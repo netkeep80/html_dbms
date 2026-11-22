@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HDBMS-04
+normative: |
+  ### HDBMS-04 — Explicit and consistent licensing
+
+  **MUST:** The distributed public prototype states its adopted license explicitly and keeps the repository LICENSE text and public documentation mutually consistent. Changes to licensing terms must be separately reviewable; license presence alone does not imply cryptographic certification or fitness for financial use.
+relations:
+  - predicates: [documents]
+    target: {kind: artifact, path: 'LICENSE'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'README.md'}
