@@ -15,3 +15,18 @@ jobs:
         with:
           base: ${{ github.event.pull_request.base.sha }}
           head: ${{ github.event.pull_request.head.sha }}
+      - name: Check RepoGuard diagnostics
+        if: failure()
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: netkeep80/repo-guard
+          ref: 74db97791e6da8a75287164f0d0b41579108f114
+          path: .repo-guard-tool
+      - name: Print RepoGuard compiler report on failure
+        if: failure()
+        env:
+          RG_BASE: ${{ github.event.pull_request.base.sha }}
+          RG_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          (cd .repo-guard-tool && npm install --omit=dev --silent)
+          node .repo-guard-tool/dist/repo-guard.mjs --repo-root . check --base "$RG_BASE" --head "$RG_HEAD" --format json
