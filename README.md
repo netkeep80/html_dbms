@@ -25,3 +25,7 @@ Requirements: [`docs/SRS.md`](docs/SRS.md) (Wiegers/Beatty-informed structure), 
 ## Status
 
 Early research prototype, **not audited** and not suitable for confidential or regulated production data. The full stored-code editor, calculations, charts, Excel import and jsonRVM interpreter are future work, not delivered features.
+
+## Repository governance
+
+The pull request workflow executes [RepoGuard](https://github.com/netkeep80/repo-guard) pinned to immutable upstream commit `74db97791e6da8a75287164f0d0b41579108f114` using exact BASE/HEAD SHA identities. The separate subject CI checks code tests and reproducible HTML build. Workflow installation does not configure required branch protection or prove cryptographic safety.
