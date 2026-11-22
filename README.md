@@ -25,3 +25,7 @@ Requirements: [`docs/SRS.md`](docs/SRS.md) (Wiegers/Beatty-informed structure), 
 ## Status
 
 Early research prototype, **not audited** and not suitable for confidential or regulated production data. The full stored-code editor, calculations, charts, Excel import and jsonRVM interpreter are future work, not delivered features.
+
+## Repository governance
+
+The PR workflow uses [RepoGuard](https://github.com/netkeep80/repo-guard) pinned to commit `74db97791e6da8a75287164f0d0b41579108f114` to check explicit links from `HDBMS-*` requirements to implementation, documentation and verification artifacts. Subject tests and reproducible artifact checks are run separately. Workflow installation alone does not configure required branch protection or approve any security guarantees.
