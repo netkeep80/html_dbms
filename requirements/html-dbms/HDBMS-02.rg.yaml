@@ -1,9 +1,9 @@
 format: repo-guard/requirement-v1
 id: HDBMS-02
 normative: |
-  ### HDBMS-02 — Portable generic UI and nested transaction log
+  ### HDBMS-02 — Переносимый универсальный интерфейс и вложенный журнал транзакций
 
-  **MUST:** The browser UI edits synthetic generic tables, records changes as RFC 6902 patches addressed by RFC 6901 pointers, and stores an independent append-only transaction chain whose head is referenced from the main state. Export creates a complete portable HTML copy; executable source from stored JSON is not evaluated.
+  **Обязательно:** браузерный интерфейс позволяет редактировать синтетические универсальные таблицы, записывать изменения как патчи RFC 6902 с адресацией RFC 6901 и вести независимую транзакционную цепочку только с добавлением, последний хэш которой указан в основном состоянии. Экспорт формирует полную переносимую HTML-копию; исполняемый код, хранящийся в JSON, не запускается.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/app.js'}

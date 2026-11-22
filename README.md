@@ -1,31 +1,44 @@
 # HTML DBMS
 
-**Experimental monofile encrypted hash-linked DBMS for the browser.** One HTML file contains executable UI code and a JSON object of encrypted records. Every save downloads a new standalone version.
+**Экспериментальная автономная зашифрованная СУБД с хэш-связанной историей для браузера.** Один HTML-файл содержит исполняемый код интерфейса и JSON-объект с зашифрованными записями. При сохранении скачивается новый самостоятельный HTML-файл.
 
-## Demo (v2)
+## Демонстрация (версия 2)
 
-Download/open [`dist/html_dbms.html`](dist/html_dbms.html) in a modern browser with Web Crypto support. You can edit two synthetic tables and append rows to a separate transaction history. Download a new HTML with all changes. There is **no real financial information** in the repository.
+Скачайте и откройте [`dist/html_dbms.html`](dist/html_dbms.html) в современном браузере с поддержкой Web Crypto. Можно редактировать две демонстрационные таблицы и добавлять записи в независимый журнал транзакций. Все изменения сохраняются в новой HTML-копии. **В репозитории нет реальных финансовых данных:** примеры полностью синтетические.
 
-## Algorithm
+## Алгоритм
 
-Each event is serialized as `[version,seq,kind,time,prev_key,prev_hash,payload]`. SHA-256 of the serialized event is also the AES-GCM key for that event. The plaintext record includes the prior map key and hash. The successor's map address is deterministic: first 16 bytes of SHA-256 of the domain-separated prior hash, Base64url encoded. Existing keys are never overwritten. A first (genesis) record needs an initial random address. IVs remain random per encryption.
+Каждое событие сериализуется как массив `[version,seq,kind,time,prev_key,prev_hash,payload]`. SHA-256 сериализованного события используется также в качестве ключа AES-GCM для этого события. Открытая запись содержит ключ JSON-объекта и хэш предыдущей записи.
 
-From a known head hash, try decryption of the record map to identify the latest event, then walk backwards using `prev_key`, verify all hashes and derived successor addresses, and replay patches forward. The global JSON map can contain multiple independent chains with no public registry. The main demo chain points at a separate append-only transaction chain.
+Адрес следующей записи в JSON-объекте определяется детерминированно: первые 16 байт SHA-256 от хэша предыдущей записи с разделением доменов, закодированные в Base64url. Существующие ключи не перезаписываются. Первая запись цепочки (генезис) получает случайный начальный адрес. Для каждого шифрования независимо генерируется случайный IV.
 
-**Security warning:** The hash-as-key design is experimental message-locked encryption and **does not protect predictable data against offline guessing**. A public head allows anyone to read its chain. A head stored in the same untrusted HTML is not an external proof of provenance. Two separate copies may evolve into conflicting branches; deterministic addresses prevent competing successors only within a shared map. This is not a peer-to-peer consensus mechanism. Embedded HTML JS can itself be altered; verify suspicious copies using trusted code and an independently saved anchor.
+По известному последнему хэшу `headHash` перебираются зашифрованные значения JSON-объекта до обнаружения записи, проходящей аутентифицированное расшифрование. Далее цепочка восстанавливается назад по `prev_key` с проверкой хэшей и ожидаемых детерминированных адресов. Патчи применяются в прямом хронологическом порядке. В одном физическом JSON-объекте могут находиться несколько независимых цепочек без публичного реестра. Демонстрационная основная цепочка ссылается на отдельную цепочку транзакций, допускающую только добавление.
 
-## Development
+**Предупреждение о безопасности:** схема «хэш открытого текста = ключ шифрования» экспериментальная и **не защищает предсказуемые данные от автономного перебора вариантов**. Публичный последний хэш позволяет прочитать всю соответствующую цепочку. Хэш, объявленный в самом недоверенном HTML-файле, не подтверждает происхождение данных: нужна независимо сохранённая контрольная точка. Две отдельные копии файла могут развиваться по разным ветвям; детерминированные адреса предотвращают конкурирующие продолжения только в одном общем физическом хранилище. Это не протокол распределённого консенсуса. Встроенный JavaScript также может быть изменён: подозрительные копии нужно проверять доверенным кодом и независимо сохранённым хэшем.
 
-- `node tests/core.test.cjs` — deterministic address, append-only, collision, multiple-chain and JSON Patch tests.
-- `python build.py` — package `src/index.html` + `src/core.js` + `src/app.js` into self-contained `dist/html_dbms.html`.
-- Browser UI smoke test is experimental and not yet guaranteed in headless sandbox environments.
+## Разработка и проверка
 
-Requirements: [`docs/SRS.md`](docs/SRS.md) (Wiegers/Beatty-informed structure), canonical RepoGuard requirements under [`requirements/html-dbms`](requirements/html-dbms). Roadmap in issues #1–#4.
+- `node tests/core.test.cjs` — тестирование детерминированной адресации, запрета перезаписи, конфликтов, нескольких цепочек и JSON Patch.
+- `node tests/docs-language.test.cjs` — проверка русскоязычности сопровождаемых документов и нормативных требований; эта проверка не заменяет редактуру.
+- `python build.py` — сборка `src/index.html`, `src/core.js` и `src/app.js` в автономный `dist/html_dbms.html`.
+- Проверка интерфейса в браузере остаётся экспериментальной: запуск в безголовой среде пока не гарантирован.
 
-## Status
+Спецификация требований: [`docs/SRS.md`](docs/SRS.md), подготовленная с учётом методики Вигерса и Битти. Канонические требования RepoGuard находятся в [`requirements/html-dbms`](requirements/html-dbms), а задачи развития — в [GitHub Issues](https://github.com/netkeep80/html_dbms/issues).
 
-Early research prototype, **not audited** and not suitable for confidential or regulated production data. The full stored-code editor, calculations, charts, Excel import and jsonRVM interpreter are future work, not delivered features.
+## Состояние проекта
 
-## Repository governance
+Это ранний исследовательский прототип, **не проходивший независимый криптографический аудит** и не предназначенный для эксплуатации с конфиденциальными или регулируемыми данными.
 
-The pull request workflow executes [RepoGuard](https://github.com/netkeep80/repo-guard) pinned to immutable upstream commit `74db97791e6da8a75287164f0d0b41579108f114` using exact BASE/HEAD SHA identities. The separate subject CI checks code tests and reproducible HTML build. Workflow installation does not configure required branch protection or prove cryptographic safety.
+Полноценный редактор программ из БД, вычисляемые формулы, графики, импорт Excel и интерпретатор jsonRVM являются планируемыми возможностями, **а не реализованными функциями**.
+
+## Требования к языку документации
+
+**Нормативное требование HDBMS-05:** все разрабатываемые и сопровождаемые проектом описательные документы, требования и руководства должны быть написаны **на русском языке**. Это распространяется на `README.md`, документы в `docs/`, человекочитаемые формулировки `normative` в `requirements/html-dbms/*.rg.yaml` и будущую документацию.
+
+Не переводятся имена файлов и путей, идентификаторы требований, команды, исходный код, имена JSON-полей, названия стандартов и технологий, собственные имена, цитируемые библиографические наименования и оригинальный юридический текст `LICENSE`. Проверка документации выполняется в CI; окончательная оценка полноты и корректности перевода требует редакторской проверки. См. [задачу #7](https://github.com/netkeep80/html_dbms/issues/7).
+
+## Управление репозиторием
+
+Проверка Pull Request запускает [RepoGuard](https://github.com/netkeep80/repo-guard), закреплённый за неизменяемым коммитом `74db97791e6da8a75287164f0d0b41579108f114` и получающий точные SHA состояний BASE/HEAD. Отдельный CI выполняет предметные тесты, проверку языка документации и воспроизводимую сборку HTML.
+
+Наличие CI и RepoGuard **не означает**, что на GitHub включена обязательная защита ветки или доказана криптографическая безопасность.

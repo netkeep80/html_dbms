@@ -1,90 +1,98 @@
-# HTML DBMS — Software Requirements Specification (experimental v2)
+# HTML DBMS — спецификация требований к программному обеспечению (экспериментальная версия 2)
 
-Status: draft baseline 2026-11-22. Based on the *requirements engineering approach* of Karl Wiegers and Joy Beatty, *Software Requirements*, 3rd ed., particularly chapters 5, 8–11, 13–14, 17, 21, 27–29. This document contains original project requirements, not copied book text.
+**Состояние:** предварительная базовая версия от 22.11.2026. Структура основана на подходах к разработке требований Карла Вигерса и Джой Битти из книги «Разработка требований к программному обеспечению», 3-е издание, в частности на главах 5, 8–11, 13–14, 17, 21, 27–29. Требования в настоящем документе сформулированы для проекта самостоятельно, а не переписаны из книги.
 
-## 1. Purpose, stakeholders and scope
+## 1. Назначение, заинтересованные лица и границы
 
-**Business goal BG-01.** Permit a non-specialist to maintain a portable structured record system without Excel, installation or a server, and to distribute independently inspectable snapshots.
+**Бизнес-цель BG-01.** Предоставить неподготовленному пользователю возможность вести переносимую структурированную систему учёта без Excel, установки отдельного приложения и сервера, а также передавать автономные копии состояния для независимой проверки.
 
-**Actors:** operator (edits and saves), reader (views), verifier (checks against an independently trusted hash), developer (extends schema and behavior), malicious editor (threat actor).
+**Роли:** оператор (редактирует и сохраняет), читатель (просматривает), проверяющий (сопоставляет данные с независимо доверенным хэшем), разработчик (расширяет схему и поведение), злоумышленник-редактор (модель угроз).
 
-**In scope (v2 prototype):** portable HTML container, RFC 6901 pointers and RFC 6902 patch replay, multiple tables, encrypted hash-linked event chains, deterministic successor addressing, a separate append-only transaction chain, verifiable exports and a minimal UI.
+**В границах прототипа версии 2:** переносимый HTML-контейнер, адресация RFC 6901, последовательное применение патчей RFC 6902, несколько таблиц, зашифрованные хэш-связанные цепочки событий, детерминированная адресация следующей записи, отдельная транзакционная цепочка только с добавлением, проверяемый экспорт и минимальный интерфейс.
 
-**Not in scope:** strong confidentiality of predictable plaintext, authenticated authorship, global consensus or fork exclusion across separate copies, arbitrary JS execution from database, full legacy workbook import, formulas and chart designer, full jsonRVM.
+**Вне границ:** стойкая конфиденциальность предсказуемого открытого текста, доказательство авторства, глобальный консенсус и исключение ветвления между разными копиями, произвольное исполнение JavaScript из БД, полный импорт существующей книги Excel, конструкторы формул и графиков, полноценная jsonRVM.
 
-## 2. Assumptions and business rules
+## 2. Допущения и бизнес-правила
 
-- BR-01: An already recorded financial transaction is never mutated or deleted; corrections are additional events.
-- BR-02: A successor event can only be written to a currently unoccupied deterministic address in the same physical map.
-- BR-03: A receiver needs an independently obtained trusted head hash for provenance checks. A self-declared head alone establishes only internal consistency.
-- BR-04: Distinct logical chains may coexist without a public database catalogue. Their count, sizes and changes are not necessarily hidden.
-- A-01: Secure-context Web Crypto API, TextEncoder, structuredClone and download support are available in a tested browser; compatibility is a tested target, not universal guarantee.
+- **BR-01.** Уже зарегистрированная финансовая транзакция не изменяется и не удаляется; исправление оформляется дополнительным событием.
+- **BR-02.** Следующее событие можно записать только по свободному детерминированному адресу того же физического JSON-объекта.
+- **BR-03.** Для проверки происхождения получателю необходим независимо полученный доверенный последний хэш. Хэш, заявленный внутри файла, подтверждает только внутреннюю согласованность.
+- **BR-04.** Разные логические цепочки могут сосуществовать без публичного каталога БД. При этом общее количество, размеры записей и изменения между копиями не обязаны быть скрыты.
+- **A-01.** Проверяемый браузер предоставляет Web Crypto API в безопасном контексте, `TextEncoder`, `structuredClone` и скачивание файлов. Универсальная совместимость со всеми браузерами не заявляется.
 
-## 3. Functional requirements
+## 3. Функциональные требования
 
-Each MUST has an observable acceptance condition. IDs are stable for issue/test traceability.
+Каждое обязательное требование сопровождается наблюдаемым критерием приёмки. Идентификаторы сохраняются для прослеживаемости между задачами и тестами.
 
-| ID | Priority | Requirement and observable condition |
+| ID | Приоритет | Требование и проверяемый результат |
 |---|---|---|
-| FR-01 | Must | System SHALL open a single HTML document without an application server, external scripts, external CSS or network calls. Validate by opening offline and using UI. |
-| FR-02 | Must | System SHALL save a standalone copy containing the entire current encrypted map. Reopening SHALL reconstruct the same tables and chain heads. |
-| FR-03 | Must | The download name SHALL use a sanitized editable title and local timestamp `title_yyyy.mm.dd_hh.mm.ss.html`; no claim of strict filename uniqueness within one second. |
-| FR-04 | Must | Every successor record SHALL use map key `B64URL(SHA256(UTF8("html-dbms/map-id/v2\\0") || SHA256(plaintext_previous_record))[0..16])`. Genesis keys SHALL be random. No map key SHALL be overwritten. |
-| FR-05 | Must | Each record SHALL be AES-256-GCM encrypted under its own SHA-256 plaintext digest, with random 96-bit IV; reader SHALL authenticate and verify digest. This is an **experimental integrity-oriented format, not a promise of secrecy**. |
-| FR-06 | Must | Given a chain head hash, the reader SHALL find exactly one last record by attempting authenticated decryption of map values, then follow `prev_key` and verify `prev_hash`, sequence, and expected successor address back to genesis. Unrelated records SHALL be ignored. |
-| FR-07 | Must | Reader SHALL support at least two logical tables with stable row IDs and editable cells; table data SHALL be represented as JSON objects, not positional row arrays. |
-| FR-08 | Must | Reader SHALL apply RFC 6902 ordered operations using RFC 6901 paths; an invalid operation SHALL leave its input state unchanged. Prototype pollution paths SHALL fail. |
-| FR-09 | Must | A separate transaction chain SHALL allow append of a new row only; it SHALL reject updates, deletes, and overwrites to previously recorded rows. |
-| FR-10 | Must | Main state SHALL reference a nested transaction head. When extending the transaction chain, a new main event SHALL update that pointer; old events remain unchanged. |
-| FR-11 | Must | Operator SHALL be able to check an independently supplied historical hash against the recovered main chain. Verifier SHALL read an external HTML as data without executing its scripts. |
-| FR-12 | Must | UI SHALL allow adding rows, columns to ordinary tables, and renaming a document through persisted events. |
-| FR-13 | Should | Future releases SHALL describe procedures, derived views, validations, charts, dropdowns and events as editable model objects; change history SHALL use the same journal format. Not implemented in v2. |
-| FR-14 | Could | Future releases MAY load validated Relations Model JSON programs via a restricted JS jsonRVM interpreter. Not implemented. |
+| FR-01 | Обязательное | Система **должна** открывать один HTML-документ без сервера приложений, внешних скриптов, внешних CSS и сетевых запросов. Приёмка: работа с интерфейсом без сети. |
+| FR-02 | Обязательное | Система **должна** сохранять самостоятельную копию, содержащую весь текущий зашифрованный JSON-объект. После повторного открытия должны восстановиться те же таблицы и последние хэши цепочек. |
+| FR-03 | Обязательное | Имя скачиваемого файла **должно** включать очищенный пользовательский заголовок и местные дату и время в формате `title_yyyy.mm.dd_hh.mm.ss.html`. Строгая уникальность при двух сохранениях за секунду не гарантируется. |
+| FR-04 | Обязательное | Каждая следующая запись **должна** получать ключ JSON-объекта по правилу `B64URL(SHA256(UTF8("html-dbms/map-id/v2\0") || SHA256(plaintext_previous_record))[0..16])`. Адрес первой записи случаен. Перезапись существующего ключа запрещена. |
+| FR-05 | Обязательное | Каждая запись **должна** шифроваться AES-256-GCM с ключом, равным SHA-256 её открытого представления, и случайным 96-битным IV. Чтение должно проверять аутентификацию и совпадение хэша. Это **экспериментальный формат, ориентированный на проверку целостности, а не обещание секретности**. |
+| FR-06 | Обязательное | По последнему хэшу система **должна** найти ровно одну последнюю запись путём попыток аутентифицированного расшифрования значений JSON-объекта, затем перейти назад по `prev_key`, проверяя `prev_hash`, номера записей и рассчитанные адреса вплоть до генезиса. Посторонние записи игнорируются. |
+| FR-07 | Обязательное | Система **должна** поддерживать минимум две логические таблицы со стабильными ID строк и редактируемыми ячейками. Строки таблиц представляются JSON-объектами, а не позиционными массивами. |
+| FR-08 | Обязательное | Система **должна** применять упорядоченные операции RFC 6902 по путям RFC 6901; ошибочная операция не должна менять исходное состояние. Пути, ведущие к загрязнению прототипов JavaScript, должны отклоняться. |
+| FR-09 | Обязательное | Отдельная транзакционная цепочка **должна** допускать только добавление новой строки; изменение, удаление или замена ранее зарегистрированной строки отвергаются. |
+| FR-10 | Обязательное | Основное логическое состояние **должно** содержать ссылку на последний хэш вложенной транзакционной цепочки. При её продлении новое событие основной цепочки обновляет указатель; прежние события сохраняются неизменными. |
+| FR-11 | Обязательное | Оператор **должен** иметь возможность проверить независимо предоставленный исторический хэш по восстановленной основной цепочке. Проверяющий **должен** читать внешний HTML как данные, не исполняя его скрипты. |
+| FR-12 | Обязательное | Интерфейс **должен** позволять добавлять строки и столбцы обычных таблиц и изменять заголовок документа с сохранением изменений в событиях. |
+| FR-13 | Желательное | В будущих выпусках процедуры, вычисляемые представления, проверки, графики, выпадающие списки и события **следует** описывать редактируемыми объектами модели с общей историей изменений. В версии 2 не реализовано. |
+| FR-14 | Возможное | В будущих выпусках **допускается** загрузка проверенных JSON-программ Модели Отношений ограниченным JS-интерпретатором jsonRVM. Не реализовано. |
 
-## 4. External interfaces and data model
+## 4. Внешние интерфейсы и модель данных
 
-**Physical storage**: `{format, publicHead, records}`; each `records` value is `{iv, ct}` (Base64url). Keys are Base64url of 16-byte IDs. Other chains may exist without being listed in `publicHead`.
+**Физическое хранилище:** `{format, publicHead, records}`; значение каждого элемента `records` имеет вид `{iv, ct}` (Base64url). Ключи JSON-объекта — Base64url-кодировка 16-байтовых идентификаторов. Иные цепочки могут присутствовать, не перечисляясь в `publicHead`.
 
-**Event**: ordered JSON array `[version, seq, kind, utcTime, prev_key, prev_hash, payload]`. Genesis events provide policy and complete initial state; subsequent events carry `{patch:[...]}`.
+**Событие:** упорядоченный JSON-массив `[version, seq, kind, utcTime, prev_key, prev_hash, payload]`. Событие-генезис задаёт политику и полное начальное состояние; последующие события несут `{patch:[...]}`.
 
-**Logical main state**: `{title, tabs, tables}`. Table rows are objects keyed by stable row IDs. A transaction table has `type:"chain"` and a `headHash` reference to a separate chain.
+**Основное логическое состояние:** `{title, tabs, tables}`. Строки таблиц представлены объектами со стабильными идентификаторами. Транзакционная таблица имеет `type:"chain"` и ссылку `headHash` на отдельную цепочку.
 
-**JSON Pointer**: RFC 6901 escaping is required for `~` and `/`; unsafe prototype keys are rejected. **JSON Patch**: RFC 6902 add/remove/replace/move/copy/test. These are logical edits applied oldest to newest; snapshots are reconstructible by replay.
+**JSON Pointer:** требуется экранирование символов `~` и `/` по RFC 6901; небезопасные ключи прототипов отклоняются. **JSON Patch:** операции `add`, `remove`, `replace`, `move`, `copy`, `test` по RFC 6902. Патчи применяются от самой ранней записи к самой поздней, восстанавливая состояние.
 
-## 5. Quality attributes and security
+## 5. Атрибуты качества и безопасность
 
-| ID | Requirement | Verification |
+| ID | Требование | Проверка |
 |---|---|---|
-| NFR-01 | Portability: no install or network dependency for a fully saved HTML. | Offline browser smoke test and inspection for external resource URLs. |
-| NFR-02 | Integrity: corrupted ciphertext, hash mismatch, invalid ancestry or missing predecessor MUST fail closed. | Negative automated crypto tests. |
-| NFR-03 | Safe parsing: JSON Pointer paths MUST reject `__proto__`, `prototype`, `constructor` at each segment. | Unit tests. |
-| NFR-04 | Bounded processing: reject excessive chain depth and record count; patch batches limited to 1000 operations. | Boundary tests. |
-| NFR-05 | Privacy: only synthetic examples in public source, tests, issues and documentation. Never upload confidential datasets or templates derived from them. | Repository review. |
-| NFR-06 | Truthful security: documentation and UI MUST identify the hash-as-key construct as experimental and vulnerable to guessing low-entropy plaintext; no claims of global immutability or authenticated authorship. | Documentation/UI review. |
-| NFR-07 | Traceability: source, tests and CI SHALL relate to rooted requirements; RepoGuard configured at immutable upstream SHA, exact BASE/HEAD. | GitHub workflow + RepoGuard output. |
-| NFR-08 | Browser support SHALL be verified against a defined browser/version matrix before general release. | Deferred browser CI. |
+| NFR-01 | Переносимость: готовый HTML не требует установки приложения и подключения к сети. | Открытие без сети, отсутствие внешних URL ресурсов. |
+| NFR-02 | Целостность: при повреждении шифртекста, несовпадении хэша, неправильном происхождении или отсутствии предыдущей записи обработка должна завершаться отказом. | Автоматические негативные криптографические тесты. |
+| NFR-03 | Безопасность JSON Pointer: сегменты `__proto__`, `prototype` и `constructor` должны отклоняться. | Модульные тесты. |
+| NFR-04 | Ограничение ресурсов: чрезмерная глубина цепочки и количество записей должны отвергаться; размер пакета патчей ограничен 1000 операциями. | Граничные тесты. |
+| NFR-05 | Конфиденциальность исходных материалов: в публичные исходники, тесты, задачи и документацию помещаются только синтетические примеры. Запрещена публикация закрытых наборов данных и производных от них шаблонов. | Проверка содержимого репозитория. |
+| NFR-06 | Достоверность заявлений о безопасности: в документации и интерфейсе необходимо обозначить экспериментальность схемы «хэш как ключ» и уязвимость к перебору при низкой энтропии данных. Нельзя утверждать глобальную неизменяемость или аутентифицированное авторство. | Проверка интерфейса и документов. |
+| NFR-07 | Прослеживаемость: исходники, тесты и CI должны быть связаны с нормативными требованиями; RepoGuard закрепляется за неизменяемым upstream SHA, проверяются точные BASE/HEAD. | GitHub Actions и вывод RepoGuard. |
+| NFR-08 | Поддержка браузеров проверяется по заранее определённой матрице браузеров и версий до общего выпуска. | Отложенные браузерные CI-проверки. |
+| NFR-09 | Все сопровождаемые проектом документы и нормативные формулировки требований должны быть написаны на русском языке с сохранением технических идентификаторов и оригинального юридического текста лицензии. | Автоматическая проверка, редакторская проверка; требование HDBMS-05, задача #7. |
 
-## 6. Key use cases and acceptance scenarios
+## 6. Основные варианты использования и приёмочные сценарии
 
-**UC-01: edit/save/reopen.** Given a new HTML, operator adds a row to table A, edits it and adds a row to B, saves, opens saved file. Both tables and hashes are preserved.
+**UC-01: редактирование, сохранение и повторное открытие.** Оператор добавляет строку в таблицу А, изменяет её, добавляет строку в таблицу Б, сохраняет HTML и открывает его снова. Обе таблицы и хэши цепочек сохраняются.
 
-**UC-02: append transaction.** Given a transaction head H, append transaction T. New transaction record is stored under derived map address from H and main head points at new child head; attempting to edit T is rejected.
+**UC-02: добавление транзакции.** При известном последнем хэше транзакций H добавление операции T помещает новую запись под адресом, вычисленным из H, и основная цепочка обновляет указатель на новый хэш вложенной цепочки. Попытка изменить T отвергается.
 
-**UC-03: competing successor.** Given same predecessor H and map M, two different successors target same map key; only first is written, the second yields explicit conflict, prior ciphertext unchanged. Separate copied maps may still fork.
+**UC-03: конкурирующие продолжения.** При одном предшественнике H и одном физическом JSON-объекте M две разные новые записи претендуют на один ключ. Записывается только первая; вторая вызывает явный конфликт. Старый шифртекст не меняется. Отдельные копии JSON-объекта могут независимо разветвляться.
 
-**UC-04: verifier.** Given a recipient HTML and a previously independently trusted H, verify whole chain from the recipient head and detect H as ancestor; reject tampered records or absent H. Verify with trusted code, never recipient HTML scripts.
+**UC-04: независимая проверка.** Проверяющий получает сторонний HTML и ранее доверенный хэш H. Он проверяет всю цепочку от заявленного последнего хэша и наличие H среди предков; повреждённая запись или отсутствие H приводят к отказу. Исполняется только доверенный код проверяющего, но не скрипты стороннего HTML.
 
-**UC-05: mixed independent chains.** A map contains at least two interleaved logical chains; providing H_A reveals and verifies A without requiring B's head; traversal does not infer a mandatory total count of logical databases.
+**UC-05: смешанные независимые цепочки.** Физический JSON-объект содержит минимум две перемешанные логические цепочки. По хэшу H_A можно восстановить и проверить A без знания последнего хэша Б. Обход не предполагает обязательного знания общего числа логических БД.
 
-## 7. Traceability and open decisions
+**UC-06: русскоязычная документация.** В репозиторий добавляется или изменяется описательный документ либо `normative` в каноническом файле требования. Текст пишется по-русски, технические токены сохраняются. Автоматическая проверка выявляет очевидные англоязычные заголовки и пояснительные строки; рецензент подтверждает качество перевода.
 
-- BG-01 -> FR-01..FR-03, FR-07, FR-12; GitHub issues #2, #3.
-- BR-01 -> FR-09..FR-10; issue #2.
-- BR-02 -> FR-04, FR-06; issue #1.
-- BR-03 -> FR-05, FR-11, NFR-02/NFR-06; issues #1, #4.
-- BR-04 -> FR-06, UC-05; issues #1, #4.
-- **Pending:** independent cryptographic audit; replay and simultaneous-head semantics across nested chains; browser CI; handling very large files; multi-head permission model; full formulas, charts and metadata editor. These are NOT accepted as delivered.
+## 7. Прослеживаемость и открытые решения
 
-## 8. Verification and change control
+- **BG-01** → FR-01–FR-03, FR-07, FR-12; задачи #2 и #3.
+- **BR-01** → FR-09–FR-10; задача #2.
+- **BR-02** → FR-04, FR-06; задача #1.
+- **BR-03** → FR-05, FR-11, NFR-02/NFR-06; задачи #1 и #4.
+- **BR-04** → FR-06, UC-05; задачи #1 и #4.
+- **NFR-09** → HDBMS-05, UC-06; задача [#7](https://github.com/netkeep80/html_dbms/issues/7).
+- **Не решено:** независимый криптографический аудит; семантика воспроизведения и одновременных обновлений вложенных цепочек; браузерный CI; обработка очень больших файлов; модель разрешений для нескольких последних хэшей; полноценные формулы, графики и редактор метаданных. Эти возможности **не считаются принятыми или реализованными**.
 
-Every changeset should cite issue and requirement IDs. Tests prove only enumerated properties; CI success does not imply acceptance or real-world accounting readiness. Requirements changes require explicit review, impact assessment and updated tests. Repository guards and branch protection are separate mechanisms; installing a workflow alone does not enable a required GitHub check.
+## 8. Верификация и управление изменениями
+
+Каждое изменение должно указывать связанную задачу и идентификаторы требований. Тесты подтверждают только конкретные проверяемые свойства; успешный CI не означает предметной приёмки и готовности к ведению реальной бухгалтерии.
+
+Изменения требований требуют отдельного рассмотрения, анализа влияния и обновления тестов. RepoGuard и защита веток GitHub — разные механизмы: подключение рабочего процесса не делает проверку обязательным условием слияния автоматически.
+
+**Язык документации:** все новые и изменяемые пояснительные документы, спецификации, нормативные требования, пользовательские руководства и инструкции создаются на русском языке. Исключения: исполняемые команды и код, неизменяемые API/JSON-поля, стандартизованные идентификаторы, имена собственные, библиографические названия и оригинальная лицензия `LICENSE`. Это отдельное обязательное требование HDBMS-05. Автоматическая проверка обнаруживает только часть нарушений, поэтому нужна также редакторская проверка.
