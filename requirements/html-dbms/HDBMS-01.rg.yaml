@@ -1,0 +1,17 @@
+format: repo-guard/requirement-v1
+id: HDBMS-01
+normative: |
+  ### HDBMS-01 — Deterministic and checkable append-only encrypted chains
+
+  **MUST:** The engine generates a deterministic successor map ID from the predecessor hash using domain-separated SHA-256, rejects overwrite and competing local successors, verifies AES-GCM and plaintext hash on read, and reconstructs logical history by exact predecessor references. An independent trusted anchor is required for provenance. This is an experimental integrity mechanism, not a confidentiality or global-consensus guarantee.
+relations:
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/core.js'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'dist/html_dbms.html'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/core.test.cjs'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'docs/SRS.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'README.md'}
