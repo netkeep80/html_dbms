@@ -1,0 +1,23 @@
+format: repo-guard/requirement-v1
+id: HDBMS-05
+normative: |
+  ### HDBMS-05 — Русский язык всей сопровождаемой документации
+
+  **Обязательно:** все создаваемые и изменяемые описательные документы репозитория, спецификации, инструкции, руководства и человекочитаемые формулировки нормативных требований должны быть написаны на русском языке. Технические идентификаторы, имена путей и файлов, команды, исходный код, названия стандартов, JSON-поля, имена собственные и оригинальный юридический текст LICENSE сохраняются без перевода. В CI выполняется автоматическая проверка очевидных нарушений; она не заменяет редакторскую проверку полноты, смысловой точности и языкового качества. Критерий приёмки: README, спецификация и нормативные блоки всех файлов требований доступны и понятны русскоязычному читателю, техническая семантика не изменена.
+relations:
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: '.github/workflows/quality.yml'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/docs-language.test.cjs'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'README.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'docs/SRS.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'requirements/html-dbms/HDBMS-01.rg.yaml'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'requirements/html-dbms/HDBMS-02.rg.yaml'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'requirements/html-dbms/HDBMS-03.rg.yaml'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'requirements/html-dbms/HDBMS-04.rg.yaml'}

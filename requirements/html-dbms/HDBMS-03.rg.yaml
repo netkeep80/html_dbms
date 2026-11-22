@@ -1,9 +1,9 @@
 format: repo-guard/requirement-v1
 id: HDBMS-03
 normative: |
-  ### HDBMS-03 — Reproducible build and honest security boundary
+  ### HDBMS-03 — Воспроизводимая сборка и достоверно описанная граница безопасности
 
-  **MUST:** The repository ships only synthetic examples, testable source and a deterministically built single-file artifact. CI executes subject tests and checks generated artifact freshness. RepoGuard Action is pinned to an immutable upstream SHA and receives exact PR BASE/HEAD. CI status alone does not establish subject-matter correctness or required branch protection.
+  **Обязательно:** репозиторий содержит только синтетические примеры, тестируемые исходники и детерминированно собранный однофайловый артефакт. CI выполняет предметные тесты и проверяет актуальность сгенерированного HTML. GitHub Action RepoGuard закреплён за неизменяемым SHA исходного коммита и получает точные SHA состояний BASE/HEAD запроса на слияние. Успешный CI сам по себе не доказывает предметную корректность или наличие обязательной защиты ветки.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'build.py'}
