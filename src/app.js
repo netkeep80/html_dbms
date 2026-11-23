@@ -22,7 +22,7 @@ function format(h){return h||'—';}
 function show(id,on){const el=$(id);on?el.removeAttribute('hidden'):el.setAttribute('hidden','hidden');}
 function validName(s){return typeof s==='string'&&s.trim().length>0&&!s.includes('/')&&!['__proto__','constructor','prototype'].includes(s);}
 function needRoot(){if(!rootHead)throw Error('Сначала откройте базу');}
-function activePublished(){return !!(publicName&&store.publicHeads&&db.sameHead(store.publicHeads[publicName],rootHead));}
+function activePublished(){return !!(publicName&&db.sameHead(db.catalog(store)[publicName],rootHead));}
 function updateInfo(){
  if(!store)return;
  if(!$('info-panel').hasAttribute('hidden')){const {bytes,count,published}=db.storeInfo(store);
@@ -42,7 +42,7 @@ function setFields(head){$('head').value=head||'';}
 function fieldHead(){const h=$('head').value;if(!db.validHead(h))throw Error('Введите корректный HEAD (64 символа Base64url)');return h;}
 function syncCatalog(){
  updateInfo();
- const sel=$('databases'),names=Object.keys(store.publicHeads||{});
+ const sel=$('databases'),names=Object.keys(db.catalog(store));
  sel.replaceChildren();
  const empty=makeOption(names.length?'— существующая —':'— БД отсутствуют —','');
  sel.add(empty);
@@ -52,13 +52,13 @@ function syncCatalog(){
  sel.value='';
 }
 function selectAlias(alias){
- const h=store.publicHeads?.[alias];
+ const h=db.catalog(store)[alias];
  $('databases').value=''; // enables choosing the same alias again
  if(!db.validHead(h))return;
  setFields(h);
  notice('HEAD подставлены для «'+alias+'». Нажмите «Открыть»; активная БД пока не изменена.');
 }
-function findPublicName(h){return Object.keys(store.publicHeads||{}).find(n=>db.sameHead(store.publicHeads[n],h))||null;}
+function findPublicName(h){return Object.entries(db.catalog(store)).find(([,head])=>head===h)?.[0]||null;}
 function stopApp(){if(startupListener){window.removeEventListener('message',startupListener);startupListener=null;}if(session){session.port.close();session=null;}if(activeFrame){activeFrame.remove();activeFrame=null;}}
 function clearEntry(){stopApp();$('entry-area').replaceChildren();}
 function element(tag,text,cls){const el=makeElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;}
@@ -81,9 +81,9 @@ async function openHead(head,updateUrl=false){
  catch(e){if(current(opened)){clearEntry();placeholder('Ошибка entry: '+(e.code||'')+' '+e.message);notice('БД открыта; ошибка entry: '+e.message,true);}}
 }
 async function openInitial(useFragment=true){
- clearOpened();setFields(null);syncCatalog();const names=Object.keys(store.publicHeads||{});
+ clearOpened();setFields(null);syncCatalog();const catalog=db.catalog(store),names=Object.keys(catalog);
  let explicit;try{explicit=useFragment?fragmentHead(location.hash):null;}catch(e){err(e);return;}
- if(explicit){await openHead(explicit);return;}if(names.length===1){await openHead(store.publicHeads[names[0]]);return;}
+ if(explicit){await openHead(explicit);return;}if(names.length===1){await openHead(catalog[names[0]]);return;}
  clearEntry();placeholder(names.length?'Выберите опубликованную БД, затем нажмите «Открыть».':'Для открытия требуется HEAD или ссылка доступа.');notice(names.length?'Выберите БД · опубликовано '+names.length:'Контейнер пуст: опубликованных БД нет.');
 }
 function entryValue(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).length===1&&typeof x.$ref==='string';}
@@ -216,13 +216,13 @@ async function verify(){
  }
 }
 async function verifyStore(){
- const c=context();db.validateStore(c.store);lastDiagnosis=null;const all=Object.create(null);
- for(const [alias,head] of Object.entries(c.store.publicHeads||{})){
+ const c=context();db.validateStore(db.snapshot(c.store));lastDiagnosis=null;const all=Object.create(null);
+ for(const [alias,head] of Object.entries(db.catalog(c.store))){
   try{all[alias]=await db.verifyDatabase(c.store,head);}catch(e){all[alias]={status:'failed',code:e.code||'ERROR',message:e.message};}
   if(!current(c))return;
  }
  if(!current(c))return;
- validationOutput({format:c.store.format,records:Object.keys(c.store.records).length,publishedHeads:Object.keys(all).length,publicDatabases:all,warnings:['Скрытые цепочки без известного head не перечисляются и не проверяются.']});
+ validationOutput({format:db.VERSION,records:db.storeInfo(c.store).count,publishedHeads:Object.keys(all).length,publicDatabases:all,warnings:['Скрытые цепочки без известного head не перечисляются и не проверяются.']});
  notice('Проверка контейнера завершена. Детали в «Валидация».');
 }
 async function verifyAnchor(){
@@ -262,12 +262,9 @@ async function verifyFile(){
  let external;
  try{external=await db.verifyDatabase(other,h);}catch(e){external={status:'failed',code:e.code||'ERROR',message:e.message};}
  if(!current(c))return;
- const changedIds=[],missingIds=[],addedIds=[];let shared=0;
- for(const [id,ct]of Object.entries(c.store.records)){
-   if(!OWN(other.records,id))missingIds.push(id);
-   else {shared++;if(other.records[id]!==ct)changedIds.push(id);}
- }
- for(const id of Object.keys(other.records))if(!OWN(c.store.records,id))addedIds.push(id);
+ const changedIds=[],missingIds=[],addedIds=[],a=db.snapshot(c.store).records,b=db.snapshot(other).records;let shared=0;
+ for(const [id,ct]of Object.entries(a)){if(!OWN(b,id))missingIds.push(id);else{shared++;if(b[id]!==ct)changedIds.push(id);}}
+ for(const id of Object.keys(b))if(!OWN(a,id))addedIds.push(id);
  validationOutput({target:file.name,verifiedHead:h,external,sharedSlots:shared,missingIds,addedIds,changedIds,changedPhysicalSlots:changedIds.length,note:'missingIds отсутствуют во внешнем HTML; addedIds появились во внешнем HTML; changedIds имеют другой ciphertext при том же ID.'});
  notice('Внешняя проверка: удалены '+missingIds.length+', добавлены '+addedIds.length+', изменены '+changedIds.length,!!(missingIds.length||changedIds.length||external.status!=='complete'));
 }
@@ -276,22 +273,22 @@ async function truncate(){
  const recovery=$('recovery-head').value;
  if(!db.validHead(recovery))throw Error('Укажите корректные Recovery HEAD');
  const c=context(),diagnosis=lastDiagnosis;const result=await db.truncateInvalidTail(c.store,diagnosis,recovery);if(!current(c))return;await db.verifyDatabase(result.store,recovery);if(!current(c))return;
- const aliases=Object.entries(store.publicHeads||{}).filter(([_,h])=>db.sameHead(h,diagnosis.sourceHead)).map(([n])=>n);
+ const aliases=Object.entries(db.catalog(store)).filter(([_,h])=>db.sameHead(h,diagnosis.sourceHead)).map(([n])=>n);
  const message='Восстановление необратимо.\nСохранится повреждённый physical slot: '+result.keptInvalidSlot+'\nБудут удалены ID: '+JSON.stringify(result.deletedIds)+'\nПубличные записи будут перенаправлены на recovery head: '+aliases.join(', ')+'\nПодтвердить?';
  if(!confirm(message))return;
  for(const alias of aliases)db.publish(result.store,alias,recovery,diagnosis.sourceHead);
  requireCurrent(c);db.commit(store,result.store);await openHead(recovery,true);if(store!==c.store||rootHead!==recovery)return;validationOutput({status:'recovered',recoveryHead:recovery,deletedIds:result.deletedIds,keptInvalidSlot:result.keptInvalidSlot});
  notice('Восстановление выполнено. Сохраните новый HTML.');
 }
-async function publish(){needRoot();const c=context();const {chain}=await db.openDatabase(c.store,c.head);if(!current(c))return;const root=chain.state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=store.publicHeads?.[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;requireCurrent(c);const tx=db.staging(c.store);db.publish(tx,name,c.head);db.commit(store,tx);publicName=name;syncCatalog();notice('Опубликована «'+name+'»');}
-async function hideHead(){needRoot();if(!publicName||!store.publicHeads||!OWN(store.publicHeads,publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните HEAD перед скрытием.'))return;const tx=db.staging(store);delete tx.publicHeads[publicName];if(!Object.keys(tx.publicHeads).length)delete tx.publicHeads;db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте HEAD.');}
+async function publish(){needRoot();const c=context();const {chain}=await db.openDatabase(c.store,c.head);if(!current(c))return;const root=chain.state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=db.catalog(store)[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;requireCurrent(c);const tx=db.staging(c.store);db.publish(tx,name,c.head);db.commit(store,tx);publicName=name;syncCatalog();notice('Опубликована «'+name+'»');}
+async function hideHead(){needRoot();if(!publicName||!OWN(db.catalog(store),publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните HEAD перед скрытием.'))return;const tx=db.staging(store);db.unpublish(tx,publicName);db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте HEAD.');}
 async function copyText(t,label){const c=context();try{await navigator.clipboard.writeText(t);if(current(c))notice('Скопировано: '+label);}catch{if(current(c))prompt(label,t);}}
 async function copyHead(){needRoot();await copyText(rootHead,'HEAD открытой версии');}
 async function copyLink(){needRoot();await copyText(accessUrl(rootHead),'Ссылка доступа');}
-async function loadHtml(file){if(!file)return;const c=context(),raw=await containerText(file);if(!current(c))return;const candidate=readStoreFromDocument(raw);clearOpened();store=candidate;syncUrl(null);await openInitial(false);if(store===candidate&&!location.hash&&!$('status').classList.contains('error'))notice('Контейнер загружен. '+(rootHead?'БД открыта.':'Опубликованных БД: '+Object.keys(store.publicHeads||{}).length));}
+async function loadHtml(file){if(!file)return;const c=context(),raw=await containerText(file);if(!current(c))return;const candidate=readStoreFromDocument(raw);clearOpened();store=candidate;syncUrl(null);await openInitial(false);if(store===candidate&&!location.hash&&!$('status').classList.contains('error'))notice('Контейнер загружен. '+(rootHead?'БД открыта.':'Опубликованных БД: '+db.storeInfo(store).published));}
 // Convert the pristine XHTML template to HTML, never the live application DOM.
 function htmlSerialize(node){if(node.nodeType===3||node.nodeType===4)return node.textContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');if(node.nodeType===8)return '<!--'+node.data+'-->';if(node.nodeType!==1)return '';const tag=node.localName;const attrs=Array.from(node.attributes).filter(a=>a.name!=='xmlns').map(a=>' '+a.name+'="'+a.value.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')+'"').join('');const start='<'+tag+attrs+'>';if(/^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/.test(tag))return start;const content=tag==='script'?node.textContent.replace(/<\/script/gi,'<\\/script'):tag==='style'?node.textContent:Array.from(node.childNodes).map(htmlSerialize).join('');return start+content+'</'+tag+'>';}
-function exportDocument(data=store,asXML=XML_CONTAINER){
+function exportDocument(data,asXML=XML_CONTAINER){
   const doc=exportTemplate.cloneNode(true);
   const storeNode=doc.querySelector('#db-store');
   // DOM textContent is safely serialized by each container's native serializer.
@@ -308,7 +305,7 @@ function exportDocument(data=store,asXML=XML_CONTAINER){
   return '<!doctype html>\n'+(XML_CONTAINER?htmlSerialize(doc):doc.outerHTML);
 }
 function save(publishSite=false){
- db.validateStore(store);const data=publishSite?{...store,publicHeads:{}}:store;
+ const data=db.snapshot(store);if(publishSite)data.publicHeads={};
  const asXML=XML_CONTAINER&&!publishSite,output=exportDocument(data,asXML),extension=asXML?'xml':'html';
  const mime=asXML?'application/xml':'text/html';
  const url=URL.createObjectURL(new Blob([output],{type:mime+';charset=utf-8'}));

@@ -20,7 +20,7 @@ async function main(){
  let html=fs.readFileSync(path.join(project,'dist/html_dbms.html'),'utf8');
  const marker=/<script id="db-store" type="application\/json">[\s\S]*?<\/script>/;
  if(!marker.test(html))throw Error('Missing embedded db-store');
- html=html.replace(marker,()=>'<script id="db-store" type="application/json">'+JSON.stringify(store).replace(/</g,'\\u003c')+'</script>');
+ html=html.replace(marker,()=>'<script id="db-store" type="application/json">'+JSON.stringify(db.snapshot(store)).replace(/</g,'\\u003c')+'</script>');
  const sourceTag='<script id="cash-demo-source" type="text/plain">'+appSource.replace(/<\/script/gi,'<\\/script')+'</script>';
  if(!html.includes('<script id="starter-source"'))throw Error('Missing trusted entry data anchor');
  html=html.replace('<script id="starter-source"',()=>sourceTag+'\n<script id="starter-source"');

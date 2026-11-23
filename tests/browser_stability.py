@@ -40,7 +40,7 @@ def scenario(browser, kind, tmp):
       const heads={};for(const name of ['Alpha','Beta','BrokenEntry']){
         const r=await db.createDatabase(s,name,{entry:name==='BrokenEntry'?{$ref:'missing/'}:entry});
         db.commit(s,r.store);heads[name]=r.rootHead;
-      }return {heads,store:JSON.parse(JSON.stringify(s))};
+      }return {heads,store:db.snapshot(s)};
     }''')
     heads=fixture['heads'];base=src.read_text('utf8')
     def container(name,catalog):

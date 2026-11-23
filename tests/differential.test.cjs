@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict'),{webcrypto}=require('node:crypto'),db=require('../src/core-node.cjs');
 const subtle=(globalThis.crypto||webcrypto).subtle;
-const serial=s=>JSON.stringify(s);
+const serial=s=>JSON.stringify(db.snapshot(s));
 function measure(s){
  const snapshot=JSON.parse(serial(s)),info=db.storeInfo(s);
  assert.deepEqual(info,{count:Object.keys(snapshot.records).length,published:Object.keys(snapshot.publicHeads||{}).length,bytes:Buffer.byteLength(serial(s))});
@@ -59,12 +59,13 @@ function measure(s){
  const s=db.newStore(),g=await db.createDatabase(s,'Overwrite');db.commit(s,g.store);
  const a=await db.patchRoot(s,g.rootHead,[{op:'add',path:'/n',value:1}]);db.commit(s,a.store);
  const b=await db.patchRoot(s,a.rootHead,[{op:'replace',path:'/n',value:2}]);db.commit(s,b.store);
- const oldId=db.unpackHead(b.rootHead).id,oldCipher=s.records[oldId];
+ const oldId=db.unpackHead(b.rootHead).id,oldCipher=db.readCipher(s,oldId);
  const repl=await db.patchRoot(s,g.rootHead,[{op:'add',path:'/n',value:3}],{overwrite:true});db.commit(s,repl.store);
- assert.equal(s.records[oldId],oldCipher);assert.equal((await db.verifyDatabase(s,repl.rootHead)).status,'complete');
+ assert.equal(db.readCipher(s,oldId),oldCipher);assert.equal((await db.verifyDatabase(s,repl.rootHead)).status,'complete');
  await assert.rejects(db.verifyDatabase(s,b.rootHead),{code:'INVALID_GCM'});measure(s);
  // Physical insert, replace, delete and catalog omission preserve exact size metadata.
- const id=db.encode64(new Uint8Array(16));s.records[id]='A'.repeat(22);measure(s);s.records[id]='A'.repeat(24);measure(s);delete s.records[id];delete s.publicHeads;measure(s);
+ const id=db.encode64(new Uint8Array(16));db.writePhysical(s,id,'A'.repeat(22));measure(s);db.writePhysical(s,id,'A'.repeat(24));measure(s);db.removePhysical(s,id);db.unpublish(s,'Overwrite');measure(s);
+ const detached=db.snapshot(s);detached.records[id]='A'.repeat(22);detached.publicHeads={Fake:'A'.repeat(64)};assert.equal(db.readCipher(s,id),undefined);assert.deepEqual(db.catalog(s),{});assert.equal(Object.isFrozen(s),true);assert.throws(()=>{s.records={};},TypeError);
  assert.ok(accepted>=12&&rejected>=3);
  console.log('DIFFERENTIAL PASS',JSON.stringify({seeds:3,accepted,rejected,aliases:true,overwrite:true,byteAccounting:true}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

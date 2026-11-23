@@ -146,46 +146,38 @@ function validateStore(s){
 // Only these controlled stores are mutable. External containers are adopted once.
 // Overlay reads are revision-bound; a stale transaction cannot read a mixed snapshot.
 const stores=new WeakMap(),REMOVED=Symbol('removed');
-function fresh(m){ensure(!m.closed&&(!m.base||m.base.rev===m.baseRev),'STALE_TRANSACTION','Store revision changed');}
-function meta(s){const m=stores.get(s);ensure(m,'UNMANAGED_STORE','Adopt external storage before mutation');fresh(m);return m;}
+function meta(s){const m=stores.get(s);ensure(m,'UNMANAGED_STORE','Adopt external storage before mutation');ensure(!m.closed&&(!m.base||m.base.rev===m.baseRev),'STALE_TRANSACTION','Store revision changed');return m;}
 function revision(s){return meta(s).rev;}
 function unchanged(s,rev){if(rev!==undefined)ensure(revision(s)===rev,'STALE_TRANSACTION','Store revision changed');}
 function beginRead(s){if(stores.has(s))return revision(s);validateStore(s);}
-function guardedMap(m,kind){
- const records=kind==='records',target=Object.create(null);
- const backing=()=>records?(m.base?m.base.raw:m.raw):m.catalog;
- const has=k=>{fresh(m);return records&&m.delta?.has(k)?m.delta.get(k)!==REMOVED:own(backing(),k);};
- const get=k=>{fresh(m);return records&&m.delta?.has(k)?(m.delta.get(k)===REMOVED?undefined:m.delta.get(k)):backing()[k];};
- const keys=()=>{fresh(m);if(!records||!m.delta)return Object.keys(backing());const result=new Set(Object.keys(backing()));for(const [k,v] of m.delta)v===REMOVED?result.delete(k):result.add(k);return [...result];};
- const set=(k,v)=>{fresh(m);if(records){validCipher(k,v);const prior=get(k);if(prior===undefined){ensure(m.count<MAX_RECORDS,'RESOURCE_LIMIT','Too many records');m.count++;m.bytes+=27+v.length;}else m.bytes+=v.length-prior.length;if(m.delta)m.delta.set(k,v);else put(m.raw,k,v);m.proof=null;}else{validPublication(k,v);put(m.catalog,k,v);}m.rev++;return true;};
- return new Proxy(target,{
-  get:(_,k)=>get(k),has:(_,k)=>has(k),ownKeys:keys,
-  getOwnPropertyDescriptor:(_,k)=>has(k)?{value:get(k),enumerable:true,writable:true,configurable:true}:undefined,
-  set:(_,k,v)=>set(k,v),
-  defineProperty:(_,k,d)=>{ensure(own(d,'value')&&d.enumerable===true&&d.configurable===true&&d.writable===true,'INVALID_JSON','Only writable data properties');return set(k,d.value);},
-  deleteProperty:(_,k)=>{fresh(m);if(has(k)){if(records){m.count--;m.bytes-=27+get(k).length;if(m.delta)m.delta.set(k,REMOVED);else delete m.raw[k];m.proof=null;}else delete m.catalog[k];m.rev++;}return true;},
-  setPrototypeOf:()=>false,preventExtensions:()=>false
- });
+function makeStore(m){const handle=Object.freeze({});stores.set(handle,m);return handle;}
+function catalog(s){return {...meta(s).catalog};}
+function readCipher(s,id){
+ if(!stores.has(s))return own(s.records,id)?s.records[id]:undefined;
+ const m=meta(s);if(m.delta?.has(id)){const ct=m.delta.get(id);return ct===REMOVED?undefined:ct;}return (m.base?.raw||m.raw)[id];
 }
-function catalogFrom(value){const out=Object.create(null);for(const k of dataKeys(value)){validPublication(k,value[k]);put(out,k,value[k]);}return out;}
-function makeStore(m){
- const ordered={format:VERSION};if(m.catalog)ordered.publicHeads=guardedMap(m,'catalog');ordered.records=guardedMap(m,'records');m.target=ordered;
- const proxy=new Proxy(ordered,{
-  get:(t,k)=>{fresh(m);return Reflect.get(t,k);},
-  ownKeys:t=>{fresh(m);return Reflect.ownKeys(t);},
-  getOwnPropertyDescriptor:(t,k)=>{fresh(m);return Reflect.getOwnPropertyDescriptor(t,k);},
-  set:(t,k,v)=>{fresh(m);ensure(k==='publicHeads','INVALID_JSON','Store fields are controlled');m.catalog=catalogFrom(v);t.publicHeads=guardedMap(m,'catalog');m.rev++;return true;},
-  deleteProperty:(t,k)=>{fresh(m);ensure(k==='publicHeads','INVALID_JSON','Store fields are controlled');if(m.catalog){m.catalog=null;delete t.publicHeads;m.rev++;}return true;},
-  defineProperty:()=>false,setPrototypeOf:()=>false,preventExtensions:()=>false
- });stores.set(proxy,m);return proxy;
+function writePhysical(s,id,ct){
+ const m=meta(s),prior=readCipher(s,id);validCipher(id,ct);
+ if(prior===undefined){ensure(m.count<MAX_RECORDS,'RESOURCE_LIMIT','Too many records');m.count++;m.bytes+=27+ct.length;}else m.bytes+=ct.length-prior.length;
+ if(m.delta)m.delta.set(id,ct);else put(m.raw,id,ct);m.proof=null;m.rev++;
 }
+function removePhysical(s,id){
+ const m=meta(s),prior=readCipher(s,id);if(prior===undefined)return;
+ m.count--;m.bytes-=27+prior.length;if(m.delta)m.delta.set(id,REMOVED);else delete m.raw[id];m.proof=null;m.rev++;
+}
+function catalogFrom(value){return Object.assign(Object.create(null),value);}
 function adoptStore(s){
- validateStore(s);
- const raw=Object.assign(Object.create(null),s.records);
- const values=Object.values(raw);return makeStore({raw,count:values.length,bytes:values.reduce((n,ct)=>n+27+ct.length,0),catalog:own(s,'publicHeads')?catalogFrom(s.publicHeads):null,rev:0});
+ validateStore(s);const raw=Object.assign(Object.create(null),s.records),values=Object.values(raw);
+ return makeStore({raw,count:values.length,bytes:values.reduce((n,ct)=>n+27+ct.length,0),catalog:own(s,'publicHeads')?catalogFrom(s.publicHeads):null,rev:0});
+}
+function newStore(){return makeStore({raw:Object.create(null),count:0,bytes:0,catalog:Object.create(null),rev:0});}
+function snapshot(s){
+ const m=meta(s),out={format:VERSION};if(m.catalog)out.publicHeads={...m.catalog};
+ const records=Object.assign({},m.base?.raw||m.raw);
+ if(m.delta)for(const [id,ct] of m.delta)ct===REMOVED?delete records[id]:put(records,id,ct);
+ out.records=records;return out;
 }
 function storeInfo(s){const m=meta(s),header={format:VERSION};if(m.catalog)header.publicHeads=m.catalog;header.records={};return {count:m.count,published:m.catalog?Object.keys(m.catalog).length:0,bytes:encoder.encode(JSON.stringify(header)).length+m.bytes+Math.max(0,m.count-1)};}
-function newStore(){return makeStore({raw:Object.create(null),count:0,bytes:0,catalog:Object.create(null),rev:0});}
 function iso(s){return typeof s==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(s)&&!Number.isNaN(Date.parse(s))&&new Date(s).toISOString()===s;}
 // Compact v4 format: genesis = [null,{name,parent,state}], patch = [ISO-time,previousHEAD,RFC6902-operations].
 // Sequence is derived from verified ancestry; it is NEVER serialized.
@@ -201,7 +193,7 @@ function validateRecord(r){
  return r;
 }
 async function expectedId(r,hash){return isGenesis(r)?rootId(hash):successorId(r[1]);}
-async function readDecoded(s,decoded){const {id,hash}=decoded;ensure(own(s.records,id),'MISSING_RECORD','Missing record '+id);let r=validateRecord(await decrypt(s.records[id],decoded));ensure((await expectedId(r,hash))===id,'ADDRESS_MISMATCH','Wrong physical address');return r;}
+async function readDecoded(s,decoded){const {id,hash}=decoded,ct=readCipher(s,id);ensure(ct!==undefined,'MISSING_RECORD','Missing record '+id);let r=validateRecord(await decrypt(ct,decoded));ensure((await expectedId(r,hash))===id,'ADDRESS_MISMATCH','Wrong physical address');return r;}
 async function readRecord(s,head){const rev=stores.has(s)?revision(s):undefined;const r=await readDecoded(s,unpackHead(head));unchanged(s,rev);return r;}
 function parts(pointer){ensure(typeof pointer==='string'&&(pointer===''||pointer[0]==='/'),'INVALID_POINTER','Not a JSON Pointer');if(pointer==='')return [];return pointer.slice(1).split('/').map(s=>{ensure(!/~(?![01])/.test(s),'INVALID_POINTER','Invalid tilde escape');return s.replace(/~1/g,'/').replace(/~0/g,'~');});}
 function indexOfToken(t,len,insert=false){ensure(t==='-'&&insert||/^(0|[1-9]\d*)$/.test(t),'INVALID_POINTER','Invalid array index');if(t==='-')return len;const i=Number(t);ensure(Number.isSafeInteger(i)&&i<=(insert?len:len-1),'INVALID_POINTER','Array index out of bounds');return i;}
@@ -234,10 +226,10 @@ unchanged(s,revisionAtStart);return {status:'complete',chain:{head,genesis:clone
 }catch(e){return diagnose(e,head);}}
 async function load(s,head){return loadChain(s,head);}
 async function loadChain(s,head,visit){const x=await inspectChain(s,head,MAX_RECORDS,visit);if(x.status!=='complete')throw error(x.code,x.message,{diagnosis:x});return x.chain;}
-async function genesis(s,name,state,parent=null,options={}){const rev=revision(s),overwrite=!!options.overwrite;ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state)}]);const {bytes,h}=await encodeRecord(r),id=encode64((await sha(h)).slice(0,16));const occupied=own(s.records,id);if(occupied&&!overwrite){const old=await readRecord(s,packHead(id,h)).catch(()=>null);unchanged(s,rev);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head:packHead(id,h),existing:true,overwritten:false};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
-const ciphertext=await encrypt(bytes,h,id);unchanged(s,rev);s.records[id]=ciphertext;return {head:packHead(id,h),existing:false,overwritten:occupied};}
+async function genesis(s,name,state,parent=null,options={}){const rev=revision(s),overwrite=!!options.overwrite;ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state)}]);const {bytes,h}=await encodeRecord(r),id=encode64((await sha(h)).slice(0,16));const occupied=readCipher(s,id)!==undefined;if(occupied&&!overwrite){const old=await readRecord(s,packHead(id,h)).catch(()=>null);unchanged(s,rev);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head:packHead(id,h),existing:true,overwritten:false};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
+const ciphertext=await encrypt(bytes,h,id);unchanged(s,rev);writePhysical(s,id,ciphertext);return {head:packHead(id,h),existing:false,overwritten:occupied};}
 async function append(s,head,operations,options={}){const rev=revision(s),ops=clone(operations),opts={overwrite:!!options.overwrite,timestamp:options.timestamp},chain=await load(s,head);return appendKnown(s,head,chain.state,ops,opts,rev);}
-async function appendKnown(s,head,previous,operations,{overwrite=false,timestamp}={},rev=revision(s)){unchanged(s,rev);const state=patch(previous,operations);const id=await successorId(head);const occupied=own(s.records,id);if(occupied&&!overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head,operations]);const {bytes,h}=await encodeRecord(r);const ciphertext=await encrypt(bytes,h,id);unchanged(s,rev);s.records[id]=ciphertext;return {head:packHead(id,h),state,overwritten:occupied};}
+async function appendKnown(s,head,previous,operations,{overwrite=false,timestamp}={},rev=revision(s)){unchanged(s,rev);const state=patch(previous,operations);const id=await successorId(head);const occupied=readCipher(s,id)!==undefined;if(occupied&&!overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head,operations]);const {bytes,h}=await encodeRecord(r);const ciphertext=await encrypt(bytes,h,id);unchanged(s,rev);writePhysical(s,id,ciphertext);return {head:packHead(id,h),state,overwritten:occupied};}
 async function patchRoot(s,head,operations,options={}){
  const ops=clone(operations),opts={overwrite:!!options.overwrite,timestamp:options.timestamp},tx=staging(s),proof=await checkedProof(s,head);
  const r=await appendKnown(tx,head,proof.state,ops,opts);
@@ -282,8 +274,14 @@ async function checkChange(tx,proof,root,known,overwritten){
  unchanged(tx,rev);meta(tx).proof={head:root.head,state:root.state,children};
 }
 function staging(s){const base=meta(s);ensure(!base.base,'INVALID_TRANSACTION','Nested staging is not supported');return makeStore({base,baseRev:base.rev,delta:new Map(),count:base.count,bytes:base.bytes,catalog:base.catalog?catalogFrom(base.catalog):null,rev:0,proof:base.proof});}
-function publish(staged,alias,newHead,oldHead=null){ensure(validHead(newHead),'INVALID_HEAD','Bad published head');if(!own(staged,'publicHeads'))staged.publicHeads={};ensure(plain(staged.publicHeads),'INVALID_PUBLIC_HEADS','Invalid publicHeads');if(oldHead!==null)ensure(sameHead(staged.publicHeads[alias],oldHead),'STALE_PUBLIC_HEAD','Published version changed');put(staged.publicHeads,alias,clone(newHead));}
-async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(tx.publicHeads||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);meta(tx).proof={head:g.head,state:root,children:new Map()};return {store:tx,rootHead:g.head,genesis:g};}
+function publish(s,alias,newHead,oldHead=null){
+ const m=meta(s);validPublication(alias,newHead);
+ if(oldHead!==null)ensure(sameHead(m.catalog?.[alias],oldHead),'STALE_PUBLIC_HEAD','Published version changed');
+ if(!m.catalog)m.catalog=Object.create(null);put(m.catalog,alias,newHead);m.rev++;
+}
+function unpublish(s,alias){const m=meta(s);if(!m.catalog||!own(m.catalog,alias))return;delete m.catalog[alias];if(!Object.keys(m.catalog).length)m.catalog=null;m.rev++;}
+
+async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(meta(tx).catalog||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);meta(tx).proof={head:g.head,state:root,children:new Map()};return {store:tx,rootHead:g.head,genesis:g};}
 async function createDocument(s,rootHead,name,initial,alias=null,options={}){
  const state=clone(initial),overwriteRoot=!!options.overwriteRoot,tx=staging(s),proof=await checkedProof(s,rootHead),refs=getRootRefs(proof.state),n=alias||name;
  ensure(typeof n==='string'&&n.length>0&&!n.includes('/')&&!own(refs,n),'DUPLICATE_DOCUMENT','Name already exists');
@@ -379,26 +377,24 @@ async function truncateInvalidTail(s,diagnosis,recoveryHead) {
   // actually points back to the corrupt slot; no guesses and no deleting the occupant.
   const deletions=[];
   for(const id of descendants){
-    if(!own(s.records,id))continue;
+    if(readCipher(s,id)===undefined)continue;
     // These records were read and authenticated while inspecting from the broken tip.
     deletions.push(id);
   }
   unchanged(s,rev);const out=staging(s);
-  for(const id of deletions)delete out.records[id];
+  for(const id of deletions)removePhysical(out,id);
   return {store:out,recoveryHead,deletedIds:deletions,keptInvalidSlot:invalid};
 }
 function commit(s,tx){
  const base=meta(s),stage=meta(tx);ensure(stage.base===base,'INVALID_TRANSACTION','Wrong transaction base');
- // Prepare catalog before touching base. All physical changes were validated when staged.
- const catalog=stage.catalog?catalogFrom(stage.catalog):null;
+ // The stage owns its private catalog; transfer it without another copy.
  for(const [id,ct] of stage.delta)ct===REMOVED?delete base.raw[id]:put(base.raw,id,ct);
- base.count=stage.count;base.bytes=stage.bytes;base.catalog=catalog;
- if(catalog)base.target.publicHeads=guardedMap(base,'catalog');else delete base.target.publicHeads;
+ base.count=stage.count;base.bytes=stage.bytes;base.catalog=stage.catalog;
  base.proof=stage.proof;base.rev++;stage.closed=true;return s;
 }
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
-const api={VERSION,newStore,validateStore,adoptStore,revision,storeInfo,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
+const api={VERSION,newStore,validateStore,adoptStore,revision,storeInfo,snapshot,catalog,readCipher,writePhysical,removePhysical,unpublish,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
 g.HTML_DBMS=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
 ]]></script>
@@ -426,7 +422,7 @@ function format(h){return h||'—';}
 function show(id,on){const el=$(id);on?el.removeAttribute('hidden'):el.setAttribute('hidden','hidden');}
 function validName(s){return typeof s==='string'&&s.trim().length>0&&!s.includes('/')&&!['__proto__','constructor','prototype'].includes(s);}
 function needRoot(){if(!rootHead)throw Error('Сначала откройте базу');}
-function activePublished(){return !!(publicName&&store.publicHeads&&db.sameHead(store.publicHeads[publicName],rootHead));}
+function activePublished(){return !!(publicName&&db.sameHead(db.catalog(store)[publicName],rootHead));}
 function updateInfo(){
  if(!store)return;
  if(!$('info-panel').hasAttribute('hidden')){const {bytes,count,published}=db.storeInfo(store);
@@ -446,7 +442,7 @@ function setFields(head){$('head').value=head||'';}
 function fieldHead(){const h=$('head').value;if(!db.validHead(h))throw Error('Введите корректный HEAD (64 символа Base64url)');return h;}
 function syncCatalog(){
  updateInfo();
- const sel=$('databases'),names=Object.keys(store.publicHeads||{});
+ const sel=$('databases'),names=Object.keys(db.catalog(store));
  sel.replaceChildren();
  const empty=makeOption(names.length?'— существующая —':'— БД отсутствуют —','');
  sel.add(empty);
@@ -456,13 +452,13 @@ function syncCatalog(){
  sel.value='';
 }
 function selectAlias(alias){
- const h=store.publicHeads?.[alias];
+ const h=db.catalog(store)[alias];
  $('databases').value=''; // enables choosing the same alias again
  if(!db.validHead(h))return;
  setFields(h);
  notice('HEAD подставлены для «'+alias+'». Нажмите «Открыть»; активная БД пока не изменена.');
 }
-function findPublicName(h){return Object.keys(store.publicHeads||{}).find(n=>db.sameHead(store.publicHeads[n],h))||null;}
+function findPublicName(h){return Object.entries(db.catalog(store)).find(([,head])=>head===h)?.[0]||null;}
 function stopApp(){if(startupListener){window.removeEventListener('message',startupListener);startupListener=null;}if(session){session.port.close();session=null;}if(activeFrame){activeFrame.remove();activeFrame=null;}}
 function clearEntry(){stopApp();$('entry-area').replaceChildren();}
 function element(tag,text,cls){const el=makeElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;}
@@ -485,9 +481,9 @@ async function openHead(head,updateUrl=false){
  catch(e){if(current(opened)){clearEntry();placeholder('Ошибка entry: '+(e.code||'')+' '+e.message);notice('БД открыта; ошибка entry: '+e.message,true);}}
 }
 async function openInitial(useFragment=true){
- clearOpened();setFields(null);syncCatalog();const names=Object.keys(store.publicHeads||{});
+ clearOpened();setFields(null);syncCatalog();const catalog=db.catalog(store),names=Object.keys(catalog);
  let explicit;try{explicit=useFragment?fragmentHead(location.hash):null;}catch(e){err(e);return;}
- if(explicit){await openHead(explicit);return;}if(names.length===1){await openHead(store.publicHeads[names[0]]);return;}
+ if(explicit){await openHead(explicit);return;}if(names.length===1){await openHead(catalog[names[0]]);return;}
  clearEntry();placeholder(names.length?'Выберите опубликованную БД, затем нажмите «Открыть».':'Для открытия требуется HEAD или ссылка доступа.');notice(names.length?'Выберите БД · опубликовано '+names.length:'Контейнер пуст: опубликованных БД нет.');
 }
 function entryValue(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).length===1&&typeof x.$ref==='string';}
@@ -620,13 +616,13 @@ async function verify(){
  }
 }
 async function verifyStore(){
- const c=context();db.validateStore(c.store);lastDiagnosis=null;const all=Object.create(null);
- for(const [alias,head] of Object.entries(c.store.publicHeads||{})){
+ const c=context();db.validateStore(db.snapshot(c.store));lastDiagnosis=null;const all=Object.create(null);
+ for(const [alias,head] of Object.entries(db.catalog(c.store))){
   try{all[alias]=await db.verifyDatabase(c.store,head);}catch(e){all[alias]={status:'failed',code:e.code||'ERROR',message:e.message};}
   if(!current(c))return;
  }
  if(!current(c))return;
- validationOutput({format:c.store.format,records:Object.keys(c.store.records).length,publishedHeads:Object.keys(all).length,publicDatabases:all,warnings:['Скрытые цепочки без известного head не перечисляются и не проверяются.']});
+ validationOutput({format:db.VERSION,records:db.storeInfo(c.store).count,publishedHeads:Object.keys(all).length,publicDatabases:all,warnings:['Скрытые цепочки без известного head не перечисляются и не проверяются.']});
  notice('Проверка контейнера завершена. Детали в «Валидация».');
 }
 async function verifyAnchor(){
@@ -666,12 +662,9 @@ async function verifyFile(){
  let external;
  try{external=await db.verifyDatabase(other,h);}catch(e){external={status:'failed',code:e.code||'ERROR',message:e.message};}
  if(!current(c))return;
- const changedIds=[],missingIds=[],addedIds=[];let shared=0;
- for(const [id,ct]of Object.entries(c.store.records)){
-   if(!OWN(other.records,id))missingIds.push(id);
-   else {shared++;if(other.records[id]!==ct)changedIds.push(id);}
- }
- for(const id of Object.keys(other.records))if(!OWN(c.store.records,id))addedIds.push(id);
+ const changedIds=[],missingIds=[],addedIds=[],a=db.snapshot(c.store).records,b=db.snapshot(other).records;let shared=0;
+ for(const [id,ct]of Object.entries(a)){if(!OWN(b,id))missingIds.push(id);else{shared++;if(b[id]!==ct)changedIds.push(id);}}
+ for(const id of Object.keys(b))if(!OWN(a,id))addedIds.push(id);
  validationOutput({target:file.name,verifiedHead:h,external,sharedSlots:shared,missingIds,addedIds,changedIds,changedPhysicalSlots:changedIds.length,note:'missingIds отсутствуют во внешнем HTML; addedIds появились во внешнем HTML; changedIds имеют другой ciphertext при том же ID.'});
  notice('Внешняя проверка: удалены '+missingIds.length+', добавлены '+addedIds.length+', изменены '+changedIds.length,!!(missingIds.length||changedIds.length||external.status!=='complete'));
 }
@@ -680,22 +673,22 @@ async function truncate(){
  const recovery=$('recovery-head').value;
  if(!db.validHead(recovery))throw Error('Укажите корректные Recovery HEAD');
  const c=context(),diagnosis=lastDiagnosis;const result=await db.truncateInvalidTail(c.store,diagnosis,recovery);if(!current(c))return;await db.verifyDatabase(result.store,recovery);if(!current(c))return;
- const aliases=Object.entries(store.publicHeads||{}).filter(([_,h])=>db.sameHead(h,diagnosis.sourceHead)).map(([n])=>n);
+ const aliases=Object.entries(db.catalog(store)).filter(([_,h])=>db.sameHead(h,diagnosis.sourceHead)).map(([n])=>n);
  const message='Восстановление необратимо.\nСохранится повреждённый physical slot: '+result.keptInvalidSlot+'\nБудут удалены ID: '+JSON.stringify(result.deletedIds)+'\nПубличные записи будут перенаправлены на recovery head: '+aliases.join(', ')+'\nПодтвердить?';
  if(!confirm(message))return;
  for(const alias of aliases)db.publish(result.store,alias,recovery,diagnosis.sourceHead);
  requireCurrent(c);db.commit(store,result.store);await openHead(recovery,true);if(store!==c.store||rootHead!==recovery)return;validationOutput({status:'recovered',recoveryHead:recovery,deletedIds:result.deletedIds,keptInvalidSlot:result.keptInvalidSlot});
  notice('Восстановление выполнено. Сохраните новый HTML.');
 }
-async function publish(){needRoot();const c=context();const {chain}=await db.openDatabase(c.store,c.head);if(!current(c))return;const root=chain.state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=store.publicHeads?.[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;requireCurrent(c);const tx=db.staging(c.store);db.publish(tx,name,c.head);db.commit(store,tx);publicName=name;syncCatalog();notice('Опубликована «'+name+'»');}
-async function hideHead(){needRoot();if(!publicName||!store.publicHeads||!OWN(store.publicHeads,publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните HEAD перед скрытием.'))return;const tx=db.staging(store);delete tx.publicHeads[publicName];if(!Object.keys(tx.publicHeads).length)delete tx.publicHeads;db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте HEAD.');}
+async function publish(){needRoot();const c=context();const {chain}=await db.openDatabase(c.store,c.head);if(!current(c))return;const root=chain.state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=db.catalog(store)[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;requireCurrent(c);const tx=db.staging(c.store);db.publish(tx,name,c.head);db.commit(store,tx);publicName=name;syncCatalog();notice('Опубликована «'+name+'»');}
+async function hideHead(){needRoot();if(!publicName||!OWN(db.catalog(store),publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните HEAD перед скрытием.'))return;const tx=db.staging(store);db.unpublish(tx,publicName);db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте HEAD.');}
 async function copyText(t,label){const c=context();try{await navigator.clipboard.writeText(t);if(current(c))notice('Скопировано: '+label);}catch{if(current(c))prompt(label,t);}}
 async function copyHead(){needRoot();await copyText(rootHead,'HEAD открытой версии');}
 async function copyLink(){needRoot();await copyText(accessUrl(rootHead),'Ссылка доступа');}
-async function loadHtml(file){if(!file)return;const c=context(),raw=await containerText(file);if(!current(c))return;const candidate=readStoreFromDocument(raw);clearOpened();store=candidate;syncUrl(null);await openInitial(false);if(store===candidate&&!location.hash&&!$('status').classList.contains('error'))notice('Контейнер загружен. '+(rootHead?'БД открыта.':'Опубликованных БД: '+Object.keys(store.publicHeads||{}).length));}
+async function loadHtml(file){if(!file)return;const c=context(),raw=await containerText(file);if(!current(c))return;const candidate=readStoreFromDocument(raw);clearOpened();store=candidate;syncUrl(null);await openInitial(false);if(store===candidate&&!location.hash&&!$('status').classList.contains('error'))notice('Контейнер загружен. '+(rootHead?'БД открыта.':'Опубликованных БД: '+db.storeInfo(store).published));}
 // Convert the pristine XHTML template to HTML, never the live application DOM.
 function htmlSerialize(node){if(node.nodeType===3||node.nodeType===4)return node.textContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');if(node.nodeType===8)return '<!--'+node.data+'-->';if(node.nodeType!==1)return '';const tag=node.localName;const attrs=Array.from(node.attributes).filter(a=>a.name!=='xmlns').map(a=>' '+a.name+'="'+a.value.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')+'"').join('');const start='<'+tag+attrs+'>';if(/^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/.test(tag))return start;const content=tag==='script'?node.textContent.replace(/<\/script/gi,'<\\/script'):tag==='style'?node.textContent:Array.from(node.childNodes).map(htmlSerialize).join('');return start+content+'</'+tag+'>';}
-function exportDocument(data=store,asXML=XML_CONTAINER){
+function exportDocument(data,asXML=XML_CONTAINER){
   const doc=exportTemplate.cloneNode(true);
   const storeNode=doc.querySelector('#db-store');
   // DOM textContent is safely serialized by each container's native serializer.
@@ -712,7 +705,7 @@ function exportDocument(data=store,asXML=XML_CONTAINER){
   return '<!doctype html>\n'+(XML_CONTAINER?htmlSerialize(doc):doc.outerHTML);
 }
 function save(publishSite=false){
- db.validateStore(store);const data=publishSite?{...store,publicHeads:{}}:store;
+ const data=db.snapshot(store);if(publishSite)data.publicHeads={};
  const asXML=XML_CONTAINER&&!publishSite,output=exportDocument(data,asXML),extension=asXML?'xml':'html';
  const mime=asXML?'application/xml':'text/html';
  const url=URL.createObjectURL(new Blob([output],{type:mime+';charset=utf-8'}));

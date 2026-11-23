@@ -9,7 +9,7 @@ async function main(){
  const match=html.match(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/);
  assert.ok(match,'encrypted store is embedded');
  const store=db.adoptStore(JSON.parse(match[1]));
- const original=store.publicHeads['Касса'];
+ const original=db.catalog(store)['Касса'];
  const originalRoot=await db.load(store,original);
  assert.equal(Object.keys(originalRoot.state.$refs).length,11);
  const earlier=(await db.load(store,originalRoot.state.$refs.participants)).state;

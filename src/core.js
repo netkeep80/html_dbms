@@ -56,46 +56,38 @@ function validateStore(s){
 // Only these controlled stores are mutable. External containers are adopted once.
 // Overlay reads are revision-bound; a stale transaction cannot read a mixed snapshot.
 const stores=new WeakMap(),REMOVED=Symbol('removed');
-function fresh(m){ensure(!m.closed&&(!m.base||m.base.rev===m.baseRev),'STALE_TRANSACTION','Store revision changed');}
-function meta(s){const m=stores.get(s);ensure(m,'UNMANAGED_STORE','Adopt external storage before mutation');fresh(m);return m;}
+function meta(s){const m=stores.get(s);ensure(m,'UNMANAGED_STORE','Adopt external storage before mutation');ensure(!m.closed&&(!m.base||m.base.rev===m.baseRev),'STALE_TRANSACTION','Store revision changed');return m;}
 function revision(s){return meta(s).rev;}
 function unchanged(s,rev){if(rev!==undefined)ensure(revision(s)===rev,'STALE_TRANSACTION','Store revision changed');}
 function beginRead(s){if(stores.has(s))return revision(s);validateStore(s);}
-function guardedMap(m,kind){
- const records=kind==='records',target=Object.create(null);
- const backing=()=>records?(m.base?m.base.raw:m.raw):m.catalog;
- const has=k=>{fresh(m);return records&&m.delta?.has(k)?m.delta.get(k)!==REMOVED:own(backing(),k);};
- const get=k=>{fresh(m);return records&&m.delta?.has(k)?(m.delta.get(k)===REMOVED?undefined:m.delta.get(k)):backing()[k];};
- const keys=()=>{fresh(m);if(!records||!m.delta)return Object.keys(backing());const result=new Set(Object.keys(backing()));for(const [k,v] of m.delta)v===REMOVED?result.delete(k):result.add(k);return [...result];};
- const set=(k,v)=>{fresh(m);if(records){validCipher(k,v);const prior=get(k);if(prior===undefined){ensure(m.count<MAX_RECORDS,'RESOURCE_LIMIT','Too many records');m.count++;m.bytes+=27+v.length;}else m.bytes+=v.length-prior.length;if(m.delta)m.delta.set(k,v);else put(m.raw,k,v);m.proof=null;}else{validPublication(k,v);put(m.catalog,k,v);}m.rev++;return true;};
- return new Proxy(target,{
-  get:(_,k)=>get(k),has:(_,k)=>has(k),ownKeys:keys,
-  getOwnPropertyDescriptor:(_,k)=>has(k)?{value:get(k),enumerable:true,writable:true,configurable:true}:undefined,
-  set:(_,k,v)=>set(k,v),
-  defineProperty:(_,k,d)=>{ensure(own(d,'value')&&d.enumerable===true&&d.configurable===true&&d.writable===true,'INVALID_JSON','Only writable data properties');return set(k,d.value);},
-  deleteProperty:(_,k)=>{fresh(m);if(has(k)){if(records){m.count--;m.bytes-=27+get(k).length;if(m.delta)m.delta.set(k,REMOVED);else delete m.raw[k];m.proof=null;}else delete m.catalog[k];m.rev++;}return true;},
-  setPrototypeOf:()=>false,preventExtensions:()=>false
- });
+function makeStore(m){const handle=Object.freeze({});stores.set(handle,m);return handle;}
+function catalog(s){return {...meta(s).catalog};}
+function readCipher(s,id){
+ if(!stores.has(s))return own(s.records,id)?s.records[id]:undefined;
+ const m=meta(s);if(m.delta?.has(id)){const ct=m.delta.get(id);return ct===REMOVED?undefined:ct;}return (m.base?.raw||m.raw)[id];
 }
-function catalogFrom(value){const out=Object.create(null);for(const k of dataKeys(value)){validPublication(k,value[k]);put(out,k,value[k]);}return out;}
-function makeStore(m){
- const ordered={format:VERSION};if(m.catalog)ordered.publicHeads=guardedMap(m,'catalog');ordered.records=guardedMap(m,'records');m.target=ordered;
- const proxy=new Proxy(ordered,{
-  get:(t,k)=>{fresh(m);return Reflect.get(t,k);},
-  ownKeys:t=>{fresh(m);return Reflect.ownKeys(t);},
-  getOwnPropertyDescriptor:(t,k)=>{fresh(m);return Reflect.getOwnPropertyDescriptor(t,k);},
-  set:(t,k,v)=>{fresh(m);ensure(k==='publicHeads','INVALID_JSON','Store fields are controlled');m.catalog=catalogFrom(v);t.publicHeads=guardedMap(m,'catalog');m.rev++;return true;},
-  deleteProperty:(t,k)=>{fresh(m);ensure(k==='publicHeads','INVALID_JSON','Store fields are controlled');if(m.catalog){m.catalog=null;delete t.publicHeads;m.rev++;}return true;},
-  defineProperty:()=>false,setPrototypeOf:()=>false,preventExtensions:()=>false
- });stores.set(proxy,m);return proxy;
+function writePhysical(s,id,ct){
+ const m=meta(s),prior=readCipher(s,id);validCipher(id,ct);
+ if(prior===undefined){ensure(m.count<MAX_RECORDS,'RESOURCE_LIMIT','Too many records');m.count++;m.bytes+=27+ct.length;}else m.bytes+=ct.length-prior.length;
+ if(m.delta)m.delta.set(id,ct);else put(m.raw,id,ct);m.proof=null;m.rev++;
 }
+function removePhysical(s,id){
+ const m=meta(s),prior=readCipher(s,id);if(prior===undefined)return;
+ m.count--;m.bytes-=27+prior.length;if(m.delta)m.delta.set(id,REMOVED);else delete m.raw[id];m.proof=null;m.rev++;
+}
+function catalogFrom(value){return Object.assign(Object.create(null),value);}
 function adoptStore(s){
- validateStore(s);
- const raw=Object.assign(Object.create(null),s.records);
- const values=Object.values(raw);return makeStore({raw,count:values.length,bytes:values.reduce((n,ct)=>n+27+ct.length,0),catalog:own(s,'publicHeads')?catalogFrom(s.publicHeads):null,rev:0});
+ validateStore(s);const raw=Object.assign(Object.create(null),s.records),values=Object.values(raw);
+ return makeStore({raw,count:values.length,bytes:values.reduce((n,ct)=>n+27+ct.length,0),catalog:own(s,'publicHeads')?catalogFrom(s.publicHeads):null,rev:0});
+}
+function newStore(){return makeStore({raw:Object.create(null),count:0,bytes:0,catalog:Object.create(null),rev:0});}
+function snapshot(s){
+ const m=meta(s),out={format:VERSION};if(m.catalog)out.publicHeads={...m.catalog};
+ const records=Object.assign({},m.base?.raw||m.raw);
+ if(m.delta)for(const [id,ct] of m.delta)ct===REMOVED?delete records[id]:put(records,id,ct);
+ out.records=records;return out;
 }
 function storeInfo(s){const m=meta(s),header={format:VERSION};if(m.catalog)header.publicHeads=m.catalog;header.records={};return {count:m.count,published:m.catalog?Object.keys(m.catalog).length:0,bytes:encoder.encode(JSON.stringify(header)).length+m.bytes+Math.max(0,m.count-1)};}
-function newStore(){return makeStore({raw:Object.create(null),count:0,bytes:0,catalog:Object.create(null),rev:0});}
 function iso(s){return typeof s==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(s)&&!Number.isNaN(Date.parse(s))&&new Date(s).toISOString()===s;}
 // Compact v4 format: genesis = [null,{name,parent,state}], patch = [ISO-time,previousHEAD,RFC6902-operations].
 // Sequence is derived from verified ancestry; it is NEVER serialized.
@@ -111,7 +103,7 @@ function validateRecord(r){
  return r;
 }
 async function expectedId(r,hash){return isGenesis(r)?rootId(hash):successorId(r[1]);}
-async function readDecoded(s,decoded){const {id,hash}=decoded;ensure(own(s.records,id),'MISSING_RECORD','Missing record '+id);let r=validateRecord(await decrypt(s.records[id],decoded));ensure((await expectedId(r,hash))===id,'ADDRESS_MISMATCH','Wrong physical address');return r;}
+async function readDecoded(s,decoded){const {id,hash}=decoded,ct=readCipher(s,id);ensure(ct!==undefined,'MISSING_RECORD','Missing record '+id);let r=validateRecord(await decrypt(ct,decoded));ensure((await expectedId(r,hash))===id,'ADDRESS_MISMATCH','Wrong physical address');return r;}
 async function readRecord(s,head){const rev=stores.has(s)?revision(s):undefined;const r=await readDecoded(s,unpackHead(head));unchanged(s,rev);return r;}
 function parts(pointer){ensure(typeof pointer==='string'&&(pointer===''||pointer[0]==='/'),'INVALID_POINTER','Not a JSON Pointer');if(pointer==='')return [];return pointer.slice(1).split('/').map(s=>{ensure(!/~(?![01])/.test(s),'INVALID_POINTER','Invalid tilde escape');return s.replace(/~1/g,'/').replace(/~0/g,'~');});}
 function indexOfToken(t,len,insert=false){ensure(t==='-'&&insert||/^(0|[1-9]\d*)$/.test(t),'INVALID_POINTER','Invalid array index');if(t==='-')return len;const i=Number(t);ensure(Number.isSafeInteger(i)&&i<=(insert?len:len-1),'INVALID_POINTER','Array index out of bounds');return i;}
@@ -144,10 +136,10 @@ unchanged(s,revisionAtStart);return {status:'complete',chain:{head,genesis:clone
 }catch(e){return diagnose(e,head);}}
 async function load(s,head){return loadChain(s,head);}
 async function loadChain(s,head,visit){const x=await inspectChain(s,head,MAX_RECORDS,visit);if(x.status!=='complete')throw error(x.code,x.message,{diagnosis:x});return x.chain;}
-async function genesis(s,name,state,parent=null,options={}){const rev=revision(s),overwrite=!!options.overwrite;ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state)}]);const {bytes,h}=await encodeRecord(r),id=encode64((await sha(h)).slice(0,16));const occupied=own(s.records,id);if(occupied&&!overwrite){const old=await readRecord(s,packHead(id,h)).catch(()=>null);unchanged(s,rev);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head:packHead(id,h),existing:true,overwritten:false};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
-const ciphertext=await encrypt(bytes,h,id);unchanged(s,rev);s.records[id]=ciphertext;return {head:packHead(id,h),existing:false,overwritten:occupied};}
+async function genesis(s,name,state,parent=null,options={}){const rev=revision(s),overwrite=!!options.overwrite;ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state)}]);const {bytes,h}=await encodeRecord(r),id=encode64((await sha(h)).slice(0,16));const occupied=readCipher(s,id)!==undefined;if(occupied&&!overwrite){const old=await readRecord(s,packHead(id,h)).catch(()=>null);unchanged(s,rev);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head:packHead(id,h),existing:true,overwritten:false};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
+const ciphertext=await encrypt(bytes,h,id);unchanged(s,rev);writePhysical(s,id,ciphertext);return {head:packHead(id,h),existing:false,overwritten:occupied};}
 async function append(s,head,operations,options={}){const rev=revision(s),ops=clone(operations),opts={overwrite:!!options.overwrite,timestamp:options.timestamp},chain=await load(s,head);return appendKnown(s,head,chain.state,ops,opts,rev);}
-async function appendKnown(s,head,previous,operations,{overwrite=false,timestamp}={},rev=revision(s)){unchanged(s,rev);const state=patch(previous,operations);const id=await successorId(head);const occupied=own(s.records,id);if(occupied&&!overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head,operations]);const {bytes,h}=await encodeRecord(r);const ciphertext=await encrypt(bytes,h,id);unchanged(s,rev);s.records[id]=ciphertext;return {head:packHead(id,h),state,overwritten:occupied};}
+async function appendKnown(s,head,previous,operations,{overwrite=false,timestamp}={},rev=revision(s)){unchanged(s,rev);const state=patch(previous,operations);const id=await successorId(head);const occupied=readCipher(s,id)!==undefined;if(occupied&&!overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head,operations]);const {bytes,h}=await encodeRecord(r);const ciphertext=await encrypt(bytes,h,id);unchanged(s,rev);writePhysical(s,id,ciphertext);return {head:packHead(id,h),state,overwritten:occupied};}
 async function patchRoot(s,head,operations,options={}){
  const ops=clone(operations),opts={overwrite:!!options.overwrite,timestamp:options.timestamp},tx=staging(s),proof=await checkedProof(s,head);
  const r=await appendKnown(tx,head,proof.state,ops,opts);
@@ -192,8 +184,14 @@ async function checkChange(tx,proof,root,known,overwritten){
  unchanged(tx,rev);meta(tx).proof={head:root.head,state:root.state,children};
 }
 function staging(s){const base=meta(s);ensure(!base.base,'INVALID_TRANSACTION','Nested staging is not supported');return makeStore({base,baseRev:base.rev,delta:new Map(),count:base.count,bytes:base.bytes,catalog:base.catalog?catalogFrom(base.catalog):null,rev:0,proof:base.proof});}
-function publish(staged,alias,newHead,oldHead=null){ensure(validHead(newHead),'INVALID_HEAD','Bad published head');if(!own(staged,'publicHeads'))staged.publicHeads={};ensure(plain(staged.publicHeads),'INVALID_PUBLIC_HEADS','Invalid publicHeads');if(oldHead!==null)ensure(sameHead(staged.publicHeads[alias],oldHead),'STALE_PUBLIC_HEAD','Published version changed');put(staged.publicHeads,alias,clone(newHead));}
-async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(tx.publicHeads||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);meta(tx).proof={head:g.head,state:root,children:new Map()};return {store:tx,rootHead:g.head,genesis:g};}
+function publish(s,alias,newHead,oldHead=null){
+ const m=meta(s);validPublication(alias,newHead);
+ if(oldHead!==null)ensure(sameHead(m.catalog?.[alias],oldHead),'STALE_PUBLIC_HEAD','Published version changed');
+ if(!m.catalog)m.catalog=Object.create(null);put(m.catalog,alias,newHead);m.rev++;
+}
+function unpublish(s,alias){const m=meta(s);if(!m.catalog||!own(m.catalog,alias))return;delete m.catalog[alias];if(!Object.keys(m.catalog).length)m.catalog=null;m.rev++;}
+
+async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(meta(tx).catalog||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);meta(tx).proof={head:g.head,state:root,children:new Map()};return {store:tx,rootHead:g.head,genesis:g};}
 async function createDocument(s,rootHead,name,initial,alias=null,options={}){
  const state=clone(initial),overwriteRoot=!!options.overwriteRoot,tx=staging(s),proof=await checkedProof(s,rootHead),refs=getRootRefs(proof.state),n=alias||name;
  ensure(typeof n==='string'&&n.length>0&&!n.includes('/')&&!own(refs,n),'DUPLICATE_DOCUMENT','Name already exists');
@@ -289,25 +287,23 @@ async function truncateInvalidTail(s,diagnosis,recoveryHead) {
   // actually points back to the corrupt slot; no guesses and no deleting the occupant.
   const deletions=[];
   for(const id of descendants){
-    if(!own(s.records,id))continue;
+    if(readCipher(s,id)===undefined)continue;
     // These records were read and authenticated while inspecting from the broken tip.
     deletions.push(id);
   }
   unchanged(s,rev);const out=staging(s);
-  for(const id of deletions)delete out.records[id];
+  for(const id of deletions)removePhysical(out,id);
   return {store:out,recoveryHead,deletedIds:deletions,keptInvalidSlot:invalid};
 }
 function commit(s,tx){
  const base=meta(s),stage=meta(tx);ensure(stage.base===base,'INVALID_TRANSACTION','Wrong transaction base');
- // Prepare catalog before touching base. All physical changes were validated when staged.
- const catalog=stage.catalog?catalogFrom(stage.catalog):null;
+ // The stage owns its private catalog; transfer it without another copy.
  for(const [id,ct] of stage.delta)ct===REMOVED?delete base.raw[id]:put(base.raw,id,ct);
- base.count=stage.count;base.bytes=stage.bytes;base.catalog=catalog;
- if(catalog)base.target.publicHeads=guardedMap(base,'catalog');else delete base.target.publicHeads;
+ base.count=stage.count;base.bytes=stage.bytes;base.catalog=stage.catalog;
  base.proof=stage.proof;base.rev++;stage.closed=true;return s;
 }
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
-const api={VERSION,newStore,validateStore,adoptStore,revision,storeInfo,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
+const api={VERSION,newStore,validateStore,adoptStore,revision,storeInfo,snapshot,catalog,readCipher,writePhysical,removePhysical,unpublish,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
 g.HTML_DBMS=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

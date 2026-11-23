@@ -21,7 +21,7 @@ const {createModel,SHEETS}=require(path.join(root,'examples/cash/import-model.cj
  for(const [alias,d] of [['transactions',transactions],...SHEETS.map(([a])=>[a,catalogs[a]])]){const t=await db.createDocument(s,h,alias,d);db.commit(s,t.store);h=t.rootHead;}
  db.publish(s,'Касса',h,g.rootHead);
  let html=fs.readFileSync(path.join(root,'dist/html_dbms_cash_demo.html'),'utf8');
- html=html.replace(/<script id="db-store" type="application\/json">[\s\S]*?<\/script>/,'<script id="db-store" type="application/json">'+JSON.stringify(s)+'</script>');
+ html=html.replace(/<script id="db-store" type="application\/json">[\s\S]*?<\/script>/,'<script id="db-store" type="application/json">'+JSON.stringify(db.snapshot(s))+'</script>');
  fs.writeFileSync(process.argv[2]||path.join(root,'dist/ui_test_crypto_shim_fixture.html'),html);
- console.log('Fake crypto UI integration fixture ready:',Object.keys(s.records).length);
+ console.log('Fake crypto UI integration fixture ready:',db.storeInfo(s).count);
 })().catch(e=>{console.error(e);process.exit(1)});
