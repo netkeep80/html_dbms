@@ -8,7 +8,7 @@ const subtle={
  async decrypt(_opts,key,buffer){const data=new Uint8Array(buffer);if(data.length<16||Array.from(data.slice(-16)).some((x,i)=>x!==key[i]))throw Error('bad tag');return data.slice(0,-16).buffer;}
 };
 Object.defineProperty(globalThis,'crypto',{value:{subtle},configurable:true});
-const db=require(path.join(root,'src/core.js'));
+const db=require(path.join(root,'src/core-node.cjs'));
 const {createModel,SHEETS}=require(path.join(root,'examples/cash/import-model.cjs'));
 (async()=>{
  const f=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/cash_excel_extracted.json'),'utf8'));

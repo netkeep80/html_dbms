@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process');
-const db=require('../../src/core.js'),{syntheticFixture}=require('./synthetic-pages.cjs'),{createModel,SHEETS}=require('./import-model.cjs');
+const db=require('../../src/core-node.cjs'),{syntheticFixture}=require('./synthetic-pages.cjs'),{createModel,SHEETS}=require('./import-model.cjs');
 const project=path.resolve(__dirname,'../..');
 function storeFromHtml(html){
  const matches=[...html.matchAll(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/g)];

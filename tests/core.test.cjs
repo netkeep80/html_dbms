@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const db = require('../src/core.js');
+const db = require('../src/core-node.cjs');
 const id=head=>db.unpackHead(head).id;
 const fixedTime = '2026-11-23T18:00:00.000Z';
 

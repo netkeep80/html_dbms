@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const db=require(path.resolve(__dirname,'../src/core.js'));
+const db=require(path.resolve(__dirname,'../src/core-node.cjs'));
 async function main(){
  const html=fs.readFileSync(path.resolve(__dirname,'../dist/html_dbms_cash_demo.html'),'utf8');
  const match=html.match(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/);

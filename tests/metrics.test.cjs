@@ -8,7 +8,7 @@ globalThis.Proxy=new NativeProxy(NativeProxy,{construct(target,[obj,handler]){
  if(enumerate)handler={...handler,ownKeys(t){const keys=enumerate(t);if(probe&&keys.includes(probe))counts.fullScans++;return keys;}};
  return new target(obj,handler);
 }});
-const db=require('../src/core.js');
+const db=require('../src/core-node.cjs');
 const reset=()=>Object.keys(counts).forEach(k=>counts[k]=0);
 const sample=()=>({...counts});
 (async()=>{

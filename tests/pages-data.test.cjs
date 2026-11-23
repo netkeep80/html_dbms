@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
-const db=require('../src/core.js'),{audit,build,storeFromHtml}=require('../examples/cash/build-pages.cjs'),{syntheticFixture}=require('../examples/cash/synthetic-pages.cjs');
+const db=require('../src/core-node.cjs'),{audit,build,storeFromHtml}=require('../examples/cash/build-pages.cjs'),{syntheticFixture}=require('../examples/cash/synthetic-pages.cjs');
 function withStore(html,store){return html.replace(/(<script id="db-store" type="application\/json">)[\s\S]*?(<\/script>)/,(_,a,b)=>a+JSON.stringify(store).replace(/</g,'\\u003c')+b);}
 (async()=>{
  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'hdbms-pages-test-'));

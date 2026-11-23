@@ -8,7 +8,7 @@ const makeElement=tag=>XML_CONTAINER?document.createElementNS(XHTML_NS,tag):docu
 function makeOption(label,value){const e=makeElement('option');e.textContent=label;e.value=value;return e;}
 // Export from a pristine template: never copy decrypted application DOM into saved HTML.
 const exportTemplate=document.documentElement.cloneNode(true);
-const STARTER_SOURCE=$('starter-source').textContent;
+const STARTER_SOURCE=$('starter-source').textContent,DEMO_SOURCE=$('cash-demo-source')?.textContent;
 let store, rootHead=null, publicName=null, debug=false, busy=null, activeFrame=null, lastDiagnosis=null, openEpoch=0, rpcBusy=null, session=null, startupListener=null;
 const OWN=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function notice(message,bad=false){$('status').textContent=message;$('status').className='notice '+(bad?'error':'good');}
@@ -95,7 +95,7 @@ async function renderEntry(epoch=openEpoch,checkedRoot){if(epoch!==openEpoch)ret
    const host=$('entry-area'), block=element('div',undefined,'pane');block.appendChild(element('div','Исполняемое entry: '+(value.export||'main'),'meta'));const btn=element('button','Запустить приложение','primary');btn.classList.add('entry-launch');block.appendChild(btn);block.appendChild(element('p','JavaScript выполняется только после подтверждения, в изолированном iframe. Запись в БД требует отдельного подтверждения.','meta'));host.appendChild(block);
    btn.onclick=()=>run(async()=>{if(!current(c))return;block.remove();await launchSandbox(value);});
    // Автозапуск разрешён исключительно для поставляемого неизменённого стартового приложения.
-   if(value.source===STARTER_SOURCE&&value.export==='main'){block.remove();await launchSandbox(value);}
+   if((value.source===STARTER_SOURCE||value.source===DEMO_SOURCE)&&value.export==='main'){block.remove();await launchSandbox(value);}
    return;
  }
  if(value&&typeof value==='object'&&!Array.isArray(value)&&value.type==='text/html'&&typeof value.html==='string'){

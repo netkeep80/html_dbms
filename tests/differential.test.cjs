@@ -1,5 +1,5 @@
 'use strict';
-const assert=require('node:assert/strict'),{webcrypto}=require('node:crypto'),db=require('../src/core.js');
+const assert=require('node:assert/strict'),{webcrypto}=require('node:crypto'),db=require('../src/core-node.cjs');
 const subtle=(globalThis.crypto||webcrypto).subtle;
 const serial=s=>JSON.stringify(s);
 function measure(s){

@@ -48,3 +48,5 @@ assert.doesNotMatch(dist,/\/\* (?:CORE|APP|STARTER)_JS \*\//);
 // Serialized patch shape is verified by core.test.cjs, not source comments.
 assert.ok(dist.includes('export async function main(db, mount)'));
 console.log('HTML_DBMS/4 strict shell/entry UI checks PASS');
+
+assert.doesNotMatch(dist,/require\(['"]node:crypto|\bBuffer\.from|module\.exports/);

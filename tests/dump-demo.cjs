@@ -1,7 +1,7 @@
 'use strict';
 /** Decrypt demo with current HTML_DBMS core; calculate reports using entry source (not fixture). */
 const fs=require('node:fs'),path=require('node:path');
-const db=require(path.resolve(__dirname,'../src/core.js'));
+const db=require(path.resolve(__dirname,'../src/core-node.cjs'));
 const uri=process.argv[2];if(!uri)throw Error('Provide demo HTML');
 const html=fs.readFileSync(uri,'utf8'),m=html.match(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/);
 if(!m)throw Error('Embedded physical store missing');

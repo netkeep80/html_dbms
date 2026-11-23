@@ -3,7 +3,7 @@
 'use strict';
 const VERSION = 'HTML_DBMS/4';
 const encoder = new TextEncoder(), decoder = new TextDecoder('utf-8', {fatal:true});
-const subtle = g.crypto?.subtle || (typeof require === 'function' ? require('node:crypto').webcrypto.subtle : null);
+const subtle = g.crypto.subtle;
 const MAX_RECORDS = 200000, MAX_BYTES = 12 * 1024 * 1024, MAX_PATCH = 10000, MAX_DEPTH = 32;
 const own = (o,k) => Object.prototype.hasOwnProperty.call(o,k);
 function error(code, message, more={}) { return Object.assign(new Error(message), {code, ...more}); }
@@ -20,8 +20,8 @@ function assertJson(x, seen=new Set(), depth=0) {
   seen.delete(x);
 }
 function clone(x){assertJson(x);return JSON.parse(JSON.stringify(x));}
-function encode64(b){if(typeof Buffer!=='undefined')return Buffer.from(b).toString('base64url');let s='';for(const n of b)s+=String.fromCharCode(n);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
-function decode64(s){ensure(typeof s==='string'&&/^[A-Za-z0-9_-]*$/.test(s)&&s.length%4!==1,'INVALID_BASE64','Invalid Base64url');let b;if(typeof Buffer!=='undefined') b=new Uint8Array(Buffer.from(s,'base64url'));else{const v=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4));b=Uint8Array.from(v,c=>c.charCodeAt(0));}ensure(encode64(b)===s,'INVALID_BASE64','Non-canonical Base64url');return b;}
+function encode64(b){let s='';for(const n of b)s+=String.fromCharCode(n);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function decode64(s){ensure(typeof s==='string'&&/^[A-Za-z0-9_-]*$/.test(s)&&s.length%4!==1,'INVALID_BASE64','Invalid Base64url');const v=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4)),b=Uint8Array.from(v,c=>c.charCodeAt(0));ensure(encode64(b)===s,'INVALID_BASE64','Non-canonical Base64url');return b;}
 function validId(s){try{return decode64(s).length===16;}catch{return false;}}
 function componentBytes(value,size){const bytes=typeof value==='string'?decode64(value):value;ensure(bytes instanceof Uint8Array&&bytes.length===size,'INVALID_HEAD','Invalid HEAD component');return bytes;}
 function packHead(id,hash){const b=new Uint8Array(48);b.set(componentBytes(id,16));b.set(componentBytes(hash,32),16);return encode64(b);}
@@ -309,5 +309,5 @@ function commit(s,tx){
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
 const api={VERSION,newStore,validateStore,adoptStore,revision,storeInfo,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
-g.HTML_DBMS=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+g.HTML_DBMS=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
