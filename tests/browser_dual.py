@@ -55,6 +55,12 @@ def current_pair(page):
 
 
 def frame(page):
+    # Playwright frame_locator() does not reliably attach to an XHTML iframe
+    # inside a native XML document despite the subframe being live and usable.
+    if page.evaluate('document.contentType') in ('text/xml', 'application/xml'):
+        children=[child for child in page.frames if child != page.main_frame]
+        assert len(children)==1, f'Expected one sandboxed child frame, got {len(children)}'
+        return children[0]
     return page.frame_locator('#entry-area iframe')
 
 
@@ -79,22 +85,7 @@ def scenario(browser,kind,tmp_path):
     setup(page,kind)
     expect(page.locator('#status')).to_contain_text('Контейнер пуст')
     page.locator('#new-db').click()
-    try:
-        expect(frame(page).locator('#db-title')).to_have_text('Касса',timeout=7000)
-    except Exception:
-        try:
-            diagnostic={'kind':kind,'url':page.url,'status':page.locator('#status').inner_text(),
-              'iframe':page.locator('#entry-area iframe').evaluate('(e)=>({srcdoc:e.srcdoc,sandbox:e.sandbox.value,outer:e.outerHTML.slice(0,500),ctype:e.contentDocument?.contentType,ready:e.contentDocument?.readyState})'),
-              'frames':[(f.url,f.name) for f in page.frames],
-              'consoles':consoles[-25:],'errors':errors[-25:]}
-            for frm in page.frames:
-                if frm!=page.main_frame:
-                    try:diagnostic['frame_dom']=frm.evaluate('document.documentElement?.outerHTML?.slice(0,2000)')
-                    except Exception as ex:diagnostic['frame_dom_error']=str(ex)
-            print('NATIVE_XML_FRAME_DIAGNOSTIC',repr(diagnostic),flush=True)
-        except Exception as ex:
-            print('XML_DIAGNOSTICS_FAILURE',str(ex),flush=True)
-        raise
+    expect(frame(page).locator('#db-title')).to_have_text('Касса',timeout=15000)
     frame(page).locator('#add-document').click()
     expect(frame(page).locator('#new-document')).to_be_visible()
     frame(page).locator('#new-document-name').fill('funds')
