@@ -8,7 +8,7 @@ async function main(){
  const html=fs.readFileSync(path.resolve(__dirname,'../dist/html_dbms_cash_demo.html'),'utf8');
  const match=html.match(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/);
  assert.ok(match,'encrypted store is embedded');
- const store=db.validateStore(JSON.parse(match[1]));
+ const store=db.adoptStore(JSON.parse(match[1]));
  const original=store.publicHeads['Касса'];
  const originalRoot=await db.load(store,original);
  assert.equal(Object.keys(originalRoot.state.$refs).length,11);

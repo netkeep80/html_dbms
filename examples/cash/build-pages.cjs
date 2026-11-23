@@ -5,7 +5,7 @@ const project=path.resolve(__dirname,'../..');
 function storeFromHtml(html){
  const matches=[...html.matchAll(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/g)];
  assert.equal(matches.length,1,'exactly one physical store');
- return db.validateStore(JSON.parse(matches[0][1]));
+ return db.adoptStore(JSON.parse(matches[0][1]));
 }
 async function audit(html){
  const fixture=syntheticFixture(),{transactions,catalogs}=createModel(fixture),store=storeFromHtml(html);

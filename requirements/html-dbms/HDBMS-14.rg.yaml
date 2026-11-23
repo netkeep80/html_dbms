@@ -3,6 +3,7 @@ id: HDBMS-14
 normative: |
   ### HDBMS-14 — Стабилизация, этап 1 (#41)
   Genesis использует одни сериализованные байты и один SHA-256 plaintext. Формат /4 не меняется. Структурная проверка всех ciphertext: алфавит, канонические остаточные биты, минимальный GCM tag и лимит. readRecord использует прямой lookup без перебора. Обычная запись корня и дочерних документов проверяется до commit, включая исторический rollback; отказ не изменяет рабочую копию. Повторное чтение корневой цепочки при открытии не требуется. Сохранены независимый verifier, явная перезапись и отсутствие legacy.
+  Этап 2: внешний store принимается через adoptStore; контролируемые словари поддерживают структурные инварианты, overlay хранит только дельту физических слотов, commit проверяет базовую ревизию, конкурентные физические операции отклоняют устаревшую запись. Replay root совмещён со сбором исторических refs. Ошибка entry не отзывает криптографически проверенный root. Полная приёмка этапа отдельно.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}
@@ -22,3 +23,8 @@ relations:
     target: {kind: artifact, path: 'README.md'}
   - predicates: [documents]
     target: {kind: artifact, path: 'docs/SRS.md'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/cash_crud.test.cjs'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/build-pages.cjs'}

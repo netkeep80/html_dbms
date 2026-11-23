@@ -66,7 +66,7 @@ function accessUrl(head){const url=new URL(location.href);url.search='';url.hash
 function syncUrl(head){if(!location.hash)return;const url=new URL(location.href);url.hash=head?'head='+head:'';history.replaceState(null,'',url.href);}
 async function openFields(){const requested=$('head').value;await openHead(requested,true);}
 function assertWriteTarget(){needRoot();if(!db.sameHead($('head').value,rootHead))throw Error('Поле HEAD отличается от открытой БД. Для записи откройте нужную версию кнопкой «Открыть».');}
-async function openHead(head,updateUrl=false){const epoch=clearOpened(),requestedHash=location.hash,snapshot=store;setFields(head);try{if(!db.validHead(head))throw Error('Некорректный HEAD (64 символа Base64url)');const {chain}=await db.openDatabase(snapshot,head);if(epoch!==openEpoch||requestedHash!==location.hash||snapshot!==store)return;rootHead=head;publicName=findPublicName(head);if(updateUrl)syncUrl(head);updateInfo();await renderEntry(epoch,chain.state);if(epoch===openEpoch)notice('Открыто: '+(chain.state?.name||'JSON')+' · '+format(head));}catch(e){if(epoch===openEpoch){clearOpened();throw e;}}}
+async function openHead(head,updateUrl=false){const epoch=clearOpened(),requestedHash=location.hash,snapshot=store;setFields(head);try{if(!db.validHead(head))throw Error('Некорректный HEAD (64 символа Base64url)');const {chain}=await db.openDatabase(snapshot,head);if(epoch!==openEpoch||requestedHash!==location.hash||snapshot!==store)return;rootHead=head;publicName=findPublicName(head);if(updateUrl)syncUrl(head);updateInfo();try{await renderEntry(epoch,chain.state);if(epoch===openEpoch)notice('Открыто: '+(chain.state?.name||'JSON')+' · '+format(head));}catch(e){if(epoch===openEpoch){clearEntry();placeholder('Ошибка entry: '+(e.code||'')+' '+e.message);notice('БД открыта; ошибка entry: '+e.message,true);}}}catch(e){if(epoch===openEpoch){clearOpened();throw e;}}}
 async function openInitial(useFragment=true){clearOpened();setFields(null);syncCatalog();const names=Object.keys(store.publicHeads||{});const explicit=useFragment?fragmentHead(location.hash):null;if(explicit){await openHead(explicit);return;}if(names.length===1){await openHead(store.publicHeads[names[0]]);return;}clearEntry();placeholder(names.length?'Выберите опубликованную БД, затем нажмите «Открыть».':'Для открытия требуется HEAD или ссылка доступа.');notice(names.length?'Выберите БД · опубликовано '+names.length:'Контейнер пуст: опубликованных БД нет.');}
 function entryValue(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).length===1&&typeof x.$ref==='string';}
 async function renderEntry(epoch=openEpoch,checkedRoot){clearEntry();if(!rootHead){placeholder('Выберите БД, укажите HEAD и нажмите «Открыть».');return;}const root=checkedRoot??(await db.load(store,rootHead)).state;let value=root?.entry;if(entryValue(value))value=(await db.resolve(store,rootHead,rootHead,value)).value;
@@ -113,7 +113,7 @@ async function retryOccupied(operation,perform){
   }
   throw Error('Не удалось разрешить конфликт successor');
 }
-async function stagedUpdate(result,previous){if(activePublished())db.publish(result.store,publicName,result.rootHead,previous);syncUrl(result.rootHead);db.commit(store,result.store);rootHead=result.rootHead;setFields(rootHead);syncCatalog();notice('Изменение записано · новый root: '+format(rootHead)+' · сохраните контейнер.');if(debug)await showDebug();}
+async function stagedUpdate(result,previous){if(activePublished())db.publish(result.store,publicName,result.rootHead,previous);db.commit(store,result.store);rootHead=result.rootHead;try{syncUrl(rootHead);}catch(e){console.warn(e);}setFields(rootHead);syncCatalog();notice('Изменение записано · новый root: '+format(rootHead)+' · сохраните контейнер.');if(debug)try{await showDebug();}catch(e){notice('Изменение записано; ошибка отладки: '+e.message,true);}}
 async function authorizeWrite(promptText){if(!confirm(promptText+'\nИзменение будет сохранено только в рабочей копии HTML DBMS, не на сервере. Продолжить?'))throw Error('Запись отменена пользователем');}
 window.addEventListener('message',event=>{if(!activeFrame||event.source!==activeFrame.contentWindow)return;const msg=event.data;if(!msg||typeof msg!=='object')return;if(msg.kind==='html-dbms-error'){notice('entry: '+msg.error,true);return;}if(msg.kind!=='html-dbms-rpc')return;
  const epoch=openEpoch,requestedHash=location.hash;runRpc(msg,epoch,requestedHash).then(value=>{if(epoch===openEpoch&&activeFrame&&event.source===activeFrame.contentWindow&&(!location.hash||location.hash==='#head='+rootHead))event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:true,value},'*');}).catch(e=>{if(epoch===openEpoch&&activeFrame&&event.source===activeFrame.contentWindow&&(!location.hash||location.hash==='#head='+rootHead))event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))},'*');});
@@ -126,10 +126,10 @@ async function runRpc(message,epoch,requestedHash){needRoot();if(location.hash&&
  default:throw Error('Неподдерживаемая операция entry: '+String(message.method));}}
 async function createDatabase(){const epoch=openEpoch,requestedHash=location.hash;const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});if(epoch!==openEpoch||requestedHash!==location.hash)throw Error('Контекст открытия изменился');db.commit(store,result.store);syncCatalog();setFields(result.rootHead);await openHead(result.rootHead,true);notice('БД «'+name+'» создана и открыта. Чтобы сохранить её для следующего запуска, нажмите «Сохранить» и откройте скачанный файл.');}
 async function showDebug(){
- const epoch=openEpoch,h=rootHead||fieldHead(),snapshot=store,root=await db.inspect(snapshot,h);
+ const epoch=openEpoch,h=rootHead||fieldHead(),snapshot=store,rev=db.revision(snapshot),root=await db.inspect(snapshot,h);
  const children={};
  if(root.status==='complete')for(const [name,head]of Object.entries(getRootRefs(root.chain.state)))Object.defineProperty(children,name,{value:await db.inspect(snapshot,head),enumerable:true});
- if(epoch!==openEpoch||snapshot!==store||!debug&&$('debug-panel').hasAttribute('hidden'))return false;
+ if(epoch!==openEpoch||snapshot!==store||rev!==db.revision(snapshot)||!debug&&$('debug-panel').hasAttribute('hidden'))return false;
  $('debug-raw').textContent=JSON.stringify({rootHead:h,root,children},null,2);
 }
 async function verify(){
@@ -147,7 +147,7 @@ async function verify(){
 }
 async function verifyStore(){
  db.validateStore(store);lastDiagnosis=null;
- const all={};
+ const all=Object.create(null);
  for(const [alias,head] of Object.entries(store.publicHeads||{})){
    try{all[alias]=await db.verifyDatabase(store,head);}
    catch(e){all[alias]={status:'failed',code:e.code||'ERROR',message:e.message};}
@@ -180,8 +180,7 @@ function readStoreFromDocument(raw){
    nodes[0].getAttribute('type')!=='application/json')
    throw Error('Не найден единственный валидный db-store');
  const value=JSON.parse(nodes[0].textContent);
- db.validateStore(value);
- return value;
+ return db.adoptStore(value);
 }
 async function verifyFile(){
  const file=$('external').files[0];if(!file)throw Error('Выберите HTML или XML для внешней проверки');
@@ -245,7 +244,7 @@ function save(publishSite=false){
  setTimeout(()=>URL.revokeObjectURL(url),2000);
  notice('Новый '+extension.toUpperCase()+'-файл скачан. Исходный файл на диске не перезаписывается.');
 }
-async function init(){store=JSON.parse($('db-store').textContent);db.validateStore(store);await openInitial();}
+async function init(){store=db.adoptStore(JSON.parse($('db-store').textContent));await openInitial();}
 window.addEventListener('hashchange',()=>{if(store)openInitial().catch(err);});
 $('new-db').onclick=()=>run(createDatabase);
 $('databases').onchange=()=>selectAlias($('databases').value);

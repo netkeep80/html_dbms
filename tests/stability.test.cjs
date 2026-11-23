@@ -1,5 +1,5 @@
 'use strict';
-const assert=require('node:assert/strict'),crypto=require('node:crypto'),db=require('../src/core.js');
+const assert=require('node:assert/strict'),db=require('../src/core.js');
 (async()=>{
  const s=db.newStore(),g=await db.createDatabase(s,'Test');db.commit(s,g.store);
  const d=await db.createDocument(s,g.rootHead,'child',{v:0});db.commit(s,d.store);

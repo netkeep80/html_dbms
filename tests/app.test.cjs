@@ -45,6 +45,6 @@ assert.match(starter,/export async function main\(db, mount\)/);
 assert.match(app,/source:STARTER_SOURCE/);
 assert.match(html,/"format":"HTML_DBMS\/4","publicHeads":\{\},"records":\{\}/);
 assert.doesNotMatch(dist,/\/\* (?:CORE|APP|STARTER)_JS \*\//);
-assert.ok(dist.includes('Sequence is derived from verified ancestry'));
+// Serialized patch shape is verified by core.test.cjs, not source comments.
 assert.ok(dist.includes('export async function main(db, mount)'));
 console.log('HTML_DBMS/4 strict shell/entry UI checks PASS');
