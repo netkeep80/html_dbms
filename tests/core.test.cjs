@@ -71,7 +71,15 @@ function mainState(tx){return {title:'Demo',tabs:['items','transactions'],tables
  // A later old head detects that an intermediate physical slot was replaced.
  const broken=await C.inspect(forkStore,oldHead);assert.equal(broken.code,'REPLACED_OR_CORRUPTED_PREDECESSOR');assert.equal(broken.invalid.id,b.id);assert.ok(broken.tailIds.includes(b.id));
  // Explicit truncate with independently known older pointer removes the broken tail only when requested.
- const truncated=await C.truncateInvalidTail(forkStore,broken,[a.id,a.head]);assert.equal(truncated.head[0],a.id);assert.equal(Object.hasOwn(forkStore.records,b.id),false);assert.equal((await C.load(forkStore,[a.id,a.head])).state.tables.t.rows.a.x,'a');
+ await assert.rejects(C.truncateInvalidTail(forkStore,broken,[g.id,g.hash]),e=>e.code==='INVALID_RECOVERY_HEAD');
+ assert.equal(Object.hasOwn(forkStore.records,b.id),true);
+ const truncated=await C.truncateInvalidTail(forkStore,broken,[a.id,a.head]);assert.equal(truncated.head[0],a.id);
+ assert.equal(Object.hasOwn(forkStore.records,b.id),true,'Never delete occupied successor of a new branch');
+ assert.deepEqual(truncated.preservedIds,[b.id]);
+ assert.equal(Object.hasOwn(forkStore.records,later.id),false,'Only orphaned descendants are deleted');
+ assert.equal((await C.load(forkStore,[branched.id,branched.head])).state.tables.t.rows.a.x,'branch');
+ assert.equal((await C.load(forkStore,[a.id,a.head])).state.tables.t.rows.a.x,'a');
+ await assert.rejects(C.truncateInvalidTail(forkStore,broken,[a.id,a.head]),e=>e.code==='STALE_DIAGNOSIS');
 
  // Manual replay-time schema violation is detected even if ciphertext/hash/address are internally consistent.
  const badStore=C.newStore();const root=await C.genesis(badStore,'transaction',txState());

@@ -3,7 +3,7 @@ id: HDBMS-08
 normative: |
   ### HDBMS-08 — JSON-only domain, schema replay и явный truncate
 
-  **Обязательно:** все хэшируемые данные принадлежат строгому JSON-domain; undefined, NaN/Infinity, BigInt, функции, Symbol, циклы, sparse arrays и неплоские JavaScript-объекты отвергаются до hash/ID/commit. Transaction rows валидируются одной schema-функцией и при append, и при load/replay. Успешно записанная штатным API запись должна быть воспроизводима чтением. load/inspect не удаляют и не исправляют данные; при первой некорректной записи возвращается структурированная диагностика. truncateInvalidTail является отдельной явной destructive operation и для непрозрачного разрыва требует независимо известный recovery head.
+  **Обязательно:** все хэшируемые данные принадлежат строгому JSON-domain; undefined, NaN/Infinity, BigInt, функции, Symbol, циклы, sparse arrays и неплоские JavaScript-объекты отвергаются до hash/ID/commit. Transaction rows валидируются одной schema-функцией и при append, и при load/replay. Успешно записанная штатным API запись должна быть воспроизводима чтением. load/inspect не удаляют и не исправляют данные; при первой некорректной записи возвращается структурированная диагностика. truncateInvalidTail является отдельной явной destructive operation, перепроверяет актуальность диагноза, требует валидный recovery head, непосредственно предшествующий повреждённому slot, и сохраняет сам занятый slot с отличающейся криптографической историей; удаляться могут только диагностированные потомки старого хвоста.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}
