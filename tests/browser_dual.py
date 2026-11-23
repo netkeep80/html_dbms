@@ -71,6 +71,7 @@ def store_from_output(kind,text):
 def scenario(browser,kind,tmp_path):
     page=browser.new_page(accept_downloads=True,viewport={'width':1440,'height':900})
     errors=[];page.on('pageerror',lambda err:errors.append(str(err)))
+    consoles=[];page.on('console',lambda msg:consoles.append(f'{msg.type}: {msg.text}'))
     prompts=iter(['Касса'])
     def dialog(d):
         d.accept(next(prompts)) if d.type=='prompt' else d.accept()
@@ -78,7 +79,22 @@ def scenario(browser,kind,tmp_path):
     setup(page,kind)
     expect(page.locator('#status')).to_contain_text('Контейнер пуст')
     page.locator('#new-db').click()
-    expect(frame(page).locator('#db-title')).to_have_text('Касса')
+    try:
+        expect(frame(page).locator('#db-title')).to_have_text('Касса',timeout=7000)
+    except Exception:
+        try:
+            diagnostic={'kind':kind,'url':page.url,'status':page.locator('#status').inner_text(),
+              'iframe':page.locator('#entry-area iframe').evaluate('(e)=>({srcdoc:e.srcdoc,sandbox:e.sandbox.value,outer:e.outerHTML.slice(0,500),ctype:e.contentDocument?.contentType,ready:e.contentDocument?.readyState})'),
+              'frames':[(f.url,f.name) for f in page.frames],
+              'consoles':consoles[-25:],'errors':errors[-25:]}
+            for frm in page.frames:
+                if frm!=page.main_frame:
+                    try:diagnostic['frame_dom']=frm.evaluate('document.documentElement?.outerHTML?.slice(0,2000)')
+                    except Exception as ex:diagnostic['frame_dom_error']=str(ex)
+            print('NATIVE_XML_FRAME_DIAGNOSTIC',repr(diagnostic),flush=True)
+        except Exception as ex:
+            print('XML_DIAGNOSTICS_FAILURE',str(ex),flush=True)
+        raise
     frame(page).locator('#add-document').click()
     expect(frame(page).locator('#new-document')).to_be_visible()
     frame(page).locator('#new-document-name').fill('funds')
