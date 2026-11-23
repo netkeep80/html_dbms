@@ -33,8 +33,8 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
     fake_html=Path(tmp)/'fake_crypto_browser_ui.html'
     subprocess.run(['node',str(root/'tests/build_ui_integration_fixture.cjs'),str(fake_html)],check=True)
     with sync_playwright() as pw:
-        system_chromium=Path('/usr/bin/chromium')
-        binary={'executable_path':str(system_chromium)} if system_chromium.exists() else {}
+        system_chromium=next((p for p in (Path('/usr/bin/google-chrome'),Path('/usr/bin/chromium')) if p.exists()),None)
+        binary={'executable_path':str(system_chromium)} if system_chromium else {}
         browser=pw.chromium.launch(**binary,args=['--no-sandbox','--disable-dev-shm-usage'],headless=True)
         page=browser.new_page(viewport={'width':1520,'height':900},accept_downloads=True)
         errors=[]; dialogs=[]; allow={'write':True}
@@ -107,7 +107,7 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         app.locator('.form input[name="date"]').fill('2026-09-27')
         app.locator('.form input[name="amount"]').fill('321')
         app.get_by_role('button',name='Записать транзакцию').click()
-        expect(app.locator('#cash-count')).to_contain_text('1\u00a0642',timeout=20000)
+        expect(app.locator('#cash-count')).to_contain_text('21',timeout=20000)
         # Full cryptographic graph validation at UI shell level (using deterministic test shim).
         page.locator('#validation-toggle').click()
         page.locator('#verify').click()
@@ -127,7 +127,7 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         second.locator('#open-head').click()
         app2=frame(second)
         expect(app2.locator('h1')).to_contain_text('Касса',timeout=20000)
-        expect(app2.locator('#cash-count')).to_contain_text('1\u00a0642',timeout=20000)
+        expect(app2.locator('#cash-count')).to_contain_text('21',timeout=20000)
         dict_page(second,'Типы Транзакций')
         expect(app2.locator('.gridbox tbody tr').filter(has_text=first_id)).to_contain_text('Тестовая категория 2')
         assert app2.locator('.gridbox thead').get_by_text('Строка Excel').count()==0
@@ -140,7 +140,7 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
           for(const name of Object.keys(root.$refs))docs[name]=(await db.load(s,root.$refs[name])).state;
           return {count:docs.transactions.rows.length,keys:Object.keys(root.$refs),types:docs.transactionTypes,projects:docs.projects,history:(await db.verifyDatabase(s,h)).status,withoutExcelRows:Object.values(docs).filter(v=>v.entries).every(d=>d.order.every(id=>!('excelRow' in d.entries[id])))};
         }''')
-        assert data['count']==1642
+        assert data['count']==21
         assert len(data['keys'])==12
         assert data['types']['entries'][first_id]['name']=='Тестовая категория 2'
         assert data['projects']['entries'][project_id]['name']=='Проект Б'

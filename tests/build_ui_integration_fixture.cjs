@@ -13,6 +13,8 @@ const {createModel,SHEETS}=require(path.join(root,'examples/cash/import-model.cj
 (async()=>{
  const f=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/cash_excel_extracted.json'),'utf8'));
  const {transactions,catalogs}=createModel(f);
+ // Browser RPC fixture keeps every dictionary but only 20 cash rows. Full 1641-row parity is tested independently.
+ transactions.rows=transactions.rows.slice(0,20);
  const entry=fs.readFileSync(path.join(root,'examples/cash/cash-entry.js'),'utf8');
  const s=db.newStore();const g=await db.createDatabase(s,'Касса',{entry:{type:'application/javascript',export:'main',source:entry},visible:true});db.commit(s,g.store);
  let h=g.rootHead;
