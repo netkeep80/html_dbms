@@ -11,7 +11,7 @@ const assert=require('node:assert/strict'),db=require('../src/core.js');
  assert.deepEqual((await db.load(s,child.documentHead)).genesis.parent,root.rootHead);
  const r=await db.readRecord(s,child.rootHead);assert.equal(r.length,4);
  assert.equal(r[1],root.rootHead[0]);assert.equal(r[2],root.rootHead[1]);
- assert.ok(/^\\d{4}-/.test(r[0]));assert.equal(r[3].length,1);
+ assert.ok(/^\d{4}-/.test(r[0]));assert.equal(r[3].length,1);
  assert.equal((await db.resolve(s,child.rootHead,child.rootHead,{$ref:'funds/F001/name'})).value,'A');
  const upd=await db.patchDocument(s,child.rootHead,'funds',[{op:'replace',path:'/F001/name',value:'B'}]);
  db.commit(s,upd.store);
