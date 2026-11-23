@@ -1,0 +1,30 @@
+format: repo-guard/requirement-v1
+id: HDBMS-10
+normative: |
+  ### HDBMS-10 — Демо-касса: первичные JSON-цепочки, ID-ссылки и вычисляемые представления
+  **Обязательно:** демонстрационный автономный HTML содержит ровно одну опубликованную БД «Касса», 11 независимых криптографических цепочек (журнал непустых транзакций и 10 справочников исходного Excel). Исходная обезличенная XLSX хранится как fixture с фиксированной SHA-256. Импорт игнорирует пустые Excel-строки транзакций, сохраняет координаты и исходную provenance; текстовые ссылки канонизируются без учёта регистра. Каждая строка хранит ID из справочников: toTypeId, toId, typeId, fromTypeId, fromId. UI отображает подписи, предоставляет только связанные выпадающие списки для выбора этих ID и отклоняет несопоставленные ссылки. Шесть аналитических листов воспроизводятся вычисляемыми JavaScript views, а не сохраняются как JSON-документы; для сравнения с исходной книгой сохранено её историческое исключение 32-й категории из итогов пяти SUMIFS-отчётов. Строгие тесты по расшифрованной криптографической версии сверяют 1641 операций, первичные справочники, шесть отчётов и XLSX-контрольный хеш. Browser smoke проверяет интерфейс отдельно от проверок криптографии. Никаких кассовых правил в src/core.js или в обязательной системной панели.
+relations:
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/import-model.cjs'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/build-demo.cjs'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/cash-entry.js'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'dist/html_dbms_cash_demo.html'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/dump-demo.cjs'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/compare_excel.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_cash_ui.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_cash.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/fixtures/cash_input.xlsx'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/fixtures/cash_excel_extracted.json'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'examples/cash/README.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'README.md'}
