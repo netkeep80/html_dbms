@@ -2,7 +2,8 @@ format: repo-guard/requirement-v1
 id: HDBMS-09
 normative: |
   ### HDBMS-09 — Безопасная загрузка и внешняя верификация HTML
-  **Обязательно:** другой HTML разбирается инертным DOMParser как данные; принимается ровно один script#db-store[type=application/json], код из внешнего HTML не исполняется. Base64url строго канонический, timestamp — строгий ISO UTC. Ограничены размер сообщения, число records и число операций Patch. Внешняя проверка показывает совместимые и различающиеся physical slots, не подменяя доверенную root-версию. Экспорт из чистого шаблона не включает расшифрованные raw records, debug DOM и ввода пользователя. Все сообщения 2.x отвергаются в v3 без fallback.
+  **Обязательно:** другой HTML разбирается инертным DOMParser как данные; принимается ровно один script#db-store[type=application/json], код из внешнего HTML не исполняется. Base64url строго канонический, timestamp — строгий ISO UTC. Ограничены размер сообщения, число records и число операций Patch. Внешняя проверка показывает совместимые и различающиеся physical slots, не подменяя доверенную root-версию. Экспорт из чистого шаблона не включает расшифрованные raw records, debug DOM и ввода пользователя. Все сообщения 2.x и 3.x отвергаются в v4 без fallback.
+  HEAD строго валидируется единым кодеком; при открытии проверяется история до исполнения entry.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}

@@ -23,26 +23,33 @@ SHIM=next(ast.literal_eval(item.value) for item in ast.parse(_S).body
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def setup(page, kind):
+def setup(page, kind, path=None, fragment="", real_crypto=False):
+    path=Path(path) if path else ROOT/"dist"/f"html_dbms.{kind}"
     if os.environ.get('GITHUB_ACTIONS') == 'true':
         # Full native XHTML/XML parser + script execution on file://.
         # Intentionally test-only shim; this does not assert genuine AES-GCM.
-        page.add_init_script(SHIM)
-        page.goto((ROOT/'dist'/('html_dbms.xml' if kind=='xml' else 'html_dbms.html')).resolve().as_uri(),wait_until='domcontentloaded')
+        if not real_crypto:page.add_init_script(SHIM)
+        page.goto(path.resolve().as_uri()+fragment,wait_until='domcontentloaded')
         if kind=='xml':
             assert page.evaluate('document.contentType') in ('text/xml','application/xml')
             assert page.evaluate('document.documentElement.namespaceURI') == 'http://www.w3.org/1999/xhtml'
         return
+    if real_crypto:raise RuntimeError('Native file:// is required for real-crypto acceptance')
     page.evaluate(SHIM)
+    if fragment:page.evaluate('(fragment)=>history.replaceState(null,"",fragment)',fragment)
     if kind=='html':
-        page.set_content((ROOT/'dist/html_dbms.html').read_text(encoding='utf8'),wait_until='domcontentloaded')
+        page.set_content(path.read_text(encoding='utf8'),wait_until='domcontentloaded')
     else:
         page.set_content('<!doctype html><html><body></body></html>',wait_until='domcontentloaded')
-        xml=(ROOT/'dist/html_dbms.xml').read_text(encoding='utf8')
+        xml=path.read_text(encoding='utf8')
         diagnostics=page.evaluate('''text => {
           const parsed=new DOMParser().parseFromString(text,'application/xml');
           if(parsed.getElementsByTagName('parsererror').length)throw Error('Malformed XML');
-          document.replaceChild(document.importNode(parsed.documentElement,true),document.documentElement);
+          const tree=document.importNode(parsed.documentElement,true);
+          const scripts=Array.from(tree.querySelectorAll('script')).filter(x=>!x.getAttribute('type'));
+          scripts.forEach(x=>x.setAttribute('type','application/x-test-inert'));
+          document.replaceChild(tree,document.documentElement);
+          scripts.forEach(x=>x.removeAttribute('type'));
           Object.defineProperty(document,'contentType',{configurable:true,value:'text/xml'});
           for(const script of document.querySelectorAll('script'))if(!script.getAttribute('type'))(0,eval)(script.textContent);
           return {contentType:document.contentType,namespace:document.documentElement.namespaceURI};
@@ -51,16 +58,10 @@ def setup(page, kind):
 
 
 def current_pair(page):
-    return [page.locator('#head-id').evaluate('(e)=>e.value'),page.locator('#head-hash').evaluate('(e)=>e.value')]
+    return page.locator('#head').evaluate('(e)=>e.value')
 
 
 def frame(page):
-    # Playwright frame_locator() does not reliably attach to an XHTML iframe
-    # inside a native XML document despite the subframe being live and usable.
-    if page.evaluate('document.contentType') in ('text/xml', 'application/xml'):
-        children=[child for child in page.frames if child != page.main_frame]
-        assert len(children)==1, f'Expected one sandboxed child frame, got {len(children)}'
-        return children[0]
     return page.frame_locator('#entry-area iframe')
 
 
@@ -77,7 +78,6 @@ def store_from_output(kind,text):
 def scenario(browser,kind,tmp_path):
     page=browser.new_page(accept_downloads=True,viewport={'width':1440,'height':900})
     errors=[];page.on('pageerror',lambda err:errors.append(str(err)))
-    consoles=[];page.on('console',lambda msg:consoles.append(f'{msg.type}: {msg.text}'))
     prompts=iter(['Касса'])
     def dialog(d):
         d.accept(next(prompts)) if d.type=='prompt' else d.accept()
@@ -85,13 +85,14 @@ def scenario(browser,kind,tmp_path):
     setup(page,kind)
     expect(page.locator('#status')).to_contain_text('Контейнер пуст')
     page.locator('#new-db').click()
-    expect(frame(page).locator('#db-title')).to_have_text('Касса',timeout=15000)
+    expect(frame(page).locator('#db-title')).to_have_text('Касса')
     frame(page).locator('#add-document').click()
     expect(frame(page).locator('#new-document')).to_be_visible()
     frame(page).locator('#new-document-name').fill('funds')
     frame(page).locator('#new-document-json').fill('{"F001":{"name":"Основной"}}')
     frame(page).locator('#create-document').click()
     expect(frame(page).locator('#message')).to_contain_text('Документ создан')
+    # A real JSON Patch to the child must also advance the root $refs head.
     frame(page).locator('#edit-document').click()
     frame(page).locator('#patch').fill('[{"op":"add","path":"/F001/amount","value":5}]')
     frame(page).locator('#write').click()
@@ -110,7 +111,7 @@ def scenario(browser,kind,tmp_path):
     saved_text=saved.read_text(encoding='utf8')
     assert 'DECRYPTED_UI_PRIVATE_SENTINEL_742' not in saved_text
     data=store_from_output(kind,saved_text)
-    assert data['format']=='HTML_DBMS/3' and len(data['records'])>=3
+    assert data['format']=='HTML_DBMS/4' and len(data['records'])>=3
     assert len(data.get('publicHeads',{}))==1
     assert not any('"F001"' in key for key in data['records'])
     assert not errors,errors
@@ -135,22 +136,9 @@ def main():
             fixture=Path(tmp)/('input.html' if src is html_store else 'input.xml')
             source_text=html_file.read_text(encoding='utf8') if src is html_store else xml_file.read_text(encoding='utf8')
             fixture.write_text(source_text,encoding='utf8')
-            if kind=='xml' and os.environ.get('GITHUB_ACTIONS')=='true':
-                # Playwright isolated-world set_input_files rejects a valid
-                # HTMLInputElement from text/xml. Main-world File + DataTransfer
-                # preserves the real file-input change handler and File.text().
-                result=page.locator('#input-html').evaluate('''(e,{name,content}) => {
-                    if(!(e instanceof HTMLInputElement))throw Error('Not an HTMLInputElement');
-                    const dt=new DataTransfer();dt.items.add(new File([content],name,{type:'text/plain'}));
-                    e.files=dt.files;e.dispatchEvent(new Event('change',{bubbles:true}));
-                    return {files:e.files.length,ctor:e.constructor.name};
-                }''',{'name':fixture.name,'content':fixture.read_text('utf8')})
-                assert result=={'files':1,'ctor':'HTMLInputElement'},result
-            else:
-                page.locator('#input-html').set_input_files(str(fixture))
+            page.locator('#input-html').set_input_files(str(fixture))
             expect(page.locator('#status')).to_contain_text('Контейнер загружен')
             assert current_pair(page)==next(iter(src['publicHeads'].values()))
-            page.locator('#open-head').click()
             expect(frame(page).locator('#db-title')).to_have_text('Касса')
             page.locator('#validation-toggle').click();page.locator('#verify').click()
             expect(page.locator('#validation-report')).to_contain_text('complete')

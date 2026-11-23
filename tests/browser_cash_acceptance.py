@@ -47,11 +47,10 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         page.on('dialog',handle_dialog)
         page.evaluate(SHIM)
         page.set_content(fake_html.read_text(encoding='utf8'),wait_until='domcontentloaded')
-        page.locator('#open-head').click()
         app=frame(page)
         expect(app.locator('h1')).to_contain_text('Касса',timeout=30000)
         assert page.locator('#entry-area iframe').get_attribute('sandbox')=='allow-scripts', 'Sandbox must remain restrictive'
-        head_before=(page.locator('#head-id').input_value(),page.locator('#head-hash').input_value())
+        head_before=page.locator('#head').input_value()
         dict_page(page,'Типы Транзакций')
         # User requested no Excel source line numbers either in UI or dictionary JSON.
         assert app.locator('.gridbox thead').get_by_text('Строка Excel').count()==0
@@ -61,7 +60,7 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         allow['write']=False
         app.get_by_role('button',name='Добавить запись',exact=True).click()
         expect(app.locator('.form-error')).to_contain_text('отменена',timeout=15000)
-        assert (page.locator('#head-id').input_value(),page.locator('#head-hash').input_value())==head_before
+        assert page.locator('#head').input_value()==head_before
         assert app.locator('button',has_text='Добавить запись').is_enabled()
         allow['write']=True
         app.get_by_role('button',name='Добавить запись',exact=True).click()
@@ -70,7 +69,7 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         first_id='transactionTypes-0001'
         assert app.locator('.gridbox tbody tr').count()==33
         assert app.locator('.gridbox').get_by_text('Тестовая категория').count()==1
-        first_head=(page.locator('#head-id').input_value(),page.locator('#head-hash').input_value())
+        first_head=page.locator('#head').input_value()
         assert first_head!=head_before,'Append must move root head'
         # Edit existing row and verify ID stable.
         app.locator('.gridbox tbody tr').filter(has_text=first_id).get_by_role('button',name='Изменить').click()
@@ -124,7 +123,6 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         second.on('pageerror',lambda err:errors.append(str(err)))
         second.evaluate(SHIM)
         second.set_content(saved,wait_until='domcontentloaded')
-        second.locator('#open-head').click()
         app2=frame(second)
         expect(app2.locator('h1')).to_contain_text('Касса',timeout=20000)
         expect(app2.locator('#cash-count')).to_contain_text('21',timeout=20000)

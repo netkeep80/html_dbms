@@ -1,4 +1,4 @@
-/* HTML_DBMS/3 Demo Cash — data in independent JSON chains, views are computed. */
+/* HTML_DBMS/4 Demo Cash — data in independent JSON chains, views are computed. */
 export const SOURCE_CATALOGS = Object.freeze([
  ['entityTypes','Типы Сущностей'],['other','Прочие'],['transactionTypes','Типы Транзакций'],
  ['participants','Участники'],['suppliers','Поставщики'],['buyers','Покупатели'],
@@ -142,7 +142,7 @@ export async function main(db,mount){
   const toType=selectField('toTypeId','Тип реципиента',docs.entityTypes,idByLabel(docs.entityTypes,'Фонд'));
   const toAlias=()=>entityAlias(docs,toType.value);
   const recipient=selectField('toId','Реципиент',docs[toAlias()],docs[toAlias()].order[0]);
-  const transactionType=selectField('typeId','Тип операции',docs.transactionTypes,idByLabel(docs.transactionTypes,'Нал'));
+  const transactionType=selectField('typeId','Тип операции',docs.transactionTypes,docs.transactionTypes.order[0]);
   const fromType=selectField('fromTypeId','Тип источника',docs.entityTypes,idByLabel(docs.entityTypes,'Участник'));
   const fromAlias=()=>entityAlias(docs,fromType.value);
   const source=selectField('fromId','Источник',docs[fromAlias()],docs[fromAlias()].order[0]);

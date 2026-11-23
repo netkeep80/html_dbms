@@ -1,7 +1,8 @@
 """Genuine file:// Chrome E2E for HTML and XML/XHTML; NO CRYPTO SHIM.
 
 Run in an unrestricted Chromium runner (GitHub Actions); this model execution
-sandbox can prohibit file navigation.  Windows/MAX transfer is manual.
+sandbox can prohibit file navigation.  An actual Windows/MAX transfer remains
+independently manual. Uses only local files; rejects HTTP(S) requests.
 """
 import json
 import re
@@ -14,7 +15,7 @@ from playwright.sync_api import sync_playwright, expect
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def physical(kind,text):
+def physical(kind, text):
     if kind=='xml':
         root=ET.fromstring(text)
         return json.loads(root.find('.//{http://www.w3.org/1999/xhtml}script[@id="db-store"]').text)
@@ -31,11 +32,11 @@ def child(page,kind):
     return page.frame_locator('#entry-area iframe')
 
 
-def case(browser,kind,path):
+def case(browser, kind, path):
     page=browser.new_page(accept_downloads=True)
     page.on('dialog',lambda d:d.accept('Касса'))
-    external=[]
-    page.on('request',lambda r:external.append(r.url) if r.url.startswith(('https://','http://')) else None)
+    blocked=[]
+    page.on('request',lambda r:blocked.append(r.url) if r.url.startswith(('https://','http://')) else None)
     page.goto((ROOT/'dist'/f'html_dbms.{kind}').resolve().as_uri(),wait_until='domcontentloaded')
     check=page.evaluate('''async () => {
         const msg=new TextEncoder().encode('real browser crypto');
@@ -61,14 +62,13 @@ def case(browser,kind,path):
     page.locator('#validation-toggle').click()
     page.locator('#verify').click()
     expect(page.locator('#validation-report')).to_contain_text('complete',timeout=20000)
-    with page.expect_download() as dl:page.locator('#save').click()
+    with page.expect_download() as dl: page.locator('#save').click()
     saved=path/f'real_crypto_saved.{kind}'
     dl.value.save_as(str(saved))
     data=physical(kind,saved.read_text('utf8'))
-    assert data['format']=='HTML_DBMS/3' and len(data['records'])>=3
-    assert not external,external
+    assert data['format']=='HTML_DBMS/4' and len(data['records'])>=3
+    assert not blocked,blocked
     page.goto(saved.resolve().as_uri(),wait_until='domcontentloaded')
-    page.locator('#open-head').click()
     expect(child(page,kind).locator('#db-title')).to_have_text('Касса',timeout=20000)
     page.close()
 

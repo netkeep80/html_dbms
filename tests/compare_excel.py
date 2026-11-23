@@ -84,6 +84,10 @@ def main():
    assert fold(value)==fold(get(s,col,rowidx)),f'transaction {i} {k}: {value} vs {get(s,col,rowidx)}'
    if str(value)!=str(get(s,col,rowidx)):variants+=1
  assert len(rows)==1641,'Unexpected import row count'
+ assert all(re.fullmatch(r'(?:Демонстрационная запись|Учебная операция|Тестовый расчёт|Пример движения|Условная проводка|Проверка отчёта|Сценарий сверки|Пример записи) №\d{4}',r['note']) for r in rows),'Non-synthetic transaction comment'
+ assert len({r['note'] for r in rows})==1641
+ assert len(docs['transactionTypes']['order'])==32
+ assert all(not re.search(r'Нал|Щебень|КАМАЗ|р/ч',e['name']) for e in docs['transactionTypes']['entries'].values())
  assert all('plan' not in row for row in rows),'Plan/Fact must not be stored in the DBMS demo'
  assert len(data['transactions']['headers'])==10,'Plan/Fact must not be shown in the ledger'
  assert sum(get(s,'M',i)=='План' for i in expected)==3,'Source Excel plan flags changed unexpectedly'

@@ -1,8 +1,8 @@
 format: repo-guard/requirement-v1
 id: HDBMS-06
 normative: |
-  ### HDBMS-06 — Симметричные универсальные JSON-цепочки и компактный протокол v3
-  **Обязательно:** только HTML_DBMS/3, никакого fallback или чтения 2.x. Genesis — [null,{name,parent,state}], при создании дочернего документа parent равен head выбранного корня непосредственно перед регистрацией в $refs; отдельный самостоятельный корень имеет parent=null. Обычная запись — [ISO-UTC timestamp,prevID,prevH,operations] из четырёх элементов; seq, kind, повторное слово patch и обёртка payload отсутствуют. Patch содержит минимум одну операцию RFC 6902; JSON Pointer соответствует RFC 6901. Строгий JSON UTF-8 без DEFLATE, CBOR, MessagePack. Genesis семантически детерминирован, одинаковые байты genesis не создают нового независимого документа без различающего содержимого.
+  ### HDBMS-06 — Симметричные универсальные JSON-цепочки и компактный протокол v4
+  **Обязательно:** только HTML_DBMS/4, никакого fallback или чтения 2.x и 3.x. Genesis — [null,{name,parent,state}], при создании дочернего документа parent равен head выбранного корня непосредственно перед регистрацией в $refs; отдельный самостоятельный корень имеет parent=null. Обычная запись — [ISO-UTC timestamp,previousHEAD,operations] из трёх элементов; seq, kind, повторное слово patch и обёртка payload отсутствуют. Patch содержит минимум одну операцию RFC 6902; JSON Pointer соответствует RFC 6901. Строгий JSON UTF-8 без DEFLATE, CBOR, MessagePack. Genesis семантически детерминирован, одинаковые байты genesis не создают нового независимого документа без различающего содержимого.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}
