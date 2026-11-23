@@ -1,7 +1,7 @@
 /* HTML_DBMS/3 minimal physical shell. All database UI is provided by the JSON entry. */
 (function(){
 'use strict';
-const db=HTML_DBMS, $=id=>document.getElementById(id);
+const db=HTML_DBMS, $=id=>document.querySelector('[id="'+id+'"]');
 const XHTML_NS='http://www.w3.org/1999/xhtml';
 const XML_CONTAINER=/\b(?:xml|xhtml\+xml)\b/i.test(document.contentType||'');
 const makeElement=tag=>XML_CONTAINER?document.createElementNS(XHTML_NS,tag):document.createElement(tag);
@@ -15,7 +15,7 @@ function notice(message,bad=false){$('status').textContent=message;$('status').c
 function err(e){notice((e?.code?e.code+': ':'')+(e?.message||String(e)),true);}
 async function run(fn){if(busy)return;busy=true;try{await fn();}catch(e){err(e);}finally{busy=false;}}
 function format(h){return h?JSON.stringify(h):'—';}
-function show(id,on){$(id).hidden=!on;}
+function show(id,on){const el=$(id);on?el.removeAttribute('hidden'):el.setAttribute('hidden','hidden');}
 function validName(s){return typeof s==='string'&&s.trim().length>0&&!s.includes('/')&&!['__proto__','constructor','prototype'].includes(s);}
 function needRoot(){if(!rootHead)throw Error('Сначала откройте базу');}
 function activePublished(){return !!(publicName&&store.publicHeads&&db.sameHead(store.publicHeads[publicName],rootHead));}
@@ -28,7 +28,7 @@ function updateInfo(){
 function togglePanel(which){
  const names=['info','validation','debug'];
  const panel=which+'-panel';
- const next=$(panel).hidden;
+ const next=$(panel).hasAttribute('hidden');
  for(const name of names){show(name+'-panel',name===which&&next);$(name+'-toggle').setAttribute('aria-expanded',String(name===which&&next));}
  if(which==='info'&&next)updateInfo();
  return next;
@@ -243,7 +243,7 @@ function save(){
  const mime=XML_CONTAINER?'application/xml':'text/html';
  const url=URL.createObjectURL(new Blob([output],{type:mime+';charset=utf-8'}));
  const a=makeElement('a');a.href=url;a.download='html_dbms_3_saved.'+extension;
- document.body.appendChild(a);a.click();a.remove();
+ document.querySelector('body').appendChild(a);a.click();a.remove();
  setTimeout(()=>URL.revokeObjectURL(url),2000);
  notice('Новый '+extension.toUpperCase()+'-файл скачан. Исходный файл на диске не перезаписывается.');
 }
