@@ -46,5 +46,6 @@ jobs:
           .venv/bin/python tests/browser_dual.py
           .venv/bin/python tests/browser_head_url.py
           .venv/bin/python tests/browser_native_crypto.py
+          .venv/bin/python tests/browser_stability.py
           HDBMS_REAL_CRYPTO=1 .venv/bin/python tests/browser_head_url.py
           .venv/bin/python tests/browser_pages.py
