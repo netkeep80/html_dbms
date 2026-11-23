@@ -1,9 +1,8 @@
 format: repo-guard/requirement-v1
 id: HDBMS-07
 normative: |
-  ### HDBMS-07 — Универсальный operational head и явная перезапись successor
-
-  **Обязательно:** publicHead допускает ровно три формы: null, [null,H] и [ID,H]. При [ID,H] head открывается напрямую без глобального поиска; при [null,H] physical ID находится поиском; при null UI запрашивает H либо ID+H и не перечисляет скрытые цепочки. Если canonical successor slot занят, обычный append не изменяет store и сообщает SUCCESSOR_OCCUPIED. Перезапись разрешена только отдельным явным подтверждением и меняет только этот slot; потенциально осиротевшие потомки автоматически не удаляются.
+  ### HDBMS-07 — Необязательный publicHeads, независимые БД и явная перезапись
+  **Обязательно:** physical store = {format,records,publicHeads?}; publicHeads — необязательный плоский словарь произвольных имён БД в пары [ID,H]. Отсутствие поля или части имён не удаляет скрытые криптоцепочки; прямое открытие по известной внешней паре [ID,H] поддерживается. Нет единственного publicHead, null и [null,H] как легаси. Публикация не изменяет криптоцепочки. Из [prevID,prevH] следует единственный canonical successor slot; занятый slot вызывает SUCCESSOR_OCCUPIED, overwrite допускается только отдельно и явно, без неявного удаления потомков.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}
