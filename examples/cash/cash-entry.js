@@ -109,6 +109,24 @@ export async function main(db,mount){
  const td=(tr,x,cl)=>{const cell=el('td',x,cl);tr.appendChild(cell);};const th=(tr,x,cl)=>{const cell=el('th',x,cl);tr.appendChild(cell);};
  const money=n=>Number(n||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₽';
  const message=(s,bad=false)=>{$('cash-msg').textContent=s;$('cash-msg').className=bad?'error':'good';};
+ // The entry iframe deliberately has sandbox=allow-scripts WITHOUT allow-forms.
+ // The browser blocks native form submit even when submit handlers call preventDefault.
+ // Use explicit buttons and click events: never weaken the sandbox for CRUD.
+ function bindWriteAction(panel,button,action){
+  button.type='button';
+  const feedback=el('p',undefined,'form-error');feedback.setAttribute('role','alert');panel.appendChild(feedback);
+  button.addEventListener('click',async()=>{
+   if(button.disabled)return;
+   button.disabled=true;feedback.textContent='';
+   try{await action();}
+   catch(error){feedback.textContent=error.message||String(error);message(feedback.textContent,true);}
+   finally{button.disabled=false;}
+  });
+  panel.addEventListener('keydown',event=>{
+   if(event.key==='Enter'&&event.target?.tagName==='INPUT'&&!event.isComposing){event.preventDefault();button.click();}
+  });
+ }
+
  const timeRange=()=>mode==='По периоду'?{fromSerial:from,toSerial:to}:{fromSerial:-Infinity,toSerial:to};
  function renderTabs(){const nav=$('cash-tabs');nav.replaceChildren();for(const name of ['Транзакции',...REPORTS.map(r=>r.tab),'Справочники'])nav.appendChild(btn(name,()=>{tab=name;dictForm=null;editingId=null;render();},name===tab?'active':''));}
  function controlPeriod(host){const div=el('div',undefined,'controls');div.appendChild(line('Режим',choose(['По периоду','Нарастающий'],mode,x=>{mode=x;render();})));
@@ -117,7 +135,7 @@ export async function main(db,mount){
  }
  function renderMetrics(host,inc,out,balance,n){const area=el('div',undefined,'summary');for(const [name,value] of [['Поступления',money(inc)],['Расходы',money(out)],['Остаток',money(balance)],['Транзакций',n]]){const box=el('div',undefined,'metric');box.appendChild(el('span',name));box.appendChild(el('strong',value));area.appendChild(box);}host.appendChild(area);}
  function visibleTransaction(r){const v=describeTransaction(r,docs);return [v.n,dateFromExcel(v.date),v.toType,v.to,v.type,v.fromType,v.from,v.amount,v.note,v.dd];}
- function transactionForm(host){const box=el('section',undefined,'form');box.appendChild(el('h2','Добавить транзакцию'));const form=el('form'),grid=el('div',undefined,'form-grid');const fields={};
+ function transactionForm(host){const box=el('section',undefined,'form');box.appendChild(el('h2','Добавить транзакцию'));const form=el('section'),grid=el('div',undefined,'form-grid');const fields={};
   const input=(key,title,type,value)=>{const i=el('input');i.type=type;i.name=key;i.value=value;if(type==='number')i.step='any';i.required=true;grid.appendChild(line(title,i));fields[key]=i;return i;};
   input('date','Дата','date',dateFromExcel(to));input('amount','Числовое значение','number','0');
   const selectField=(key,title,doc,id,onchange)=>{const s=dropdown(doc,id,onchange||(()=>{}));s.name=key;s.required=true;grid.appendChild(line(title,s));fields[key]=s;return s;};
@@ -132,14 +150,13 @@ export async function main(db,mount){
   toType.addEventListener('change',()=>reloadEntity(recipient,toAlias()));fromType.addEventListener('change',()=>reloadEntity(source,fromAlias()));
   selectField('dd','ДД',{order:['Да','Нет'],entries:{'Да':{name:'Да'},'Нет':{name:'Нет'}}},'Да');
   form.appendChild(grid);const note=el('textarea');note.placeholder='Текстовое значение (примечание)';form.appendChild(line('Примечание',note));
-  const buttons=el('div',undefined,'controls');const submit=el('button','Записать транзакцию','primary');submit.type='submit';buttons.appendChild(submit);buttons.appendChild(btn('Отмена',()=>{showCreate=false;render();}));form.appendChild(buttons);
-  form.addEventListener('submit',async event=>{event.preventDefault();submit.disabled=true;
-   try{
+  const buttons=el('div',undefined,'controls');const submit=el('button','Записать транзакцию','primary');submit.type='button';buttons.appendChild(submit);buttons.appendChild(btn('Отмена',()=>{showCreate=false;render();}));form.appendChild(buttons);
+  bindWriteAction(form,submit,async()=>{
+
     const amount=Number(fields.amount.value);if(!Number.isFinite(amount))throw Error('Сумма должна быть конечным числом');
     const row={excelRow:null,n:Math.max(0,...tx.rows.map(r=>Number(r.n)||0))+1,date:dateToExcel(fields.date.value),toTypeId:fields.toTypeId.value,toId:fields.toId.value,typeId:fields.typeId.value,fromTypeId:fields.fromTypeId.value,fromId:fields.fromId.value,amount,note:note.value,dd:fields.dd.value};
     const errors=validateReferences([row],docs);if(errors.length)throw Error(errors[0]);
     await db.patch('transactions',[{op:'add',path:'/rows/-',value:row}]);tx=await db.read('transactions/');showCreate=false;await render();message('Транзакция добавлена. Сохраните HTML кнопкой в системной панели.');
-   }catch(error){message(error.message,true);}finally{submit.disabled=false;}
   });box.appendChild(form);host.appendChild(box);
  }
  function renderTransactions(host){controlPeriod(host);const ctrl=el('div',undefined,'controls');const q=el('input');q.placeholder='Поиск в транзакциях';q.value=search;q.style.width='300px';q.addEventListener('change',()=>{search=q.value;render();});ctrl.appendChild(q);
@@ -186,23 +203,23 @@ export async function main(db,mount){
   host.appendChild(el('p',report.mode==='participants'?'View: суммы взносов участников по выбранному фонду и периоду.':'View: пересчёт из транзакций по ID источников, реципиентов и категорий. В исходном Excel пять итогов исключают последнюю видимую категорию — сохранено для идентичности отчёта.','view-note'));
  }
  function selectDictionaryForm(host){
-  const form=el('form',undefined,'form'),grid=el('div',undefined,'form-grid');
+  const form=el('section',undefined,'form'),grid=el('div',undefined,'form-grid');
   form.appendChild(el('h2','Новый JSON-справочник'));
   const alias=el('input');alias.name='alias';alias.placeholder='например: projects';alias.required=true;grid.appendChild(line('ID документа (латиница)',alias));
   const title=el('input');title.name='title';title.placeholder='Название справочника';title.required=true;grid.appendChild(line('Название',title));
-  form.appendChild(grid);const buttons=el('div',undefined,'dict-actions'),save=el('button','Создать справочник','primary');save.type='submit';buttons.appendChild(save);buttons.appendChild(btn('Отмена',()=>{dictForm=null;render();}));form.appendChild(buttons);
-  form.addEventListener('submit',async e=>{e.preventDefault();save.disabled=true;try{
+  form.appendChild(grid);const buttons=el('div',undefined,'dict-actions'),save=el('button','Создать справочник','primary');save.type='button';buttons.appendChild(save);buttons.appendChild(btn('Отмена',()=>{dictForm=null;render();}));form.appendChild(buttons);
+  bindWriteAction(form,save,async()=>{
    const name=alias.value.trim(),label=title.value.trim();
    if(!/^[a-z][A-Za-z0-9_-]*$/.test(name))throw Error('ID справочника: латинские буквы, цифры, _ или -, первый символ — буква');
    if(!label)throw Error('Укажите название справочника');
    if(name==='transactions'||docs[name]||(await db.read('')).$refs[name])throw Error('ID справочника уже существует');
    const state={sourceSheet:label,alias:name,entries:{},order:[]};
    await db.createDocument(name,state);docs[name]=await db.read(name+'/');catalogList.push([name,label]);dictionaryTab=name;dictForm=null;await render();message('Справочник «'+label+'» создан. Сохраните HTML.');
-  }catch(error){message(error.message,true);}finally{save.disabled=false;}});
+  });
   host.appendChild(form);
  }
  function dictionaryRowForm(host,document,id=null){
-  const original=id?document.entries[id]:null,form=el('form',undefined,'form'),grid=el('div',undefined,'form-grid');
+  const original=id?document.entries[id]:null,form=el('section',undefined,'form'),grid=el('div',undefined,'form-grid');
   form.appendChild(el('h2',id?'Изменение записи '+id:'Новая запись справочника'));
   const name=el('input');name.name='name';name.value=original?.name||'';name.required=true;grid.appendChild(line('Название',name));
   const extra=el('textarea');extra.name='extra';extra.value=JSON.stringify(original?.extra||[]);grid.appendChild(line('Дополнительные поля (JSON-массив)',extra));
@@ -211,8 +228,8 @@ export async function main(db,mount){
    for(const [alias,title] of catalogList.filter(([key])=>key!=='entityTypes'&&key!=='transactionTypes'&&key!=='service')){const opt=el('option',title+' ('+alias+')');opt.value=alias;assoc.appendChild(opt);}
    assoc.value=original?.documentAlias||TYPE_DOCUMENTS[original?.name]||'';grid.appendChild(line('Справочник типа сущности',assoc));
   }
-  form.appendChild(grid);const buttons=el('div',undefined,'dict-actions'),save=el('button',id?'Сохранить изменения':'Добавить запись','primary');save.type='submit';buttons.appendChild(save);buttons.appendChild(btn('Отмена',()=>{dictForm=null;editingId=null;render();}));form.appendChild(buttons);
-  form.addEventListener('submit',async e=>{e.preventDefault();save.disabled=true;try{
+  form.appendChild(grid);const buttons=el('div',undefined,'dict-actions'),save=el('button',id?'Сохранить изменения':'Добавить запись','primary');save.type='button';buttons.appendChild(save);buttons.appendChild(btn('Отмена',()=>{dictForm=null;editingId=null;render();}));form.appendChild(buttons);
+  bindWriteAction(form,save,async()=>{
    const label=name.value.trim();if(!label)throw Error('Название не может быть пустым');
    if(document.order.some(key=>key!==id&&norm(document.entries[key].name)===norm(label)))throw Error('В справочнике уже есть запись с таким названием');
    let fields;try{fields=JSON.parse(extra.value||'[]');}catch{throw Error('Дополнительные поля должны быть корректным JSON-массивом');}
@@ -225,12 +242,12 @@ export async function main(db,mount){
     ops=[{op:'replace',path:path(id),value:updated}];
    }else{
     let n=1;do{newId=dictionaryTab+'-'+String(n++).padStart(4,'0');}while(document.entries[newId]);
-    const record={id:newId,name:label,excelRow:null,extra:fields};if(assocAlias)record.documentAlias=assocAlias;
+    const record={id:newId,name:label,extra:fields};if(assocAlias)record.documentAlias=assocAlias;
     ops=[{op:'add',path:path(newId),value:record},{op:'add',path:'/order/-',value:newId}];
    }
    await db.patch(dictionaryTab,ops);docs[dictionaryTab]=await db.read(dictionaryTab+'/');dictForm=null;editingId=null;
    await render();message((id?'Изменена':'Добавлена')+' запись '+newId+' · сохраните HTML.');
-  }catch(error){message(error.message,true);}finally{save.disabled=false;}});
+  });
   host.appendChild(form);
  }
  function renderDictionaries(host){
@@ -242,9 +259,9 @@ export async function main(db,mount){
   if(dictForm==='new-entry'||dictForm==='edit')dictionaryRowForm(host,document,editingId);
   host.appendChild(el('h2',(document.sourceSheet||dictionaryTab)+' · '+document.order.length+' записей'));
   const pane=el('div',undefined,'gridbox'),t=el('table',undefined,'ledger'),h=el('thead'),tr=el('tr');
-  for(const col of ['ID','Название','Дополнительные сведения','Строка Excel','Действие'])th(tr,col);
+  for(const col of ['ID','Название','Дополнительные сведения','Действие'])th(tr,col);
   h.appendChild(tr);t.appendChild(h);const body=el('tbody');
-  for(const id of document.order){const row=document.entries[id],r=el('tr');for(const v of [id,row.name,(row.extra||[]).filter(v=>v!==null&&v!=='').join(' · '),row.excelRow??'—'])td(r,v);
+  for(const id of document.order){const row=document.entries[id],r=el('tr');for(const v of [id,row.name,(row.extra||[]).filter(v=>v!==null&&v!=='').join(' · ')])td(r,v);
    const cell=el('td');cell.appendChild(btn('Изменить',()=>{dictForm='edit';editingId=id;render();}));r.appendChild(cell);body.appendChild(r);}
   t.appendChild(body);pane.appendChild(t);host.appendChild(pane);
  }

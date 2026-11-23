@@ -21,9 +21,10 @@ async function main(){
  assert.deepEqual(child.genesis.parent,original,'genesis cause must be parent root head');
  assert.equal((await db.verifyDatabase(store,created.rootHead)).checks.documents,12);
  // New row: stable ID used from now on; no modification to old catalog row.
- const ops=[{op:'add',path:'/entries/projects-0001',value:{id:'projects-0001',name:'Проект А',excelRow:null,extra:['тест']}},{op:'add',path:'/order/-',value:'projects-0001'}];
+ const ops=[{op:'add',path:'/entries/projects-0001',value:{id:'projects-0001',name:'Проект А',extra:['тест']}},{op:'add',path:'/order/-',value:'projects-0001'}];
  const add=await db.patchDocument(store,created.rootHead,'projects',ops);db.commit(store,add.store);db.publish(store,'Касса',add.rootHead,created.rootHead);
  assert.deepEqual((await db.load(store,add.documentHead)).state.order,['projects-0001']);
+ assert.ok(!('excelRow' in (await db.load(store,add.documentHead)).state.entries['projects-0001']));
  // Edit record without changing identity.
  const update=await db.patchDocument(store,add.rootHead,'projects',[{op:'replace',path:'/entries/projects-0001/name',value:'Проект Б'}]);db.commit(store,update.store);db.publish(store,'Касса',update.rootHead,add.rootHead);
  const updated=(await db.load(store,update.documentHead)).state;

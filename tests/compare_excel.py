@@ -97,7 +97,7 @@ def main():
    if isinstance(label,str) and label.strip():expected_rows.append(i)
   same(len(order),len(expected_rows),f'dictionary {name} count')
   for ident,index in zip(order,expected_rows):
-   e=entries[ident];same(e['excelRow'],index,f'{name} Excel row');same(e['name'],get(raw,'A',index),f'{name} label');dict_cells+=1
+   e=entries[ident];assert 'excelRow' not in e,f'{name}: Excel row must not be persisted in JSON dictionary';same(e['name'],get(raw,'A',index),f'{name} label');dict_cells+=1
    for j,v in enumerate(e.get('extra',[]),2):
     same(v,get(raw,column_name(j),index),f'{name} row {index} {column_name(j)}');dict_cells+=1
  report_cells=0

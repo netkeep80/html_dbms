@@ -22,7 +22,7 @@ function dictDoc(sheet, alias, prefix, rows){
   if(seen.has(norm))throw Error(`Duplicate normalized name in ${sheet}: ${name}`);
   const id=prefix+'-'+String(i).padStart(4,'0');seen.set(norm,id);
   const extra=cells.slice(1);
-  entries[id]={id,name,excelRow:i+1,...(extra.some(x=>x!==null&&x!=='')?{extra}: {})};order.push(id);
+  entries[id]={id,name,...(extra.some(x=>x!==null&&x!=='')?{extra}: {})};order.push(id);
  }
  return {sourceSheet:sheet,alias,entries,order};
 }
