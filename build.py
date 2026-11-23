@@ -4,6 +4,7 @@ No protocol encoding/serialization, encryption, or runtime JS is changed by this
 """
 from html import escape
 from html.parser import HTMLParser
+import re
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -15,12 +16,20 @@ SCRIPTS = {'/* CORE_JS */': 'core.js', '/* APP_JS */': 'app.js', '/* STARTER_JS 
 VOID = frozenset('area base br col embed hr img input link meta param source track wbr'.split())
 
 
+def html_script_safe(code):
+    """Prevent HTML tokenizer from ending a raw-text script element early.
+
+    JavaScript's escaped slash has the same value inside strings and template
+    literals; the XML/XHTML output always retains the exact original source.
+    """
+    return re.sub(r'</script(?=[\s/>])', lambda m: '<\\/script', code, flags=re.I)
+
+
 def sources():
     html = (SOURCE / 'index.html').read_text(encoding='utf-8')
     for marker, name in SCRIPTS.items():
         code = (SOURCE / name).read_text(encoding='utf-8')
-        if '</script' in code.lower():
-            raise ValueError(f'{name}: literal closing script tag would corrupt HTML')
+        code = html_script_safe(code)
         if html.count(marker) != 1:
             raise ValueError(f'{name}: expected exactly one insertion marker')
         html = html.replace(marker, code)

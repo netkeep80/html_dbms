@@ -68,6 +68,8 @@ def main():
     assert ET.fromstring(xml_modified).tag=='{'+XHTML+'}html'
     from importlib.machinery import SourceFileLoader
     build=SourceFileLoader('hdbms_builder',str(ROOT/'build.py')).load_module()
+    assert build.html_script_safe("const x='</script>';") == "const x='<\\/script>';"
+    assert build.html_script_safe("const y='</ScRiPt >';") == "const y='<\\/script >';"
     for text in ['some ]]> text','</script> & <tag>', '🙂 Привет & < >']:
         wrapped='<root>'+build.cdata(text)+'</root>'
         assert ET.fromstring(wrapped).text==text
