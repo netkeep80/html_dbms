@@ -1,9 +1,9 @@
 format: repo-guard/requirement-v1
 id: HDBMS-06
 normative: |
-  ### HDBMS-06 — Детерминированный genesis и отсутствие легаси до стабильного релиза
-
-  **Обязательно:** содержимое genesis является семантической идентичностью логической цепочки. Genesis не получает автоматически время, случайный physical ID или иные скрытые различающие данные. Одинаковый genesis распознаётся как существующая цепочка. Создатель может включить nonce в сам genesis для независимой или непредсказуемой идентичности. Значение records[ID] является непосредственно Base64url ciphertext. До первого стабильного релиза код поддерживает только текущий формат HTML_DBMS/2.2; 2.1, 2.0 и другие экспериментальные форматы отвергаются без миграции и fallback-чтения.
+  ### HDBMS-06 — Детерминированный genesis и отсутствие легаси
+  
+  Обязательно: genesis содержит [null,{name,parent,state}]; для дочерних документов parent=[ID,H] выбранного root до регистрации в $refs, для самостоятельных корней parent=null. Genesis детерминирован по сериализованному содержимому. Контейнеры и записи 2.x не открываются и не мигрируются внутри v3; fallback отсутствует.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}
@@ -14,4 +14,4 @@ relations:
   - predicates: [verified_by]
     target: {kind: artifact, path: 'tests/core.test.cjs'}
   - predicates: [documents]
-    target: {kind: artifact, path: 'docs/SRS.md'}
+    target: {kind: artifact, path: 'docs/SRS-3.md'}
