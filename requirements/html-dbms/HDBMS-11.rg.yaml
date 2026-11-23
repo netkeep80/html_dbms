@@ -1,0 +1,28 @@
+format: repo-guard/requirement-v1
+id: HDBMS-11
+normative: |
+  ### HDBMS-11 — Два автономных исполняемых контейнера одного протокола
+  Обязательны воспроизводимые сборки dist/html_dbms.html и dist/html_dbms.xml одним build.py из общих src/core.js, src/app.js, src/starter.js. XML является настоящим XML с XHTML namespace и корректным CDATA, сохраняет исходный JavaScript/CSS, исполняет тот же entry в прежнем sandbox; DOM API адаптируются к XHTML. Оба формата поддерживают импорт/валидацию и экспорт обоих контейнеров, сохраняя records, publicHeads, ID/H и ciphertext без модификации. Запись XML-версии выпускает .xml, HTML-версии — .html. Никаких plaintext DOM/debug в сохранённом контейнере. Обязательные приёмочные тесты: XML well-formedness, идентичность исходников и хранилища, цикл создания/записи/экспорта/импорта, проверка истории и регрессий v3.0.2. Browser UI regression с тестовым crypto shim нельзя представлять как реальный file:// Web Crypto. Прямой запуск через file:// с настоящей криптографией и доставка через MAX требуют независимой ручной проверки. Не изменять протокол HTML_DBMS/3 и не вводить legacy.
+relations:
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'build.py'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/app.js'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/index.html'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/dual_build.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_dual.py'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'dist/html_dbms.html'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'dist/html_dbms.xml'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: '.github/workflows/quality.yml'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'docs/SRS-3.md'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_native_crypto.py'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'README.md'}

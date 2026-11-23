@@ -89,3 +89,14 @@ python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cas
 ```
 
 Контрольный тест независимо расшифровывает HTML через ядро HTML DBMS и сравнивает справочники, операции и расчётные ячейки всех шести отчётов с исходной XLSX. Дополнительный UI-тест: `python3 tests/browser_cash_ui.py` (Chromium/Playwright, mock RPC; без подмены расчётов). Полный браузерный Web Crypto E2E на `file://` остаётся непроверенным в ограниченной среде; см. #31, #32.
+
+
+## Два автономных формата контейнера (issue #34)
+
+`python3 build.py` преобразует один исходный шаблон и общий `src/core.js`, `src/app.js`, `src/starter.js` в **HTML** (`dist/html_dbms.html`) и настоящий **XML с XHTML namespace** (`dist/html_dbms.xml`). Отличается только контейнер DOM/сериализация, **не** `records`, `publicHeads`, `ID/H`, GCM ciphertext или JSON Patch. XML использует CDATA (с разбиением `]]>`) для сохранения исходного текста CSS/JS, а экспорт применяет нативный XMLSerializer. Импорт обоих форматов разбирается DOMParser *как неисполняемые данные*, без вставки импортированного DOM на страницу.
+
+Сохранение: HTML→`.html`, XML→`.xml`. Оба варианта могут импортировать и проверять оба формата и переносить физическое хранилище **без единого изменения ciphertext/head**. Экспорт собирается из незаполненного исходного DOM-шаблона, а не из отображённых расшифрованных данных. Уровень sandbox для `entry` не ослаблен.
+
+Проверка: `python3 build.py`, `python3 tests/dual_build.py`, `python3 tests/browser_dual.py`, плюс штатные Node-тесты и тесты кассы.
+
+**Граница подтверждения:** пользователь уже проверил простой XML-пробник в Windows через `file://` (JavaScript, SHA-256, AES-256-GCM, Secure Context). Автоматическое тестирование здесь проверяет XML well-formedness/совместимость сериализации, UI на реальном Chromium c **эмуляцией XML DOM** и отдельно Node Web Crypto для ядра. Тестовый crypto shim **не является** настоящей Web Crypto. Полное выполнение `dist/html_dbms.xml` по `file://` в Windows, без сети и после передачи через MAX, должно пройти отдельную ручную приёмку; не отмечать её PASS без выполнения. Независимый криптоаудит #4 также остаётся открытым.

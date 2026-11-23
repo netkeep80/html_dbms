@@ -6,6 +6,8 @@ failure states. Local navigation is prohibited by this test environment.
 """
 from pathlib import Path
 import json
+import shutil
+import os
 from playwright.sync_api import sync_playwright, expect
 
 HTML = Path(__file__).resolve().parent.parent/'dist/html_dbms.html'
@@ -32,7 +34,8 @@ def frame(page):
     return page.frame_locator('iframe[title="Приложение из JSON entry"]')
 
 with sync_playwright() as pl:
-    browser=pl.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+    binary={'executable_path':shutil.which('chromium')} if shutil.which('chromium') else {}
+    browser=pl.chromium.launch(headless=True,**binary,args=['--no-sandbox','--disable-dev-shm-usage'])
     page=browser.new_page(accept_downloads=True)
     errors=[];prompts=iter(['Касса','Склад'])
     confirmation_policy={'overwrite':False}; dialogs=[]
@@ -44,8 +47,14 @@ with sync_playwright() as pl:
             d.accept() if confirmation_policy['overwrite'] else d.dismiss()
         else: d.accept()
     page.on('dialog',dialog_handler)
-    page.evaluate(SHIM)
-    page.set_content(HTML.read_text(encoding='utf8'),wait_until='domcontentloaded')
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        # GitHub-hosted runner permits direct file:// navigation. The local
+        # evaluation environment does not; it tests the same code via set_content.
+        page.add_init_script(SHIM)
+        page.goto(HTML.resolve().as_uri(),wait_until='domcontentloaded')
+    else:
+        page.evaluate(SHIM)
+        page.set_content(HTML.read_text(encoding='utf8'),wait_until='domcontentloaded')
     expect(page.locator('#databases')).to_be_disabled()
     expect(page.locator('#status')).to_contain_text('Контейнер пуст')
 
