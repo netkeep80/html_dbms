@@ -51,6 +51,20 @@ const assert=require('node:assert/strict'),db=require('../src/core.js');
  const opened=await db.openDatabase(cs,one.rootHead);opened.chain.state.x=999;
  assert.equal((await db.readState(cs,one.rootHead)).x,1);
  assert.throws(()=>{cs.records[patchId]='A'.repeat(23)+'\n';},{code:'INVALID_RECORD'});
+ // Snapshot caller-owned JSON before the first await. Cached state and
+ // authenticated replay must remain exactly the same even if the caller mutates it.
+ const input=[{op:'replace',path:'/x',value:7}];
+ const pending=db.patchRoot(cs,one.rootHead,input);input[0].value=999;
+ const snapshot=await pending;db.commit(cs,snapshot.store);
+ assert.equal((await db.readState(cs,snapshot.rootHead)).x,7);
+ assert.equal((await db.load(cs,snapshot.rootHead)).state.x,7);
+ const badArray=[];Object.defineProperty(badArray,'0',{get(){throw Error('accessor ran');},enumerable:true,configurable:true});badArray.length=1;
+ assert.throws(()=>db.assertJson(badArray),{code:'INVALID_JSON'});
+ // Unmanaged raw reads take an adopted snapshot instead of rescanning mutable input.
+ const raw=JSON.parse(JSON.stringify(cs));const verifying=db.verifyDatabase(raw,snapshot.rootHead);
+ delete raw.records[db.unpackHead(snapshot.rootHead).id];
+ assert.equal((await verifying).status,'complete');
+ console.log('STABILITY PASS: immutable operation input and external read snapshot');
  console.log('STABILITY PASS: concurrent commit/append, proof invalidation, state isolation, strict hidden records');
  console.log('STABILITY PASS: checked root write, rollback rejection, atomic failure, direct physical lookup, strict ciphertext');
 })().catch(e=>{console.error(e);process.exitCode=1;});
