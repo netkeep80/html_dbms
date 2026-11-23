@@ -1,9 +1,9 @@
 format: repo-guard/requirement-v1
 id: HDBMS-09
 normative: |
-  ### HDBMS-09 — Безопасная внешняя проверка и однозначный входной формат
-
-  **Обязательно:** внешний HTML разбирается инертным HTML parser, а не регулярным выражением; принимается ровно один фактический script#db-store[type="application/json"], иностранный JavaScript не исполняется. Base64url должен иметь каноническое представление, patch timestamp — строгий ISO UTC. Поисковый режим ограничивает количество records, размер одного ciphertext и суммарный объём ciphertext. Ошибки формата и лимитов приводят к отказу.
+  ### HDBMS-09 — Безопасный импорт, размеры и изолированное entry
+  
+  Обязательно: внешний HTML разбирается инертным DOMParser, принимается ровно один script#db-store[type=application/json], чужой JS не выполняется как следствие импорта. Base64url каноничен, timestamp проверяется как ISO UTC, чтение лимитирует количество и размер записей. JSON из entry не исполняется без доверенного host разрешения; исполняемый модуль запускается в sandbox iframe с ограничивающим CSP. Полноценная защита от побочных каналов не утверждается.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}
@@ -14,4 +14,4 @@ relations:
   - predicates: [verified_by]
     target: {kind: artifact, path: 'tests/core.test.cjs'}
   - predicates: [documents]
-    target: {kind: artifact, path: 'docs/SRS.md'}
+    target: {kind: artifact, path: 'docs/SRS-3.md'}
