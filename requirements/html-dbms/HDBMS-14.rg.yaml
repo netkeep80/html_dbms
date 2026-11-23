@@ -69,3 +69,8 @@ relations:
 
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'package-lock.json'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/boundaries.test.cjs'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/benchmark.cjs'}
