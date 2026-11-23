@@ -1,0 +1,121 @@
+name: Publish synthetic cash to GitHub Pages
+on:
+  workflow_run:
+    workflows: [Subject tests and build]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      approved: ${{ steps.approval.outputs.approved }}
+      sha256: ${{ steps.approval.outputs.sha256 }}
+      source_commit: ${{ steps.source.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - name: Require successful CI for current main commit
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          commit=$(git rev-parse HEAD)
+          current=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          test "$commit" = "$current"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/quality.yml/runs?head_sha=$commit&branch=main&event=push&status=success" --jq '.total_count' | grep -Eq '^[1-9][0-9]*$'
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Build fresh public demo and verify all history
+        run: |
+          python3 build.py
+          node tests/pages-data.test.cjs
+          mkdir site
+          node examples/cash/build-pages.cjs site/index.html
+          test "$(find site -mindepth 1 -type f | wc -l)" = 1
+          test -f site/index.html
+      - name: Verify explicit dataset approval
+        id: approval
+        run: |
+          node - <<'JS'
+          const fs=require('node:fs'),{createHash}=require('node:crypto');
+          const {syntheticFixture}=require('./examples/cash/synthetic-pages.cjs');
+          const {audit}=require('./examples/cash/build-pages.cjs');
+          (async()=>{
+            const html=fs.readFileSync('site/index.html'), summary=await audit(html.toString('utf8'));
+            const approvalPath='examples/cash/pages-approval.json';
+            const approval=fs.existsSync(approvalPath)?JSON.parse(fs.readFileSync(approvalPath,'utf8')):null;
+            const approved=approval?.fixtureSha256===summary.sha256 && /^[a-f0-9]{64}$/.test(summary.sha256);
+            console.log('Synthetic fixture SHA-256:',summary.sha256, 'approved:',approved);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT,'approved='+approved+'\nsha256='+createHash('sha256').update(html).digest('hex')+'\n');
+            if(!approved)console.log('Deployment blocked: owner approval of this fixture is required.');
+          })().catch(e=>{console.error(e.message);process.exitCode=1;});
+          JS
+      - name: Upload only approved index.html
+        if: steps.approval.outputs.approved == 'true'
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
+        with:
+          path: site
+  deploy:
+    needs: build
+    if: needs.build.outputs.approved == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy approved artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
+  verify-live:
+    needs: [build, deploy]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ needs.build.outputs.source_commit }}
+          persist-credentials: false
+      - name: Verify HTTPS response and exact deployed content
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+          EXPECTED_SHA: ${{ needs.build.outputs.sha256 }}
+        run: |
+          set -eu
+          test "$PAGE_URL" = 'https://netkeep80.github.io/html_dbms/'
+          for attempt in $(seq 1 20); do
+            if curl -fsS --max-time 30 "$PAGE_URL" -o "$RUNNER_TEMP/published-index.html" &&
+               echo "$EXPECTED_SHA  $RUNNER_TEMP/published-index.html" | sha256sum --check --status; then break; fi
+            sleep 10
+          done
+          echo "$EXPECTED_SHA  $RUNNER_TEMP/published-index.html" | sha256sum --check
+      - name: Browser acceptance against actual Pages HTTPS
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install playwright==1.56.0
+          .venv/bin/python -m playwright install --with-deps chromium
+          .venv/bin/python tests/browser_pages.py "$PAGE_URL" "$RUNNER_TEMP/published-index.html"

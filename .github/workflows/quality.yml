@@ -20,6 +20,7 @@ jobs:
       - run: python3 tests/dual_build.py
       - run: node examples/cash/build-demo.cjs
       - run: node tests/cash_crud.test.cjs
+      - run: node tests/pages-data.test.cjs
       - run: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cash_demo.html
 
   cash-browser-acceptance:
@@ -44,3 +45,4 @@ jobs:
           .venv/bin/python tests/browser_head_url.py
           .venv/bin/python tests/browser_native_crypto.py
           HDBMS_REAL_CRYPTO=1 .venv/bin/python tests/browser_head_url.py
+          .venv/bin/python tests/browser_pages.py

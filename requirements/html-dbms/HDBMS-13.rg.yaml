@@ -1,0 +1,26 @@
+format: repo-guard/requirement-v1
+id: HDBMS-13
+normative: |
+  ### HDBMS-13 — Публичная синтетическая касса, GitHub Pages
+  Публичный demo строится только из независимого детерминированного синтетического генератора, не читает исходную книгу, производные финансовые fixtures или старый ciphertext. 720 искусственных операций, 10 справочников, 12 категорий; одна опубликованная БД Касса; все 23 физические записи, genesis/patch, parent HEAD и entry проверяются с новым источником; скрытые, orphan, изменённые и повреждённые записи отклоняются. В artifact только автономный site/index.html. Deploy только из актуального main после успешного CI и явного утверждения точного SHA-256 fixture владельцем; без совпадающего pages-approval.json deploy запрещён. Права pages: write и id-token: write только deploy job. Никакой публикации исходных XLSX или истории Git. Автооткрытие одной БД, sandbox, локальные изменения, нативный Web Crypto HTTPS, проверка отчёта, валидации, локальной записи, экспорта и повторной загрузки, запрет внешних запросов. Post-deploy сравнивает байты опубликованного файла по SHA-256 и проверяет реальный HTTPS URL. README объясняет синтетические данные и ограничения статического режима.
+relations:
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/synthetic-pages.cjs'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/build-pages.cjs'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: '.github/workflows/pages.yml'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/pages-data.test.cjs'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_pages.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: '.github/workflows/quality.yml'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'README.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'examples/cash/README.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'docs/SRS.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'docs/SRS-3.md'}

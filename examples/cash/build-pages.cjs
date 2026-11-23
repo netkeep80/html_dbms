@@ -35,7 +35,12 @@ async function build(out){
  try{
   const fixture=path.join(tmp,'synthetic.json');fs.writeFileSync(fixture,JSON.stringify(syntheticFixture()));
   cp.execFileSync(process.execPath,[path.join(__dirname,'build-demo.cjs'),fixture,out],{stdio:'inherit'});
-  const summary=await audit(fs.readFileSync(out,'utf8'));
+  let html=fs.readFileSync(out,'utf8');
+  assert.ok(html.includes('<span class="version">4.0.0</span>'),'missing public demo label anchor');
+  html=html.replace('<span class="version">4.0.0</span>','<span class="version">4.0.0 · Учебные синтетические данные · изменения только локальные</span>');
+  html=html.replace('</head>','<link rel="icon" href="data:,"></head>');
+  fs.writeFileSync(out,html);
+  const summary=await audit(html);
   console.log('PUBLIC DATA AUDIT PASS',JSON.stringify(summary));
   return summary;
  }finally{fs.rmSync(tmp,{recursive:true,force:true});}
