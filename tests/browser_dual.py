@@ -62,6 +62,15 @@ def current_pair(page):
 
 
 def frame(page):
+    # Native XML documents use XHTML nodes, which Playwright's isolated-world
+    # frame_locator does not recognize. Wait for the actual sandbox child.
+    if page.evaluate('document.contentType') in ('text/xml','application/xml'):
+        expect(page.locator('#entry-area iframe')).to_have_count(1,timeout=20000)
+        for _ in range(200):
+            children=[f for f in page.frames if f!=page.main_frame and not f.is_detached()]
+            if len(children)==1:return children[0]
+            page.wait_for_timeout(100)
+        raise AssertionError('Expected one live XHTML iframe')
     return page.frame_locator('#entry-area iframe')
 
 
@@ -136,7 +145,16 @@ def main():
             fixture=Path(tmp)/('input.html' if src is html_store else 'input.xml')
             source_text=html_file.read_text(encoding='utf8') if src is html_store else xml_file.read_text(encoding='utf8')
             fixture.write_text(source_text,encoding='utf8')
-            page.locator('#input-html').set_input_files(str(fixture))
+            if kind=='xml' and os.environ.get('GITHUB_ACTIONS')=='true':
+                result=page.locator('#input-html').evaluate('''(e,{name,content}) => {
+                    if(!(e instanceof HTMLInputElement))throw Error('Not an HTMLInputElement');
+                    const dt=new DataTransfer();dt.items.add(new File([content],name,{type:'text/plain'}));
+                    e.files=dt.files;e.dispatchEvent(new Event('change',{bubbles:true}));
+                    return {files:e.files.length,ctor:e.constructor.name};
+                }''',{'name':fixture.name,'content':fixture.read_text('utf8')})
+                assert result=={'files':1,'ctor':'HTMLInputElement'},result
+            else:
+                page.locator('#input-html').set_input_files(str(fixture))
             expect(page.locator('#status')).to_contain_text('Контейнер загружен')
             assert current_pair(page)==next(iter(src['publicHeads'].values()))
             expect(frame(page).locator('#db-title')).to_have_text('Касса')
@@ -148,7 +166,7 @@ def main():
             assert store_from_output(kind,out.read_text(encoding='utf8'))==src
             page.close()
         browser.close()
-    print('BROWSER DUAL PASS: HTML + XML namespace emulation, real iframe RPC, save/load and byte-identical physical store (INSECURE SHIM; NO genuine XML file:// navigation)')
+    print('BROWSER DUAL PASS: HTML + XML, real iframe RPC, save/load and byte-identical physical store (INSECURE SHIM)')
 
 if __name__=='__main__':
     main()

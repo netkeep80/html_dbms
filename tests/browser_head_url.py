@@ -19,6 +19,16 @@ def visible(page,name):
 
 def empty(page):expect(page.locator('#entry-area iframe')).to_have_count(0)
 
+def fill_head(page,value):
+    if page.evaluate('document.contentType') in ('text/xml','application/xml'):
+        page.locator('#head').evaluate("(e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));}",value)
+    else:page.locator('#head').fill(value)
+
+def select_db(page,value):
+    if page.evaluate('document.contentType') in ('text/xml','application/xml'):
+        page.locator('#databases').evaluate("(e,v)=>{e.value=v;e.dispatchEvent(new Event('change',{bubbles:true}));}",value)
+    else:page.locator('#databases').select_option(value)
+
 def scenario(browser,kind,tmp):
     print("URL scenarios",kind,flush=True)
     page=browser.new_page(accept_downloads=True)
@@ -31,9 +41,9 @@ def scenario(browser,kind,tmp):
     page.locator('#info-toggle').click()
     # The clipboard action must use the ACTIVE head and not pending form text.
     page.evaluate('''()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{window.__copied=value;}}})''')
-    page.locator('#head').fill(a);page.locator('#copy-link').click()
+    fill_head(page,a);page.locator('#copy-link').click()
     assert page.evaluate('window.__copied').endswith('#head='+b)
-    page.locator('#head').fill(b)
+    fill_head(page,b)
     with page.expect_download() as dl:page.locator('#save').click()
     original=tmp/f'original.{kind}';dl.value.save_as(str(original));full=store_from_output(kind,original.read_text('utf8'))
     page.locator('#status').evaluate("e=>e.textContent='UNSAVED_PLAINTEXT_SENTINEL'")
@@ -63,7 +73,7 @@ def scenario(browser,kind,tmp):
         return p
     open_case(zero,error='Контейнер пуст').close()
     open_case(one,name='Alpha').close()
-    p=open_case(two,error='Выберите БД');assert current_pair(p)=='';p.locator('#databases').select_option('Beta');empty(p);assert current_pair(p)==b;p.locator('#open-head').click();visible(p,'Beta');p.close()
+    p=open_case(two,error='Выберите БД');assert current_pair(p)=='';select_db(p,'Beta');empty(p);assert current_pair(p)==b;p.locator('#open-head').click();visible(p,'Beta');p.close()
     open_case(one,'#head='+b,name='Beta').close()
     for frag in ['#head=','#head=bad','#head='+a+'&head='+b,'#head='+a+'%20','#head='+'A'*64]:
         open_case(one,frag,error='HEAD' if frag!='#head='+'A'*64 else 'MISSING_RECORD').close()

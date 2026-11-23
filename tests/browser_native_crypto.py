@@ -25,11 +25,8 @@ def physical(kind, text):
 
 
 def child(page,kind):
-    if kind=='xml':
-        frames=[x for x in page.frames if x!=page.main_frame]
-        assert len(frames)==1,frames
-        return frames[0]
-    return page.frame_locator('#entry-area iframe')
+    from browser_dual import frame
+    return frame(page)
 
 
 def case(browser, kind, path):
