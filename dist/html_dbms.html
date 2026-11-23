@@ -519,7 +519,7 @@ parent.postMessage({kind:'html-dbms-ready'},'*',[channel.port2]);})();
 async function launchSandbox(entry){
  stopApp();const f=makeElement('iframe');f.title='Приложение из JSON entry';f.setAttribute('sandbox','allow-scripts');activeFrame=f;
  let loads=0;
- const revoke=()=>{if(activeFrame===f){clearEntry();placeholder('Сессия entry завершена. Откройте HEAD повторно.');}};
+ const revoke=()=>{if(activeFrame===f){rpcBusy=null;clearEntry();placeholder('Сессия entry завершена. Откройте HEAD повторно.');}};
  f.addEventListener('load',()=>{if(++loads>1)revoke();});
  const startup=e=>{
   if(activeFrame!==f||e.source!==f.contentWindow||e.data?.kind!=='html-dbms-ready'||e.ports.length!==1)return;

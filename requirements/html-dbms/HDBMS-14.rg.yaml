@@ -35,3 +35,6 @@ relations:
 
   - predicates: [verified_by]
     target: {kind: artifact, path: 'tests/browser_stability.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/differential.test.cjs'}
