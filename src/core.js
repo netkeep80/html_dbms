@@ -96,25 +96,28 @@ async function resolve(s,rootHead,currentHead,reference,{maxDepth=16}={}){ensure
 function staging(s){validateStore(s);return clone(s);}
 function publish(staged,alias,newHead,oldHead=null){ensure(validHead(newHead),'INVALID_HEAD','Bad published head');if(!own(staged,'publicHeads'))staged.publicHeads={};ensure(plain(staged.publicHeads),'INVALID_PUBLIC_HEADS','Invalid publicHeads');if(oldHead!==null)ensure(sameHead(staged.publicHeads[alias],oldHead),'STALE_PUBLIC_HEAD','Published version changed');put(staged.publicHeads,alias,clone(newHead));}
 async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(tx.publicHeads||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);return {store:tx,rootHead:g.head,genesis:g};}
-async function createDocument(s,rootHead,name,initial,alias=null){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);const n=alias||name;ensure(n.length>0&&!n.includes('/')&&!own(refs,n),'DUPLICATE_DOCUMENT','Name already exists');const g=await genesis(tx,name,initial,rootHead);const ops=own(root.state,'$refs')?[{op:'add',path:'/$refs/'+escapePtr(n),value:g.head}]:[{op:'add',path:'/$refs',value:{[n]:g.head}}];const r=await append(tx,rootHead,ops);return {store:tx,rootHead:r.head,documentHead:g.head};}
-async function patchDocument(s,rootHead,alias,operations,options={}){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);ensure(own(refs,alias),'UNKNOWN_DOCUMENT','Unknown document');const p=await append(tx,refs[alias],operations,options);const r=await append(tx,rootHead,[{op:'replace',path:'/$refs/'+escapePtr(alias),value:p.head}]);return {store:tx,rootHead:r.head,documentHead:p.head};}
+async function createDocument(s,rootHead,name,initial,alias=null,options={}){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);const n=alias||name;ensure(n.length>0&&!n.includes('/')&&!own(refs,n),'DUPLICATE_DOCUMENT','Name already exists');const g=await genesis(tx,name,initial,rootHead);const ops=own(root.state,'$refs')?[{op:'add',path:'/$refs/'+escapePtr(n),value:g.head}]:[{op:'add',path:'/$refs',value:{[n]:g.head}}];const r=await append(tx,rootHead,ops,{overwrite:!!options.overwriteRoot});return {store:tx,rootHead:r.head,documentHead:g.head};}
+async function patchDocument(s,rootHead,alias,operations,options={}){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);ensure(own(refs,alias),'UNKNOWN_DOCUMENT','Unknown document');let p,r;try{p=await append(tx,refs[alias],operations,{overwrite:!!options.overwriteChild});}catch(e){if(e.code==='SUCCESSOR_OCCUPIED')e.phase='child';throw e;}try{r=await append(tx,rootHead,[{op:'replace',path:'/$refs/'+escapePtr(alias),value:p.head}],{overwrite:!!options.overwriteRoot});}catch(e){if(e.code==='SUCCESSOR_OCCUPIED')e.phase='root';throw e;}return {store:tx,rootHead:r.head,documentHead:p.head};}
 // Validate a database snapshot, including the historical references published by its root.
 // Unlike cryptographic validation, reference policy is a separate optional check.
 async function verifyDatabase(s, rootHead, options={}) {
   validateStore(s);
-  const root = await load(s,rootHead);
+  const root=await load(s,rootHead);
   let state=clone(root.genesis.state);
-  const aliases=new Map(), warnings=[], checks={rootEvents:root.events.length, documents:0, historicalReferences:0, causalOrigins:0};
-  function scan(refMap, beforeHead, introduced) {
-    for(const [name,h] of Object.entries(refMap)){
-      const old=aliases.get(name);
-      if(old&&sameHead(old.head,h))continue;
-      if(old&&introduced) old.transitions.push({beforeHead,from:old.head,to:h});
-      if(!old)aliases.set(name,{head:h,transitions:[],firstBefore:beforeHead,firstEvent:introduced});
-      else old.head=h;
-      checks.historicalReferences++;
+  // NEVER forget an alias when it disappears from an effective root state.
+  // A removal does not erase earlier references or reset the rollback baseline.
+  const history=new Map(), warnings=[];
+  const checks={rootEvents:root.events.length,documents:0,activeDocuments:0,historicalReferences:0,causalOrigins:0};
+  function scan(references, beforeHead, introduced) {
+    for(const [name,head] of Object.entries(references)) {
+      let entry=history.get(name);
+      if(!entry){entry={firstBefore:clone(beforeHead),firstEvent:introduced,heads:[]};history.set(name,entry);}
+      const previous=entry.heads.at(-1);
+      if(!previous||!sameHead(previous,head)) {
+        entry.heads.push(clone(head));
+        checks.historicalReferences++;
+      }
     }
-    for(const name of aliases.keys())if(!own(refMap,name))aliases.delete(name);
   }
   scan(getRootRefs(state),root.events[0].head,false);
   for(let i=1;i<root.events.length;i++){
@@ -122,21 +125,30 @@ async function verifyDatabase(s, rootHead, options={}) {
     state=patch(state,root.events[i].r[3]);
     scan(getRootRefs(state),before,true);
   }
-  const documents={};
-  for(const [name,meta] of aliases){
-    const child=await load(s,meta.head);
-    checks.documents++;
-    const ancestry=new Set(child.events.map(e=>key(e.head)));
-    for(const move of meta.transitions){
-      ensure(ancestry.has(key(move.from)),'REFERENCE_ROLLBACK','Reference "'+name+'" does not extend an earlier version');
+  const activeRefs=getRootRefs(state),documents={};
+  for(const [name,meta] of history){
+    // The most recently referenced head must descend from EVERY earlier head,
+    // including ones removed and subsequently reintroduced. Loading it checks
+    // the entire authenticated child ancestry (genesis, patches, ciphertext).
+    const lastHead=meta.heads.at(-1),child=await load(s,lastHead);
+    const indices=new Map(child.events.map((e,i)=>[key(e.head),i]));
+    let previousIndex=-1;
+    for(const referencedHead of meta.heads){
+      const index=indices.get(key(referencedHead));
+      ensure(index!==undefined&&index>=previousIndex,'REFERENCE_ROLLBACK',
+        'Document "'+name+'" was replaced, rolled back or diverged across historical $refs');
+      previousIndex=index;
     }
+    checks.documents++;
+    const active=own(activeRefs,name);
+    if(active)checks.activeDocuments++;
     const parent=child.genesis.parent;
-    if(meta.firstEvent && sameHead(parent,meta.firstBefore))checks.causalOrigins++;
-    else if(parent!==null && !root.events.some(e=>sameHead(e.head,parent)))
+    if(meta.firstEvent&&sameHead(parent,meta.firstBefore))checks.causalOrigins++;
+    else if(parent!==null&&!root.events.some(e=>sameHead(e.head,parent)))
       warnings.push('Документ '+name+': genesis.parent не входит в ancestry выбранного корня');
-    else if(meta.firstEvent && parent!==null && !sameHead(parent,meta.firstBefore))
+    else if(meta.firstEvent&&parent!==null&&!sameHead(parent,meta.firstBefore))
       warnings.push('Документ '+name+': origin не совпадает с версией корня перед первой регистрацией (возможно, импортирован)');
-    documents[name]={head:meta.head,events:child.events.length,origin:parent};
+    documents[name]={head:clone(lastHead),active,events:child.events.length,referencedVersions:meta.heads.length,origin:parent};
   }
   if(options.anchorHash!==undefined){
     ensure(validHash(options.anchorHash),'INVALID_HASH','Invalid trusted historical H');

@@ -100,5 +100,42 @@ const fixedTime = '2026-11-23T18:00:00.000Z';
  await assert.rejects(db.truncateInvalidTail(branch,damage,overwrite.head),{code:'INVALID_RECOVERY_HEAD'});
  // Distinct append messages from same predecessor always target the same address.
  assert.equal(await db.successorId(g.head),e.head[0]);
+ // Audit BLOCKER: removed aliases are still part of the historical verification domain.
+ const historical=db.newStore();
+ const hg=await db.createDatabase(historical,'History');db.commit(historical,hg.store);
+ const hd=await db.createDocument(historical,hg.rootHead,'funds',{value:0});db.commit(historical,hd.store);
+ const hp=await db.patchDocument(historical,hd.rootHead,'funds',[{op:'replace',path:'/value',value:1}]);db.commit(historical,hp.store);
+ const prevRoot=await db.load(historical,hp.rootHead);
+ const removed=await db.append(historical,hp.rootHead,[{op:'remove',path:'/$refs/funds'}]);
+ const verifiedRemoved=await db.verifyDatabase(historical,removed.head);
+ assert.equal(verifiedRemoved.status,'complete');
+ assert.equal(verifiedRemoved.checks.documents,1,'removed historical document must remain verified');
+ assert.equal(verifiedRemoved.checks.activeDocuments,0);
+ assert.equal(verifiedRemoved.documents.funds.active,false);
+ const rollback=await db.append(historical,removed.head,[{op:'add',path:'/$refs/funds',value:hd.documentHead}]);
+ await assert.rejects(db.verifyDatabase(historical,rollback.head),{code:'REFERENCE_ROLLBACK'},'remove then re-add older child is rollback');
+ const damaged=db.staging(historical);
+ damaged.records[hd.documentHead[0]]=damaged.records[hp.rootHead[0]];
+ await assert.rejects(db.verifyDatabase(damaged,removed.head),{code:'INVALID_GCM'},'corrupt removed historical ciphertext must fail verification');
+ const returnNew=await db.append(historical,rollback.head,[{op:'replace',path:'/$refs/funds',value:hp.documentHead}]);
+ await assert.rejects(db.verifyDatabase(historical,returnNew.head),{code:'REFERENCE_ROLLBACK'},'rollback cannot be laundered by a later forward update');
+ // Allow a temporarily removed alias to return to the SAME latest head.
+ const keep=db.staging(historical);
+ const returnSame=await db.append(keep,removed.head,[{op:'add',path:'/$refs/funds',value:hp.documentHead}],{overwrite:true});
+ assert.equal((await db.verifyDatabase(keep,returnSame.head)).status,'complete');
+ // Explicit overwrite can be enabled independently for child and root successor.
+ const conflict=db.newStore();const cg=await db.createDatabase(conflict,'Collision');db.commit(conflict,cg.store);
+ const cd=await db.createDocument(conflict,cg.rootHead,'child',{v:0});db.commit(conflict,cd.store);
+ const cfirst=await db.patchDocument(conflict,cd.rootHead,'child',[{op:'replace',path:'/v',value:1}]);db.commit(conflict,cfirst.store);
+ await assert.rejects(db.patchDocument(conflict,cd.rootHead,'child',[{op:'replace',path:'/v',value:2}]),{code:'SUCCESSOR_OCCUPIED',phase:'child'});
+ await assert.rejects(db.patchDocument(conflict,cd.rootHead,'child',[{op:'replace',path:'/v',value:2}],{overwriteChild:true}),{code:'SUCCESSOR_OCCUPIED',phase:'root'});
+ const accepted=await db.patchDocument(conflict,cd.rootHead,'child',[{op:'replace',path:'/v',value:2}],{overwriteChild:true,overwriteRoot:true});
+ assert.equal((await db.load(accepted.store,accepted.rootHead)).state.$refs.child[0],accepted.documentHead[0]);
+ assert.equal((await db.load(accepted.store,accepted.documentHead)).state.v,2);
+ // Staging leaves physical source unchanged until commit after confirmation.
+ assert.deepEqual((await db.load(conflict,cfirst.documentHead)).state,{v:1});
+ await assert.rejects(db.createDocument(conflict,cg.rootHead,'new-child',{value:2}),{code:'SUCCESSOR_OCCUPIED'});
+ const overrideDoc=await db.createDocument(conflict,cg.rootHead,'new-child',{value:2},null,{overwriteRoot:true});
+ assert.equal((await db.load(overrideDoc.store,overrideDoc.rootHead)).state.$refs['new-child'][0],overrideDoc.documentHead[0]);
  console.log('HTML_DBMS/3 core tests PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});
