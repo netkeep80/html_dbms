@@ -71,6 +71,8 @@ function mainState(tx){return {title:'Demo',tabs:['items','transactions'],tables
  // A later old head detects that an intermediate physical slot was replaced.
  const broken=await C.inspect(forkStore,oldHead);assert.equal(broken.code,'REPLACED_OR_CORRUPTED_PREDECESSOR');assert.equal(broken.invalid.id,b.id);assert.ok(broken.tailIds.includes(b.id));
  // Explicit truncate with independently known older pointer removes the broken tail only when requested.
+ await assert.rejects(C.truncateInvalidTail(forkStore,broken,[g.id,g.hash]),e=>e.code==='INVALID_RECOVERY_HEAD');
+ assert.equal(Object.hasOwn(forkStore.records,b.id),true);
  const truncated=await C.truncateInvalidTail(forkStore,broken,[a.id,a.head]);assert.equal(truncated.head[0],a.id);
  assert.equal(Object.hasOwn(forkStore.records,b.id),true,'Never delete occupied successor of a new branch');
  assert.deepEqual(truncated.preservedIds,[b.id]);
