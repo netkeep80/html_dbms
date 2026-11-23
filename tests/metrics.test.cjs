@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict'),{webcrypto}=require('node:crypto');
-const subtle=(globalThis.crypto||webcrypto).subtle,counts={digest:0,encrypt:0,decrypt:0,fullScans:0};
+const subtle=(globalThis.crypto||webcrypto).subtle,counts={digest:0,encrypt:0,decrypt:0,fullScans:0,headDecodes:0};
+const nativeAtob=globalThis.atob;globalThis.atob=function(s){if(s.length===64&&!s.endsWith('='))counts.headDecodes++;return nativeAtob(s);};
 const originals={};for(const key of ['digest','encrypt','decrypt']){originals[key]=subtle[key];subtle[key]=function(...args){counts[key]++;return originals[key].apply(this,args);};}
 const create=Object.create;let probe=null;
 // Instrument actual private dictionaries from outside the production kernel.
@@ -21,15 +22,15 @@ const sample=()=>({...counts});
   // Positive control: real ownKeys trap is observed by Object.keys.
   reset();db.snapshot(s);assert.equal(counts.fullScans,1);
   const before=performance.now();reset();await db.openDatabase(s,d.rootHead);const open={...sample(),ms:performance.now()-before};
-  assert.equal(open.decrypt,3);assert.equal(open.fullScans,0);
+  assert.equal(open.decrypt,3);assert.equal(open.fullScans,0);assert.equal(open.headDecodes,3);
   reset();const t=performance.now();
   let head=d.rootHead;
   for(let i=1;i<=10;i++){const p=await db.patchDocument(s,head,'child',[{op:'replace',path:'/n',value:i}]);db.commit(s,p.store);head=p.rootHead;db.storeInfo(s);}
   const writes={...sample(),ms:performance.now()-t};
-  assert.equal(writes.digest,40);assert.equal(writes.encrypt,20);assert.equal(writes.decrypt,0);assert.equal(writes.fullScans,0);
+  assert.equal(writes.digest,40);assert.equal(writes.encrypt,20);assert.equal(writes.decrypt,0);assert.equal(writes.fullScans,0);assert.equal(writes.headDecodes,20);
   assert.equal((await db.readState(s,(await db.readState(s,head)).$refs.child)).n,10);
   assert.equal(counts.decrypt,0);
-  reset();const verify=await db.verifyDatabase(s,head);assert.equal(verify.status,'complete');assert.equal(counts.decrypt,23);
+  reset();const verify=await db.verifyDatabase(s,head);assert.equal(verify.status,'complete');assert.equal(counts.decrypt,23);assert.equal(counts.headDecodes,23);
   result.push({hiddenRecords:size,open,tenChildWrites:writes,independentVerify:sample()});
  }
  reset();const s=db.newStore();await db.genesis(s,'Genesis',{});assert.equal(counts.digest,2);assert.equal(counts.encrypt,1);
@@ -40,4 +41,4 @@ const sample=()=>({...counts});
  assert.equal(JSON.stringify(db.snapshot(s)),before);
  subtle.encrypt=function(...args){counts.encrypt++;return originals.encrypt.apply(this,args);};
  console.log('METRICS PASS',JSON.stringify(result));
-})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>{Object.create=create;for(const k of Object.keys(originals))subtle[k]=originals[k];});
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>{Object.create=create;globalThis.atob=nativeAtob;for(const k of Object.keys(originals))subtle[k]=originals[k];});
