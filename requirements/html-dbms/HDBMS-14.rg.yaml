@@ -28,3 +28,6 @@ relations:
     target: {kind: artifact, path: 'tests/cash_crud.test.cjs'}
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'examples/cash/build-pages.cjs'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/metrics.test.cjs'}

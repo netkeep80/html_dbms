@@ -174,7 +174,7 @@ function stateFor(s,head,proof){
 async function readState(s,head){const rev=beginRead(s),state=await stateFor(s,head,stores.get(s)?.proof);unchanged(s,rev);return clone(state);}
 async function checkedProof(s,head){
  const m=meta(s);if(m.proof?.head===head)return m.proof;
- await openDatabase(s,head);return meta(s).proof;
+ return (await verifySnapshot(s,head)).proof;
 }
 async function checkChange(tx,proof,root,known,overwritten){
  // Occupied-slot replacement can destroy dependencies elsewhere in this graph.
@@ -218,7 +218,8 @@ async function patchDocument(s,rootHead,alias,operations,options={}){
 async function verifyDatabase(s, rootHead, options={}) {
   return (await openDatabase(s,rootHead,options)).report;
 }
-async function openDatabase(s,rootHead,options={}) {
+async function openDatabase(s,rootHead,options={}) {const {chain,report}=await verifySnapshot(s,rootHead,options);return {chain,report};}
+async function verifySnapshot(s,rootHead,options={}) {
   const rev=beginRead(s);
   // NEVER forget an alias when it disappears from an effective root state.
   // A removal does not erase earlier references or reset the rollback baseline.
@@ -268,7 +269,7 @@ async function openDatabase(s,rootHead,options={}) {
     ensure(index>=0,'ANCHOR_MISMATCH','Trusted HEAD is not in the root ancestry');
     checks.anchorIndex=index;
   }
-  unchanged(s,rev);if(stores.has(s))meta(s).proof={head:rootHead,state:clone(root.state),children};return {chain:root,report:{status:'complete',rootHead,checks,documents,warnings}};
+  unchanged(s,rev);const proof={head:rootHead,state:clone(root.state),children};if(stores.has(s))meta(s).proof=proof;return {chain:root,proof,report:{status:'complete',rootHead,checks,documents,warnings}};
 }
 // Recovery is explicitly destructive. Never remove a physical slot whose contents
 // were overwritten: it might belong to a different branch of history.
