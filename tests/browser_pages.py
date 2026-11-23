@@ -12,15 +12,21 @@ ROOT=Path(__file__).resolve().parents[1]
 def test(url, expected=None, self_signed=False):
     with sync_playwright() as pw:
         browser=pw.chromium.launch(headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
-        page=browser.new_page(ignore_https_errors=self_signed,accept_downloads=True)
+        ctx=browser.new_context(ignore_https_errors=self_signed,accept_downloads=True,service_workers='block')
         errors=[]; unexpected=[]
-        page.on('pageerror',lambda e:errors.append(str(e)))
-        page.on('dialog',lambda d:d.accept())
+        def monitor(p):
+            p.on('pageerror',lambda e:errors.append(str(e)))
+            p.on('dialog',lambda d:d.accept())
+            p.on('websocket',lambda w:unexpected.append(w.url))
+        ctx.on('page',monitor)
+        page=ctx.new_page()
+        def permitted(r):
+            return r.url.split('#')[0]==url and r.is_navigation_request() and r.frame==page.main_frame
         def route(r):
-            if r.request.url.split('#')[0]==url and r.request.is_navigation_request():r.continue_()
-            elif r.request.url.startswith(('blob:','data:')):r.continue_()
+            if permitted(r.request):r.continue_()
             else:unexpected.append(r.request.url);r.abort()
-        page.route('**/*',route)
+        ctx.route('http**/*',route)
+        ctx.on('request',lambda r:unexpected.append(r.url) if r.url.startswith(('http:','https:')) and not permitted(r) else None)
         response=page.goto(url,wait_until='domcontentloaded')
         assert response.status==200 and page.url.startswith('https://')
         if expected is not None:assert response.body()==expected,'deployed bytes differ from approved artifact'
@@ -45,7 +51,7 @@ def test(url, expected=None, self_signed=False):
         with page.expect_download() as download:page.locator('#save').click()
         with TemporaryDirectory() as tmp:
             saved=Path(tmp)/'saved.html';download.value.save_as(saved)
-            other=browser.new_page()
+            other=ctx.new_page()
             other.goto(saved.as_uri(),wait_until='domcontentloaded')
             expect(other.frame_locator('#entry-area iframe').locator('#cash-count')).to_contain_text('721',timeout=30000)
             other.close()
@@ -53,7 +59,7 @@ def test(url, expected=None, self_signed=False):
         expect(page.frame_locator('#entry-area iframe').locator('#cash-count')).to_contain_text('720',timeout=30000)
         assert not unexpected,unexpected
         assert not errors,errors
-        browser.close()
+        ctx.close();browser.close()
     print('PUBLIC CASH HTTPS PASS: native crypto, auto-open, all rows, report, validation, local write, saved copy, unchanged remote snapshot, no external requests')
 def main():
     if len(sys.argv)>1:

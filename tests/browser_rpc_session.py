@@ -26,7 +26,7 @@ def scenario(browser,kind,tmp):
     # The original WindowProxy alone is no longer an RPC capability.
     page.evaluate('''()=>{window.forgedReplies=[];window.addEventListener('message',e=>{if(e.data?.kind==='html-dbms-reply')window.forgedReplies.push(e.data);});}''')
     child=next(f for f in page.frames if f!=page.main_frame)
-    child.evaluate('''()=>parent.postMessage({kind:'html-dbms-rpc',id:900,method:'read',payload:{ref:''}},'*')''')
+    child.evaluate('''()=>{window.addEventListener('message',e=>{if(e.data?.kind==='html-dbms-reply')parent.postMessage(e.data,'*');});parent.postMessage({kind:'html-dbms-rpc',id:900,method:'read',payload:{ref:''}},'*');}''')
     child.evaluate('''()=>parent.postMessage({kind:'html-dbms-rpc',id:901,method:'createDocument',payload:{name:'FORGED',state:{}}},'*')''')
     # Gate an actual staged write before it reaches the shell commit.
     page.evaluate('''()=>{

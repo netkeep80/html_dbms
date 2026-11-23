@@ -31,7 +31,15 @@ def select_db(page,value):
 
 def scenario(browser,kind,tmp):
     print("URL scenarios",kind,flush=True)
-    page=browser.new_page(accept_downloads=True)
+    ctx=browser.new_context(accept_downloads=True,service_workers='block')
+    blocked=[];errors=[]
+    ctx.on('request',lambda r:blocked.append(r.url) if r.url.startswith(('http:','https:')) else None)
+    ctx.route('http**/*',lambda r:r.abort())
+    def monitor(p):
+        p.on('pageerror',lambda e:errors.append(str(e)))
+        p.on('websocket',lambda w:blocked.append(w.url))
+    ctx.on('page',monitor)
+    page=ctx.new_page()
     names=iter(['Alpha','Beta']);page.on('dialog',lambda d:d.accept(next(names)) if d.type=='prompt' else d.accept())
     setup(page,kind,real_crypto=REAL_CRYPTO)
     empty(page);expect(page.locator('#status')).to_contain_text('Контейнер пуст')
@@ -62,7 +70,7 @@ def scenario(browser,kind,tmp):
         p=tmp/f'{name}-{kind}.{kind}';data={**full,'publicHeads':catalog,'records':full['records'] if records is None else records};p.write_text(replace_store(base,kind,data),encoding='utf8');return p
     zero=fixture('zero',{});one=fixture('one',{'Alpha':a});two=fixture('two',{'Alpha':a,'Beta':b})
     def open_case(path,frag='',name=None,error=None,container=kind):
-        p=browser.new_page();setup(p,container,path,frag,real_crypto=REAL_CRYPTO)
+        p=ctx.new_page();setup(p,container,path,frag,real_crypto=REAL_CRYPTO)
         if name:
             try:visible(p,name)
             except Exception:
@@ -89,6 +97,9 @@ def scenario(browser,kind,tmp):
     p.evaluate('location.hash="head=bad"');expect(p.locator('#status')).to_contain_text('Некорректный HEAD');empty(p)
     p.evaluate('(v)=>location.hash="head="+v',b);visible(p,'Beta')
     p.evaluate('location.hash=""');visible(p,'Alpha');p.close()
+    assert not blocked,blocked
+    assert not errors,errors
+    ctx.close()
 
 if __name__=='__main__':
     with sync_playwright() as pw,TemporaryDirectory() as d:

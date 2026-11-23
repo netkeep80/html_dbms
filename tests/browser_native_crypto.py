@@ -30,10 +30,16 @@ def child(page,kind):
 
 
 def case(browser, kind, path):
-    page=browser.new_page(accept_downloads=True)
-    page.on('dialog',lambda d:d.accept('Касса'))
-    blocked=[]
-    page.on('request',lambda r:blocked.append(r.url) if r.url.startswith(('https://','http://')) else None)
+    ctx=browser.new_context(accept_downloads=True,service_workers='block')
+    blocked=[];errors=[]
+    def monitor(p):
+        p.on('dialog',lambda d:d.accept('Касса'))
+        p.on('pageerror',lambda e:errors.append(str(e)))
+        p.on('websocket',lambda w:blocked.append(w.url))
+    ctx.on('page',monitor)
+    ctx.on('request',lambda r:blocked.append(r.url) if r.url.startswith(('https:','http:')) else None)
+    ctx.route('http**/*',lambda r:r.abort())
+    page=ctx.new_page()
     page.goto((ROOT/'dist'/f'html_dbms.{kind}').resolve().as_uri(),wait_until='domcontentloaded')
     check=page.evaluate('''async () => {
         const msg=new TextEncoder().encode('real browser crypto');
@@ -64,10 +70,11 @@ def case(browser, kind, path):
     dl.value.save_as(str(saved))
     data=physical(kind,saved.read_text('utf8'))
     assert data['format']=='HTML_DBMS/4' and len(data['records'])>=3
-    assert not blocked,blocked
     page.goto(saved.resolve().as_uri(),wait_until='domcontentloaded')
     expect(child(page,kind).locator('#db-title')).to_have_text('Касса',timeout=20000)
-    page.close()
+    assert not blocked,blocked
+    assert not errors,errors
+    ctx.close()
 
 
 if __name__=='__main__':
