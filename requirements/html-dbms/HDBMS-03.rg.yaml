@@ -1,9 +1,9 @@
 format: repo-guard/requirement-v1
 id: HDBMS-03
 normative: |
-  ### HDBMS-03 — Воспроизводимая сборка и достоверно описанная граница безопасности
-
-  **Обязательно:** репозиторий содержит только синтетические примеры, тестируемые исходники и детерминированно собранный однофайловый артефакт. CI выполняет предметные тесты и проверяет актуальность сгенерированного HTML. GitHub Action RepoGuard закреплён за неизменяемым SHA исходного коммита и получает точные SHA состояний BASE/HEAD запроса на слияние. Успешный CI сам по себе не доказывает предметную корректность или наличие обязательной защиты ветки.
+  ### HDBMS-03 — Воспроизводимая автономная сборка и граница безопасности
+  
+  Обязательно: единственный автономный HTML с embedded core, starter и shell собирается детерминированно из src/index.html, src/core.js, src/starter.js и src/app.js. Сборка проверяется CI, экспорт выполняется из чистого шаблона, не включая расшифрованное DOM-состояние. Экспериментальная message-locked схема не заявляет конфиденциальность предсказуемых данных; необходим независимый аудит.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'build.py'}
@@ -12,6 +12,6 @@ relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: '.github/workflows/repo-guard.yml'}
   - predicates: [documents]
-    target: {kind: artifact, path: 'docs/SRS.md'}
+    target: {kind: artifact, path: 'docs/SRS-3.md'}
   - predicates: [documents]
     target: {kind: artifact, path: 'README.md'}
