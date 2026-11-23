@@ -1,6 +1,7 @@
 """Browser DOM interoperability regression for HTML and XML/XHTML.
 
-XML's real file:// navigation is blocked by this environment.  To test the
+Local evaluation prohibits real file:// navigation, while GitHub Actions tests
+file:// directly. The local fallback reparses XHTML with DOMParser. To test the
 namespace-specific code paths, we reparse the REAL XML output via DOMParser,
 replace the live root with that XHTML namespace tree, and run its embedded
 scripts with document.contentType set to text/xml.  This is NOT a genuine XML
@@ -12,6 +13,7 @@ from pathlib import Path
 import json
 import re
 import shutil
+import os
 from playwright.sync_api import sync_playwright, expect
 # Read the test-only shim literal without executing browser_smoke.py's scenarios.
 import ast
@@ -22,6 +24,15 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 def setup(page, kind):
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        # Full native XHTML/XML parser + script execution on file://.
+        # Intentionally test-only shim; this does not assert genuine AES-GCM.
+        page.add_init_script(SHIM)
+        page.goto((ROOT/'dist'/('html_dbms.xml' if kind=='xml' else 'html_dbms.html')).resolve().as_uri(),wait_until='domcontentloaded')
+        if kind=='xml':
+            assert page.evaluate('document.contentType') in ('text/xml','application/xml')
+            assert page.evaluate('document.documentElement.namespaceURI') == 'http://www.w3.org/1999/xhtml'
+        return
     page.evaluate(SHIM)
     if kind=='html':
         page.set_content((ROOT/'dist/html_dbms.html').read_text(encoding='utf8'),wait_until='domcontentloaded')
