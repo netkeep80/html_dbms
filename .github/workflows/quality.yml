@@ -22,7 +22,7 @@ jobs:
       - run: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cash_demo.html
 
   cash-browser-acceptance:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
