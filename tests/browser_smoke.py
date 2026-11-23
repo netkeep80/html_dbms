@@ -6,6 +6,7 @@ failure states. Local navigation is prohibited by this test environment.
 """
 from pathlib import Path
 import json
+import shutil
 from playwright.sync_api import sync_playwright, expect
 
 HTML = Path(__file__).resolve().parent.parent/'dist/html_dbms.html'
@@ -32,7 +33,7 @@ def frame(page):
     return page.frame_locator('iframe[title="Приложение из JSON entry"]')
 
 with sync_playwright() as pl:
-    browser=pl.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
+    browser=pl.chromium.launch(headless=True,executable_path=shutil.which('chromium') or pl.chromium.executable_path,args=['--no-sandbox','--disable-dev-shm-usage'])
     page=browser.new_page(accept_downloads=True)
     errors=[];prompts=iter(['Касса','Склад'])
     confirmation_policy={'overwrite':False}; dialogs=[]

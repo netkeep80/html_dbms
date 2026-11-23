@@ -39,4 +39,5 @@ jobs:
           python3 build.py
           node examples/cash/build-demo.cjs
           .venv/bin/python tests/browser_cash_acceptance.py
+          .venv/bin/python tests/browser_smoke.py
           .venv/bin/python tests/browser_dual.py
