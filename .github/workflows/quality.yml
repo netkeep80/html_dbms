@@ -16,7 +16,8 @@ jobs:
       - run: node tests/core.test.cjs
       - run: node tests/app.test.cjs
       - run: node tests/docs-language.test.cjs
-      - run: python3 build.py && git diff --exit-code -- dist/html_dbms.html
+      - run: python3 build.py && git diff --exit-code -- dist/html_dbms.html dist/html_dbms.xml
+      - run: python3 tests/dual_build.py
       - run: node examples/cash/build-demo.cjs
       - run: node tests/cash_crud.test.cjs
       - run: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cash_demo.html
@@ -38,3 +39,4 @@ jobs:
           python3 build.py
           node examples/cash/build-demo.cjs
           .venv/bin/python tests/browser_cash_acceptance.py
+          .venv/bin/python tests/browser_dual.py
