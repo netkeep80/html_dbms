@@ -133,9 +133,9 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         expect(app2.locator('.gridbox tbody tr').filter(has_text=project_id)).to_contain_text('Проект Б')
         # Inspect recovered JSON, not just visual cells.
         data=second.evaluate('''async()=>{
-          const db=HTML_DBMS,s=JSON.parse(document.getElementById('db-store').textContent),h=s.publicHeads['Касса'];
-          const root=(await db.load(s,h)).state,docs={};
-          for(const name of Object.keys(root.$refs))docs[name]=(await db.load(s,root.$refs[name])).state;
+          const db=HTML_DBMS,raw=JSON.parse(document.getElementById('db-store').textContent),s=db.adoptStore(raw),h=raw.publicHeads['Касса'];
+          const root=await db.readState(s,h),docs={};
+          for(const name of Object.keys(root.$refs))docs[name]=await db.readState(s,root.$refs[name]);
           return {count:docs.transactions.rows.length,keys:Object.keys(root.$refs),types:docs.transactionTypes,projects:docs.projects,history:(await db.verifyDatabase(s,h)).status,withoutExcelRows:Object.values(docs).filter(v=>v.entries).every(d=>d.order.every(id=>!('excelRow' in d.entries[id])))};
         }''')
         assert data['count']==21

@@ -36,7 +36,7 @@ def scenario(browser, kind, tmp):
     expect(page.locator('#status')).to_contain_text('Контейнер пуст')
     assert page.evaluate('isSecureContext && !!crypto.subtle')
     fixture=page.evaluate('''async()=>{
-      const db=HTML_DBMS,s=db.newStore(),entry={type:'application/javascript',export:'main',source:document.querySelector('#starter-source').textContent};
+      const db=HTML_DBMS,s=db.adoptStore({format:db.VERSION,publicHeads:{},records:{}}),entry={type:'application/javascript',export:'main',source:document.querySelector('#starter-source').textContent};
       const heads={};for(const name of ['Alpha','Beta','BrokenEntry']){
         const r=await db.createDatabase(s,name,{entry:name==='BrokenEntry'?{$ref:'missing/'}:entry});
         db.commit(s,r.store);heads[name]=r.rootHead;

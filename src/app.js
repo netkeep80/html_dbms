@@ -8,7 +8,7 @@ const makeElement=tag=>XML_CONTAINER?document.createElementNS(XHTML_NS,tag):docu
 function makeOption(label,value){const e=makeElement('option');e.textContent=label;e.value=value;return e;}
 // Export from a pristine template: never copy decrypted application DOM into saved HTML.
 const exportTemplate=document.documentElement.cloneNode(true);
-const STARTER_SOURCE=$('starter-source').textContent,DEMO_SOURCE=$('cash-demo-source')?.textContent;
+const STARTER_SOURCE=$('starter-source').textContent,demoNode=$('cash-demo-source'),DEMO_SOURCE=demoNode?JSON.parse(demoNode.textContent):undefined;
 let store, rootHead=null, publicName=null, debug=false, busy=null, activeFrame=null, lastDiagnosis=null, openEpoch=0, rpcBusy=null, session=null, startupListener=null;
 const OWN=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function notice(message,bad=false){$('status').textContent=message;$('status').className='notice '+(bad?'error':'good');}
@@ -103,16 +103,7 @@ async function renderEntry(epoch=openEpoch,checkedRoot){if(epoch!==openEpoch)ret
  }
  const pre=element('pre',JSON.stringify(value,null,2));$('entry-area').appendChild(pre);
 }
-const SANDBOX_DOCUMENT=`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'"></head><body><div id="app"></div><script>
-(function(){'use strict';let sequence=0;const pending=new Map(),channel=new MessageChannel(),port=channel.port1;
-const request=(method,payload)=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});port.postMessage({kind:'html-dbms-rpc',id,method,payload});});
-const api=Object.freeze({read:(ref='')=>request('read',{ref}),patch:(document,operations)=>request('patch',{document,operations}),createDocument:(name,state)=>request('createDocument',{name,state}),getHead:()=>request('getHead',{})});
-let started=false;
-port.onmessage=async event=>{const data=event.data;if(!data||typeof data!=='object')return;if(data.kind==='html-dbms-reply'){const p=pending.get(data.id);if(!p)return;pending.delete(data.id);data.ok?p.resolve(data.value):p.reject(new Error(data.error));}
-if(data.kind==='html-dbms-start'&&!started){started=true;try{const blob=new Blob([data.source],{type:'text/javascript'});const url=URL.createObjectURL(blob);try{const module=await import(url);const main=module[data.exportName||'main'];if(typeof main!=='function')throw Error('Не найден export '+data.exportName);await main(api,document.getElementById('app'));}finally{URL.revokeObjectURL(url);}}catch(e){document.getElementById('app').textContent='Ошибка запуска entry: '+(e?.message||e);port.postMessage({kind:'html-dbms-error',error:String(e?.message||e)});}}};
-window.addEventListener('pagehide',()=>{port.postMessage({kind:'html-dbms-revoke'});port.close();},{once:true});
-parent.postMessage({kind:'html-dbms-ready'},'*',[channel.port2]);})();
-<\/script></body></html>`;
+const SANDBOX_DOCUMENT='/* SANDBOX_DOCUMENT */';
 async function launchSandbox(entry){
  stopApp();const f=makeElement('iframe');f.title='Приложение из JSON entry';f.setAttribute('sandbox','allow-scripts');activeFrame=f;
  let loads=0;

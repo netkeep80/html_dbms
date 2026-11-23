@@ -1,9 +1,7 @@
 /* HTML_DBMS/4 — standalone JSON temporal store. No legacy compatibility. */
-(function (g) {
-'use strict';
 const VERSION = 'HTML_DBMS/4';
 const encoder = new TextEncoder(), decoder = new TextDecoder('utf-8', {fatal:true});
-const subtle = g.crypto.subtle;
+const subtle = globalThis.crypto.subtle;
 const MAX_RECORDS = 200000, MAX_BYTES = 12 * 1024 * 1024, MAX_PATCH = 10000, MAX_DEPTH = 32;
 const own = (o,k) => Object.prototype.hasOwnProperty.call(o,k);
 function error(code, message, more={}) { return Object.assign(new Error(message), {code, ...more}); }
@@ -304,6 +302,4 @@ function commit(s,tx){
 }
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
-const api={VERSION,newStore,validateStore,adoptStore,revision,storeInfo,snapshot,catalog,readCipher,writePhysical,removePhysical,unpublish,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
-g.HTML_DBMS=api;
-})(typeof globalThis!=='undefined'?globalThis:this);
+export {VERSION,newStore,validateStore,adoptStore,revision,storeInfo,snapshot,catalog,readCipher,writePhysical,removePhysical,unpublish,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};

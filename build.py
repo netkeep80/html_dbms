@@ -5,6 +5,8 @@ No protocol encoding/serialization, encryption, or runtime JS is changed by this
 from html import escape
 from html.parser import HTMLParser
 import re
+import json
+import subprocess
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -22,13 +24,13 @@ def html_script_safe(code):
     JavaScript's escaped slash has the same value inside strings and template
     literals; the XML/XHTML output always retains the exact original source.
     """
-    return re.sub(r'</script(?=[\s/>])', lambda m: '<\\/script', code, flags=re.I)
+    return re.sub(r'</script(?=[\s/>])', lambda m: '<\\/'+m.group(0)[2:], code, flags=re.I)
 
 
-def sources():
-    html = (SOURCE / 'index.html').read_text(encoding='utf-8')
+def sources(compiled):
+    html = compiled['template']
     for marker, name in SCRIPTS.items():
-        code = (SOURCE / name).read_text(encoding='utf-8')
+        code = compiled[name]
         code = html_script_safe(code)
         if html.count(marker) != 1:
             raise ValueError(f'{name}: expected exactly one insertion marker')
@@ -105,21 +107,22 @@ class XHTMLBuilder(HTMLParser):
 def build():
     # Convert the template BEFORE inserting JS, so HTMLParser never treats
     # JavaScript '<', '&' or literal script-looking strings as HTML syntax.
-    source_template = (SOURCE / 'index.html').read_text(encoding='utf-8')
+    compiled = json.loads(subprocess.check_output(['node', str(ROOT / 'tools/compile.cjs')], cwd=ROOT))
+    source_template = compiled['template']
     parser = XHTMLBuilder()
     parser.feed(source_template)
     parser.close()
     xml_template = parser.finish()
     xml = xml_template
     for marker, name in SCRIPTS.items():
-        code = (SOURCE / name).read_text(encoding='utf-8')
+        code = html_script_safe(compiled[name])
         # Marker is inside its own CDATA node, replace the entire node.
         placeholder = cdata(marker)
         if xml.count(placeholder) != 1:
             raise ValueError('XML insertion marker must occur exactly once: ' + name)
         xml = xml.replace(placeholder, cdata(code))
     ET.fromstring(xml)
-    html = sources()
+    html = sources(compiled)
     if any(marker in html or marker in xml for marker in SCRIPTS):
         raise ValueError('Unexpanded source marker')
     DIST.mkdir(exist_ok=True)

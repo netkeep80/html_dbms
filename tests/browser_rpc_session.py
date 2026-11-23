@@ -61,7 +61,7 @@ def scenario(browser,kind,tmp):
     page.locator('#validation-toggle').click();page.locator('#verify').click()
     expect(page.locator('#validation-report')).to_contain_text('"status": "complete"')
     # A static HTML entry has no MessagePort or script permission.
-    fixture=page.evaluate('''async()=>{const db=HTML_DBMS,s=db.newStore();const r=await db.createDatabase(s,'Static',{entry:{type:'text/html',html:'<p>STATIC</p><script>parent.postMessage({kind:"html-dbms-rpc",id:1,method:"read",payload:{ref:""}},"*")<\\/script>'}});db.commit(s,r.store);return db.snapshot(s);}''')
+    fixture=page.evaluate('''async()=>{const db=HTML_DBMS,s=db.adoptStore({format:db.VERSION,publicHeads:{},records:{}});const r=await db.createDatabase(s,'Static',{entry:{type:'text/html',html:'<p>STATIC</p><script>parent.postMessage({kind:"html-dbms-rpc",id:1,method:"read",payload:{ref:""}},"*")<\\/script>'}});db.commit(s,r.store);return db.snapshot(s);}''')
     p=tmp/f'static-{kind}.{kind}';p.write_text(replace_store(src.read_text('utf8'),kind,fixture),encoding='utf8')
     page.goto(p.as_uri(),wait_until='domcontentloaded')
     expect(page.locator('#entry-area iframe')).to_have_count(1)

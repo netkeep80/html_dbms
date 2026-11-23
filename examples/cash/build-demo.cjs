@@ -21,7 +21,7 @@ async function main(){
  const marker=/<script id="db-store" type="application\/json">[\s\S]*?<\/script>/;
  if(!marker.test(html))throw Error('Missing embedded db-store');
  html=html.replace(marker,()=>'<script id="db-store" type="application/json">'+JSON.stringify(db.snapshot(store)).replace(/</g,'\\u003c')+'</script>');
- const sourceTag='<script id="cash-demo-source" type="text/plain">'+appSource.replace(/<\/script/gi,'<\\/script')+'</script>';
+ const sourceTag='<script id="cash-demo-source" type="application/json">'+JSON.stringify(appSource).replace(/</g,'\\u003c')+'</script>';
  if(!html.includes('<script id="starter-source"'))throw Error('Missing trusted entry data anchor');
  html=html.replace('<script id="starter-source"',()=>sourceTag+'\n<script id="starter-source"');
  const fullscreenCss='<style id="cash-fullscreen-css">.app-main{max-width:none;width:100%;height:calc(100vh - 44px);min-height:0;margin:0;padding:5px 8px;display:flex;flex-direction:column}.app-main>.notice{flex:0 0 auto;margin-bottom:3px}.entry-area{flex:1;min-height:0;overflow:hidden}.entry-area iframe{height:100%;min-height:0;width:100%;border-radius:0}</style>';

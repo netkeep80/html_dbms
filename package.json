@@ -1,0 +1,10 @@
+{
+  "name": "html-dbms-build",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "esbuild": "0.25.5",
+    "html-minifier-terser": "7.2.0"
+  }
+}

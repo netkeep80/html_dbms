@@ -31,7 +31,9 @@ def get_xml_store(xml):
 
 
 def main():
+    before=[(ROOT/'dist'/('html_dbms.'+ext)).read_bytes() for ext in ('html','xml')]
     subprocess.run(['python3','build.py'],cwd=ROOT,check=True)
+    assert before==[(ROOT/'dist'/('html_dbms.'+ext)).read_bytes() for ext in ('html','xml')], 'Non-deterministic build'
     html=(ROOT/'dist/html_dbms.html').read_text(encoding='utf-8')
     xml=(ROOT/'dist/html_dbms.xml').read_text(encoding='utf-8')
     assert html.startswith('<!doctype html>')
@@ -47,15 +49,12 @@ def main():
     for x in xml_scripts:
         key=x.attrib.get('id')
         content=x.text or ''
-        if key == 'starter-source':
-            assert content==(ROOT/'src/starter.js').read_text(encoding='utf-8')
-        elif key == 'db-store':
-            assert content==html_scripts.scripts['db-store']
-        else:
-            expected=(ROOT/'src/core.js').read_text(encoding='utf-8') if 'Sequence is derived from verified ancestry' in content else (ROOT/'src/app.js').read_text(encoding='utf-8')
-            assert content==expected
+        assert key in ('db-store','starter-source','core-source','app-source')
+        assert content==html_scripts.scripts[key], key
     assert get_xml_store(xml)==json.loads(html_scripts.scripts['db-store'])
     assert 'allow-scripts' in xml and 'allow-same-origin' not in xml
+    assert len(html.encode('utf-8'))<66290 and len(xml.encode('utf-8'))<66483
+    assert not any(x in html for x in ('require(\"node:crypto\")','Buffer.from','module.exports','Sequence is derived from verified ancestry','sourceMappingURL='))
     # Audit unusual but valid JSON content while leaving encrypted records untouched.
     sentinel='\u003cscript/> & ]]> </script> \u2028 π'
     physical={'format':'HTML_DBMS/4','records':{'ABCD':sentinel},'publicHeads':{'Участники':'A'*64}}
@@ -69,7 +68,7 @@ def main():
     from importlib.machinery import SourceFileLoader
     build=SourceFileLoader('hdbms_builder',str(ROOT/'build.py')).load_module()
     assert build.html_script_safe("const x='</script>';") == "const x='<\\/script>';"
-    assert build.html_script_safe("const y='</ScRiPt >';") == "const y='<\\/script >';"
+    assert build.html_script_safe("const y='</ScRiPt >';") == "const y='<\\/ScRiPt >';"
     for text in ['some ]]> text','</script> & <tag>', '🙂 Привет & < >']:
         wrapped='<root>'+build.cdata(text)+'</root>'
         assert ET.fromstring(wrapped).text==text
