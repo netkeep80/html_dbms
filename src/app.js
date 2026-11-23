@@ -31,7 +31,19 @@ function togglePanel(which){
 function validationOutput(value){$('validation-report').textContent=typeof value==='string'?value:JSON.stringify(value,null,2);}
 function setFields(head){$('head-id').value=head?.[0]||'';$('head-hash').value=head?.[1]||'';}
 function fieldHead(){const h=[$('head-id').value.trim(),$('head-hash').value.trim()];if(!db.validHead(h))throw Error('Введите корректные ID (22 символа) и H (43 символа)');return h;}
-function syncCatalog(){updateInfo();const sel=$('databases'),prev=sel.value;sel.replaceChildren();sel.add(new Option('— существующая —',''));for(const name of Object.keys(store.publicHeads||{}))sel.add(new Option(name,name));if(OWN(store.publicHeads||{},prev))sel.value=prev;}
+function syncCatalog(preselect=false){
+ updateInfo();
+ const sel=$('databases'),prev=sel.value,names=Object.keys(store.publicHeads||{});
+ sel.replaceChildren();
+ const empty=new Option(names.length?'— выберите БД —':'— БД отсутствуют —','');
+ empty.disabled=true;
+ sel.add(empty);
+ for(const name of names)sel.add(new Option(name,name));
+ sel.disabled=names.length===0;
+ if(names.includes(prev))sel.value=prev;
+ else if(preselect&&names.length){sel.value=names[0];setFields(store.publicHeads[names[0]]);}
+ else sel.value='';
+}
 function selectAlias(alias){const h=store.publicHeads?.[alias];if(!db.validHead(h))return;setFields(h);notice('ID и H подставлены для «'+alias+'». Нажмите «Открыть».');}
 function findPublicName(h){const selected=$('databases').value;if(selected&&db.sameHead(store.publicHeads?.[selected],h))return selected;return Object.keys(store.publicHeads||{}).find(n=>db.sameHead(store.publicHeads[n],h))||null;}
 function stopApp(){if(activeFrame){activeFrame.remove();activeFrame=null;}}
@@ -79,7 +91,7 @@ async function runRpc(message){needRoot();const params=message.payload||{};switc
  case 'patch':{const name=params.document;const ops=params.operations;if(typeof name!=='string'||!Array.isArray(ops))throw Error('Неверный запрос patch');await authorizeWrite('JSON Patch: '+(name||'(корень)')+' ('+ops.length+' операций)');const previous=[...rootHead];let result;if(name===''){const staged=db.staging(store),r=await db.append(staged,rootHead,ops);result={store:staged,rootHead:r.head};}else result=await db.patchDocument(store,rootHead,name,ops);await stagedUpdate(result,previous);return {rootHead:[...rootHead]};}
  case 'createDocument':{if(!validName(params.name))throw Error('Недопустимое имя документа');db.assertJson(params.state);await authorizeWrite('Создать документ «'+params.name+'»');const previous=[...rootHead];const result=await db.createDocument(store,rootHead,params.name,params.state);await stagedUpdate(result,previous);return {rootHead:[...rootHead],documentHead:result.documentHead};}
  default:throw Error('Неподдерживаемая операция entry: '+String(message.method));}}
-async function createDatabase(){const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});db.commit(store,result.store);syncCatalog();$('databases').value=name;setFields(result.rootHead);await openHead(result.rootHead);}
+async function createDatabase(){const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});db.commit(store,result.store);syncCatalog();$('databases').value=name;setFields(result.rootHead);await openHead(result.rootHead);notice('БД «'+name+'» создана и открыта. Чтобы сохранить её для следующего запуска, нажмите «Сохранить» и откройте скачанный HTML.');}
 async function showDebug(){
  const h=rootHead||fieldHead(),root=await db.inspect(store,h);
  const children={};
@@ -153,10 +165,16 @@ async function truncate(){
 async function publish(){needRoot();const root=(await db.load(store,rootHead)).state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=store.publicHeads?.[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;const tx=db.staging(store);db.publish(tx,name,rootHead);db.commit(store,tx);publicName=name;syncCatalog();$('databases').value=name;notice('Опубликована «'+name+'»');}
 async function hideHead(){needRoot();if(!publicName||!store.publicHeads||!OWN(store.publicHeads,publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните пару ID/H перед скрытием.'))return;const tx=db.staging(store);delete tx.publicHeads[publicName];if(!Object.keys(tx.publicHeads).length)delete tx.publicHeads;db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте ID/H.');}
 async function copyHead(){const h=fieldHead(),t=format(h);try{await navigator.clipboard.writeText(t);notice('Скопировано: '+t);}catch{prompt('Скопируйте ID/H:',t);}}
-async function loadHtml(file){if(!file)return;const raw=await file.text();const candidate=readStoreFromHTML(raw);store=candidate;rootHead=null;publicName=null;debug=false;lastDiagnosis=null;syncCatalog();setFields(null);show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');clearEntry();placeholder('Файл открыт. Выберите БД или введите ID/H, затем нажмите «Открыть».');notice('Контейнер HTML_DBMS/3 загружен. БД: '+Object.keys(store.publicHeads||{}).length+'.');}
+async function loadHtml(file){if(!file)return;const raw=await file.text();const candidate=readStoreFromHTML(raw);store=candidate;rootHead=null;publicName=null;debug=false;lastDiagnosis=null;setFields(null);$('databases').value='';syncCatalog(true);show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');clearEntry();const count=Object.keys(store.publicHeads||{}).length;placeholder(count?'БД выбрана и её ID/H подставлены. Нажмите «Открыть».':'В загруженном файле нет опубликованных БД. Можно открыть скрытую по ID/H или создать новую.');notice('Контейнер загружен. Опубликованных БД: '+count+(count?'. Выбрана «'+$('databases').value+'», нажмите «Открыть».':'.'));}
 function exportDocument(){const doc=exportTemplate.cloneNode(true);const s=doc.querySelector('#db-store');s.textContent=JSON.stringify(store).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');return '<!doctype html>\n'+doc.outerHTML;}
-function save(){db.validateStore(store);const html=exportDocument();const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='html_dbms_3.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);notice('Автономный HTML_DBMS/3 сохранён.');}
-async function init(){store=JSON.parse($('db-store').textContent);db.validateStore(store);syncCatalog();setFields(null);notice('Контейнер готов. Опубликованных БД: '+Object.keys(store.publicHeads||{}).length+'.');}
+function save(){db.validateStore(store);const html=exportDocument();const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='html_dbms_3_saved.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);notice('Новый HTML-файл скачан. Исходный файл на диске не перезаписывается: открывайте сохранённую копию.');}
+async function init(){
+ store=JSON.parse($('db-store').textContent);
+ db.validateStore(store);setFields(null);syncCatalog(true);
+ const names=Object.keys(store.publicHeads||{});
+ if(names.length)notice('Опубликованных БД: '+names.length+'. Выбрана «'+$('databases').value+'»: ID и H подставлены, нажмите «Открыть».');
+ else{clearEntry();placeholder('Этот HTML пока не содержит опубликованных БД. Нажмите «Новая» или загрузите другой HTML через «Инфо».');notice('Контейнер пуст: опубликованных БД нет. Создайте новую БД и сохраните новый HTML-файл.');}
+}
 $('new-db').onclick=()=>run(createDatabase);
 $('databases').onchange=()=>selectAlias($('databases').value);
 $('open-head').onclick=()=>run(openFields);

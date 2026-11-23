@@ -1,15 +1,15 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HTML DBMS 3</title>
+<title>HTML DBMS 3.0.1</title>
 <style>
 :root{font:14px/1.45 system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#eaf0f8;background:#0c1520;color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select{font:inherit;color:inherit;background:#172739;border:1px solid #3b526c;border-radius:5px}button{cursor:pointer;padding:5px 9px;white-space:nowrap}button:hover{background:#24435e}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #86c3f5;outline-offset:1px}button:disabled{cursor:not-allowed;opacity:.55}input,select{min-height:29px;padding:4px 7px}input{min-width:0}.brand{font-size:16px;font-weight:750;white-space:nowrap}.version{color:#98b4d0;font-size:12px;white-space:nowrap}.toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:7px;padding:6px 10px;background:#142338;border-bottom:1px solid #40516a;min-height:43px;overflow-x:auto;white-space:nowrap}.toolbar .divider{height:20px;width:1px;background:#43556b;flex:none}.toolbar .stretch{flex:1}.toolbar select{max-width:180px;min-width:130px}.toolbar label{font-size:11px;color:#a9bfd6;display:flex;align-items:center;gap:5px}.toolbar input{font:11px/1.4 ui-monospace,Consolas,monospace}#head-id{width:185px}#head-hash{width:325px}.primary{border-color:#208d74;background:#126756}.secondary{border-color:#476684}.app-main{min-height:calc(100vh - 44px);max-width:1450px;margin:auto;padding:12px}.notice{font-size:12px;color:#9db5ca;min-height:19px;margin:0 0 8px}.notice.error{color:#ffacac}.notice.good{color:#9edec4}.entry-area{min-height:56vh}.placeholder{background:#132236;border:1px dashed #3a526a;border-radius:9px;padding:24px;color:#9fb7ce;text-align:center}.pane{background:#142338;border:1px solid #34506a;border-radius:8px;padding:14px;margin:10px 0}.entry-area pre,.debug pre{background:#07111c;color:#c4e1e8;padding:12px;border-radius:5px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:70vh;overflow:auto;font:12px/1.5 ui-monospace,Consolas,monospace}.entry-area iframe{border:0;display:block;width:100%;min-height:72vh;background:#0d1724;border-radius:7px}.debug{border-color:#907550}.diagnostic{white-space:pre-wrap;overflow:auto;max-height:55vh;padding:12px;background:#07111c;color:#c4e1e8;border-radius:6px;font:12px/1.45 ui-monospace,Consolas,monospace}.pane h2{font-size:15px;margin:0 0 9px}.pane p{margin:8px 0}.pane .row{margin:8px 0}.pane label{font-size:12px;color:#adc4d9}.pane label input{font:12px ui-monospace,Consolas,monospace;width:290px;max-width:85vw}.danger{background:#703039;border-color:#a65964}details#recovery-section{border-top:1px solid #43556b;margin-top:14px;padding-top:12px}details#recovery-section summary{cursor:pointer}.debug h2{font-size:15px;margin:0 0 7px}.entry-launch{display:inline-flex;gap:8px;align-items:center;margin:9px 0}.meta{color:#a1bacd;font-size:12px}.toolbar-menu{position:relative;flex:none}.toolbar-menu summary{border:1px solid #3b526c;padding:5px 9px;border-radius:5px;cursor:pointer;list-style:none}.toolbar-menu summary::-webkit-details-marker{display:none}.toolbar-menu .menu{position:fixed;right:8px;top:44px;background:#142338;border:1px solid #3b526c;border-radius:6px;box-shadow:0 7px 24px #050c16b3;padding:8px;display:flex;flex-direction:column;gap:5px;z-index:12}.toolbar-menu button{text-align:left}.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}@media(max-width:800px){.toolbar{padding:6px}.app-main{padding:8px}#head-id{width:150px}#head-hash{width:210px}}
 </style></head>
 <body>
 <header class="toolbar" aria-label="Базовые операции HTML DBMS">
-  <strong class="brand">HTML DBMS</strong><span class="version">3.0</span>
+  <strong class="brand">HTML DBMS</strong><span class="version">3.0.1</span>
   <span class="divider"></span>
   <button id="new-db" class="primary">Новая</button>
-  <select id="databases" aria-label="Выбрать опубликованную БД"><option value="">— существующая —</option></select>
+  <select id="databases" aria-label="Выбрать опубликованную БД" title="Выбор подставляет ID/H без открытия"><option value="" disabled selected>— БД отсутствуют —</option></select>
   <label for="head-id">ID</label><input id="head-id" placeholder="22 символа" autocomplete="off" spellcheck="false" aria-label="Физический идентификатор версии">
   <label for="head-hash">H</label><input id="head-hash" placeholder="43 символа" autocomplete="off" spellcheck="false" aria-label="Хеш версии">
   <button id="open-head" class="primary">Открыть</button>
@@ -51,7 +51,7 @@ export async function main(db, mount) {
   const css = document.createElement('style');
   css.textContent = 'body{font:14px/1.5 system-ui;color:#e5edf8;background:#0d1724;margin:0}button,select,textarea,input{font:inherit;color:inherit;background:#192c41;border:1px solid #435c77;border-radius:5px;padding:6px}button{cursor:pointer}button:hover{background:#2b4f6e}button:disabled{opacity:.6}header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 8px;border-bottom:1px solid #35516b}strong{margin-right:auto}main{padding:12px}h2{font-size:16px}pre,textarea{font:12px/1.5 ui-monospace,Consolas,monospace;background:#081522;padding:12px;border-radius:6px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}textarea{width:100%;box-sizing:border-box;min-height:130px}pre{max-height:65vh}button.active{background:#236d83}.meta{color:#92aec8;font-size:12px}#message{min-height:19px;color:#a9d8bd}table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid #34465a;padding:7px}';
   document.head.appendChild(css);
-  mount.innerHTML = '<header><strong id="db-title">Документы JSON</strong><button id="add-document">+ Документ</button><button id="edit-document">JSON Patch</button><button id="refresh">Обновить</button></header><main><nav id="document-nav"></nav><p id="message" role="status"></p><section id="editor" hidden><h2>Изменить документ · RFC 6902</h2><textarea id="patch" spellcheck="false">[{"op":"add","path":"/example","value":1}]</textarea><p><button id="write">Записать</button><button id="cancel">Отмена</button></p></section><h2 id="document-title">Корневой документ</h2><pre id="json"></pre></main>';
+  mount.innerHTML = '<header><strong id="db-title">Документы JSON</strong><span class="meta" id="entry-state">● Приложение запущено из entry</span><button id="add-document">+ Документ</button><button id="edit-document">JSON Patch</button><button id="refresh">Обновить</button></header><main><nav id="document-nav"></nav><p id="message" role="status"></p><section id="editor" hidden><h2>Изменить документ · RFC 6902</h2><textarea id="patch" spellcheck="false">[{"op":"add","path":"/example","value":1}]</textarea><p><button id="write">Записать</button><button id="cancel">Отмена</button></p></section><h2 id="document-title">Корневой документ</h2><pre id="json"></pre></main>';
   const $ = id => document.getElementById(id);
   let current = '';
   const msg=(text,bad=false)=>{$('message').textContent=text;$('message').style.color=bad?'#ffa4a4':'#9bd9b8';};
@@ -63,8 +63,12 @@ export async function main(db, mount) {
     const names=['',...Object.keys(root.$refs||{})];
     if(!names.includes(current))current='';
     for(const name of names){const b=document.createElement('button');b.textContent=name||'⌂ Корень';b.className=name===current?'active':'';b.style.margin='0 6px 6px 0';b.addEventListener('click',()=>{current=name;draw().catch(e=>msg(e.message,true));});nav.appendChild(b);}
-    $('document-title').textContent=current||'Корневой JSON';
-    $('json').textContent=JSON.stringify(current?await db.read(current+'/'):root,null,2);
+    $('document-title').textContent=current||'Корневой JSON · исходный код entry скрыт';
+    const visible=current?await db.read(current+'/'):JSON.parse(JSON.stringify(root));
+    if(!current&&visible.entry&&visible.entry.type==='application/javascript'&&typeof visible.entry.source==='string'){
+      visible.entry.source='[JS-код скрыт в рабочем представлении; полный исходный текст — в системной «Отладка»]';
+    }
+    $('json').textContent=JSON.stringify(visible,null,2);
   }
   $('add-document').onclick=async()=>{try{const name=prompt('Имя нового документа');if(name===null)return;const raw=prompt('Начальное состояние JSON','{}');if(raw===null)return;await db.createDocument(name,JSON.parse(raw));current=name;await draw();msg('Документ создан');}catch(e){msg(e.message,true);}};
   $('edit-document').onclick=()=>{$('editor').hidden=!$('editor').hidden;};
@@ -72,6 +76,7 @@ export async function main(db, mount) {
   $('write').onclick=async()=>{try{await db.patch(current,JSON.parse($('patch').value));$('editor').hidden=true;await draw();msg('Изменение записано. Сохраните HTML в системной строке.');}catch(e){msg(e.message,true);}};
   $('refresh').onclick=()=>draw().catch(e=>msg(e.message,true));
   await draw();
+  msg('Приложение из entry успешно запущено. Выберите документ или создайте новый.');
 }
 </script>
 <script>/* HTML_DBMS/3 — standalone JSON temporal store. No v2 compatibility. */
@@ -290,7 +295,19 @@ function togglePanel(which){
 function validationOutput(value){$('validation-report').textContent=typeof value==='string'?value:JSON.stringify(value,null,2);}
 function setFields(head){$('head-id').value=head?.[0]||'';$('head-hash').value=head?.[1]||'';}
 function fieldHead(){const h=[$('head-id').value.trim(),$('head-hash').value.trim()];if(!db.validHead(h))throw Error('Введите корректные ID (22 символа) и H (43 символа)');return h;}
-function syncCatalog(){updateInfo();const sel=$('databases'),prev=sel.value;sel.replaceChildren();sel.add(new Option('— существующая —',''));for(const name of Object.keys(store.publicHeads||{}))sel.add(new Option(name,name));if(OWN(store.publicHeads||{},prev))sel.value=prev;}
+function syncCatalog(preselect=false){
+ updateInfo();
+ const sel=$('databases'),prev=sel.value,names=Object.keys(store.publicHeads||{});
+ sel.replaceChildren();
+ const empty=new Option(names.length?'— выберите БД —':'— БД отсутствуют —','');
+ empty.disabled=true;
+ sel.add(empty);
+ for(const name of names)sel.add(new Option(name,name));
+ sel.disabled=names.length===0;
+ if(names.includes(prev))sel.value=prev;
+ else if(preselect&&names.length){sel.value=names[0];setFields(store.publicHeads[names[0]]);}
+ else sel.value='';
+}
 function selectAlias(alias){const h=store.publicHeads?.[alias];if(!db.validHead(h))return;setFields(h);notice('ID и H подставлены для «'+alias+'». Нажмите «Открыть».');}
 function findPublicName(h){const selected=$('databases').value;if(selected&&db.sameHead(store.publicHeads?.[selected],h))return selected;return Object.keys(store.publicHeads||{}).find(n=>db.sameHead(store.publicHeads[n],h))||null;}
 function stopApp(){if(activeFrame){activeFrame.remove();activeFrame=null;}}
@@ -338,7 +355,7 @@ async function runRpc(message){needRoot();const params=message.payload||{};switc
  case 'patch':{const name=params.document;const ops=params.operations;if(typeof name!=='string'||!Array.isArray(ops))throw Error('Неверный запрос patch');await authorizeWrite('JSON Patch: '+(name||'(корень)')+' ('+ops.length+' операций)');const previous=[...rootHead];let result;if(name===''){const staged=db.staging(store),r=await db.append(staged,rootHead,ops);result={store:staged,rootHead:r.head};}else result=await db.patchDocument(store,rootHead,name,ops);await stagedUpdate(result,previous);return {rootHead:[...rootHead]};}
  case 'createDocument':{if(!validName(params.name))throw Error('Недопустимое имя документа');db.assertJson(params.state);await authorizeWrite('Создать документ «'+params.name+'»');const previous=[...rootHead];const result=await db.createDocument(store,rootHead,params.name,params.state);await stagedUpdate(result,previous);return {rootHead:[...rootHead],documentHead:result.documentHead};}
  default:throw Error('Неподдерживаемая операция entry: '+String(message.method));}}
-async function createDatabase(){const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});db.commit(store,result.store);syncCatalog();$('databases').value=name;setFields(result.rootHead);await openHead(result.rootHead);}
+async function createDatabase(){const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});db.commit(store,result.store);syncCatalog();$('databases').value=name;setFields(result.rootHead);await openHead(result.rootHead);notice('БД «'+name+'» создана и открыта. Чтобы сохранить её для следующего запуска, нажмите «Сохранить» и откройте скачанный HTML.');}
 async function showDebug(){
  const h=rootHead||fieldHead(),root=await db.inspect(store,h);
  const children={};
@@ -412,10 +429,16 @@ async function truncate(){
 async function publish(){needRoot();const root=(await db.load(store,rootHead)).state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=store.publicHeads?.[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;const tx=db.staging(store);db.publish(tx,name,rootHead);db.commit(store,tx);publicName=name;syncCatalog();$('databases').value=name;notice('Опубликована «'+name+'»');}
 async function hideHead(){needRoot();if(!publicName||!store.publicHeads||!OWN(store.publicHeads,publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните пару ID/H перед скрытием.'))return;const tx=db.staging(store);delete tx.publicHeads[publicName];if(!Object.keys(tx.publicHeads).length)delete tx.publicHeads;db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте ID/H.');}
 async function copyHead(){const h=fieldHead(),t=format(h);try{await navigator.clipboard.writeText(t);notice('Скопировано: '+t);}catch{prompt('Скопируйте ID/H:',t);}}
-async function loadHtml(file){if(!file)return;const raw=await file.text();const candidate=readStoreFromHTML(raw);store=candidate;rootHead=null;publicName=null;debug=false;lastDiagnosis=null;syncCatalog();setFields(null);show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');clearEntry();placeholder('Файл открыт. Выберите БД или введите ID/H, затем нажмите «Открыть».');notice('Контейнер HTML_DBMS/3 загружен. БД: '+Object.keys(store.publicHeads||{}).length+'.');}
+async function loadHtml(file){if(!file)return;const raw=await file.text();const candidate=readStoreFromHTML(raw);store=candidate;rootHead=null;publicName=null;debug=false;lastDiagnosis=null;setFields(null);$('databases').value='';syncCatalog(true);show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');clearEntry();const count=Object.keys(store.publicHeads||{}).length;placeholder(count?'БД выбрана и её ID/H подставлены. Нажмите «Открыть».':'В загруженном файле нет опубликованных БД. Можно открыть скрытую по ID/H или создать новую.');notice('Контейнер загружен. Опубликованных БД: '+count+(count?'. Выбрана «'+$('databases').value+'», нажмите «Открыть».':'.'));}
 function exportDocument(){const doc=exportTemplate.cloneNode(true);const s=doc.querySelector('#db-store');s.textContent=JSON.stringify(store).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');return '<!doctype html>\n'+doc.outerHTML;}
-function save(){db.validateStore(store);const html=exportDocument();const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='html_dbms_3.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);notice('Автономный HTML_DBMS/3 сохранён.');}
-async function init(){store=JSON.parse($('db-store').textContent);db.validateStore(store);syncCatalog();setFields(null);notice('Контейнер готов. Опубликованных БД: '+Object.keys(store.publicHeads||{}).length+'.');}
+function save(){db.validateStore(store);const html=exportDocument();const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='html_dbms_3_saved.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);notice('Новый HTML-файл скачан. Исходный файл на диске не перезаписывается: открывайте сохранённую копию.');}
+async function init(){
+ store=JSON.parse($('db-store').textContent);
+ db.validateStore(store);setFields(null);syncCatalog(true);
+ const names=Object.keys(store.publicHeads||{});
+ if(names.length)notice('Опубликованных БД: '+names.length+'. Выбрана «'+$('databases').value+'»: ID и H подставлены, нажмите «Открыть».');
+ else{clearEntry();placeholder('Этот HTML пока не содержит опубликованных БД. Нажмите «Новая» или загрузите другой HTML через «Инфо».');notice('Контейнер пуст: опубликованных БД нет. Создайте новую БД и сохраните новый HTML-файл.');}
+}
 $('new-db').onclick=()=>run(createDatabase);
 $('databases').onchange=()=>selectAlias($('databases').value);
 $('open-head').onclick=()=>run(openFields);
