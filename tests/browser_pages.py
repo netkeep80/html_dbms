@@ -32,6 +32,9 @@ def test(url, expected=None, self_signed=False):
         assert page.locator('#entry-area iframe').get_attribute('sandbox')=='allow-scripts'
         page.locator('#validation-toggle').click();page.locator('#verify').click()
         expect(page.locator('#validation-report')).to_contain_text('"status": "complete"',timeout=30000)
+        # The system validation panel overlays the workspace; close it as a user would.
+        page.locator('#validation-toggle').click()
+        expect(page.locator('#validation-panel')).to_be_hidden()
         app.locator('#cash-tabs button',has_text='Операции(Фонд)').click()
         expect(app.locator('.histogram svg')).to_be_visible()
         app.locator('#cash-tabs button',has_text='Транзакции').click()
