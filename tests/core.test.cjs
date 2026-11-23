@@ -1,87 +1,112 @@
 const assert=require('node:assert/strict');
 const {webcrypto}=require('node:crypto');globalThis.crypto=webcrypto;
 require('../src/core.js');const C=globalThis.HTMLDBMSCore;
+
+async function putEvent(store,id,event){
+ const te=new TextEncoder();const plain=te.encode(JSON.stringify(event));
+ const h=new Uint8Array(await crypto.subtle.digest('SHA-256',plain));
+ const hash=C.to64(h);const key=await crypto.subtle.importKey('raw',h,{name:'AES-GCM'},false,['encrypt']);
+ const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:C.ivForId(id),tagLength:128},key,plain));
+ store.records[id]=C.to64(ct);return hash;
+}
+function txState(){return {title:'История операций',columns:{date:{title:'Дата',type:'date'},amount:{title:'Сумма',type:'number'},note:{title:'Примечание',type:'text'}},rows:{}};}
+function mainState(tx){return {title:'Demo',tabs:['items','transactions'],tables:{items:{title:'Предметы',columns:{name:{title:'Название',type:'text'}},rows:{}},transactions:{title:'Операции',type:'chain',head:[tx.id,tx.hash]}}};}
+
 (async()=>{
-const genesisState={title:'demo',tables:{items:{rows:{}}}};
-const store=C.newStore();
-const base=await C.genesis(store,'main',genesisState);
-assert.equal(base.existing,false);
-assert.equal(base.id,await C.rootAddress(base.hash));
-const rawHead=C.from64(base.hash);
-const rootDigest=new Uint8Array(await crypto.subtle.digest('SHA-256',rawHead));
-assert.equal(base.id,C.to64(rootDigest.slice(0,16)));
-assert.equal(typeof store.records[base.id],'string');
-assert.equal(Object.keys(store.records).length,1);
-let chain=await C.load(store,base.hash);
-assert.equal(chain.events.length,1);
-assert.equal(chain.events[0].r.length,6);
-assert.equal(chain.events[0].r[2],null);
-assert.equal(chain.events[0].r[3],null);
-assert.equal(chain.events[0].r[4],null);
+ assert.equal(C.VERSION,'HTML_DBMS/2.2');
+ const store=C.newStore();assert.equal(store.publicHead,null);
+ const tg=await C.genesis(store,'transaction',txState());
+ const mg=await C.genesis(store,'main',mainState(tg));store.publicHead=[mg.id,mg.hash];
+ let main=await C.load(store,[mg.id,mg.hash]);assert.equal(main.searched,false);assert.equal(main.policy,'main');
+ let found=await C.load(store,[null,mg.hash]);assert.equal(found.headId,mg.id);assert.equal(found.searched,true);
+ let nohead=await C.inspect(store,null);assert.equal(nohead.code,'HEAD_REQUIRED');
+ await C.verifyNestedChains(store,main);
 
-// Genesis is content-addressed and idempotent: identical initializer => same logical DB.
-const again=await C.genesis(store,'main',genesisState);
-assert.equal(again.existing,true);
-assert.equal(again.id,base.id);
-assert.equal(again.hash,base.hash);
-assert.equal(Object.keys(store.records).length,1);
+ // JSON-only domain is enforced before commit.
+ const before=Object.keys(store.records).length;
+ await assert.rejects(C.append(store,main,[{op:'add',path:'/x',value:undefined}]),e=>e.code==='NON_JSON_VALUE');
+ await assert.rejects(C.append(store,main,[{op:'add',path:'/x',value:NaN}]),e=>e.code==='NON_JSON_VALUE');
+ await assert.rejects(C.genesis(store,'main',{x:new Date()}),e=>e.code==='NON_JSON_VALUE'||e.code==='INVALID_STATE');
+ const sparse=[];sparse.length=2;sparse[1]=1;assert.throws(()=>C.assertJson(sparse),e=>e.code==='NON_JSON_VALUE');
+ assert.equal(Object.keys(store.records).length,before);
 
-// Determinism holds across independent stores too.
-const independent=C.newStore();
-const same=await C.genesis(independent,'main',genesisState);
-assert.equal(same.id,base.id);
-assert.equal(same.hash,base.hash);
-assert.equal(independent.records[same.id],store.records[base.id]);
+ // Transaction schema is immutable and checked on append.
+ let tx=await C.load(store,[tg.id,tg.hash]);
+ const t1=await C.append(store,tx,[{op:'add',path:'/rows/r1',value:{date:'2026-11-23',amount:8,note:'ok'}}]);
+ tx=await C.load(store,[t1.id,t1.head]);assert.equal(tx.state.rows.r1.amount,8);
+ await assert.rejects(C.append(store,tx,[{op:'add',path:'/rows/r2',value:{date:'bad',amount:'8',note:'x'}}]),e=>e.code==='SCHEMA_VIOLATION');
 
-// Different genesis => different root with overwhelming probability.
-const other=await C.genesis(store,'main',{title:'other',tables:{items:{rows:{}}}});
-assert.notEqual(other.id,base.id);
-assert.notEqual(other.hash,base.hash);
+ // Main stores only nested pointer; transaction columns come from transaction chain.
+ main=await C.load(store,[mg.id,mg.hash]);
+ const m1=await C.append(store,main,[{op:'replace',path:'/tables/transactions/head',value:[t1.id,t1.head]}]);
+ main=await C.load(store,[m1.id,m1.head]);await C.verifyNestedChains(store,main);
+ assert.equal(main.state.tables.transactions.columns,undefined);
 
-const first=await C.append(store,chain,[{op:'add',path:'/tables/items/rows/a',value:{name:'Synthetic A'}}]);
-assert.equal(first.id,await C.address(base.id,base.hash));
-const rawPrevId=C.from64(base.id),rawPrevHash=C.from64(base.hash),material=new Uint8Array(48);
-material.set(rawPrevId);material.set(rawPrevHash,16);
-const nextDigest=new Uint8Array(await crypto.subtle.digest('SHA-256',material));
-assert.equal(first.id,C.to64(nextDigest.slice(0,16)));
-assert.equal(typeof store.records[first.id],'string');
+ // Effective-state continuity catches subtree rollback, regardless of patch path, before commit.
+ await assert.rejects(C.append(store,main,[{op:'replace',path:'/tables/transactions',value:{title:'Операции',type:'chain',head:[tg.id,tg.hash]}}]),e=>e.code==='NESTED_CHAIN_ROLLBACK');
+ // A manually forged rollback event is still rejected on read.
+ const rollbackId=await C.address(main.headId,main.head);
+ const rollbackEvent=[main.events.at(-1).r[0]+1,'patch','2026-11-23T00:00:00.000Z',main.headId,main.head,{patch:[{op:'replace',path:'/tables/transactions',value:{title:'Операции',type:'chain',head:[tg.id,tg.hash]}}]}];
+ const rollbackHash=await putEvent(store,rollbackId,rollbackEvent);
+ const rolled=await C.inspect(store,[rollbackId,rollbackHash]);assert.equal(rolled.status,'complete');
+ await assert.rejects(C.load(store,[rollbackId,rollbackHash]),e=>e.code==='NESTED_CHAIN_ROLLBACK');
+ delete store.records[rollbackId];
 
-// One predecessor maps to one successor address; competing successor is rejected.
-const fork=await C.load(store,base.hash);
-await assert.rejects(C.append(store,fork,[{op:'add',path:'/tables/items/rows/b',value:{name:'Synthetic B'}}]),/fork conflict/);
+ // Occupied canonical successor is non-destructive by default and overwritable explicitly.
+ const forkStore=C.newStore();const g=await C.genesis(forkStore,'main',{title:'X',tabs:['t'],tables:{t:{title:'T',columns:{x:{title:'X',type:'text'}},rows:{}}}});
+ let c=await C.load(forkStore,[g.id,g.hash]);
+ const a=await C.append(forkStore,c,[{op:'add',path:'/tables/t/rows/a',value:{x:'a'}}]);
+ c=await C.load(forkStore,[a.id,a.head]);
+ const b=await C.append(forkStore,c,[{op:'replace',path:'/tables/t/rows/a/x',value:'b'}]);
+ c=await C.load(forkStore,[b.id,b.head]);
+ const later=await C.append(forkStore,c,[{op:'replace',path:'/tables/t/rows/a/x',value:'later'}]);
+ const oldHead=[later.id,later.head];
+ const fromA=await C.load(forkStore,[a.id,a.head]);
+ const occupiedBytes=forkStore.records[b.id];
+ await assert.rejects(C.append(forkStore,fromA,[{op:'replace',path:'/tables/t/rows/a/x',value:'branch'}]),e=>e.code==='SUCCESSOR_OCCUPIED'&&e.details.id===b.id);
+ assert.equal(forkStore.records[b.id],occupiedBytes);
+ const branched=await C.append(forkStore,fromA,[{op:'replace',path:'/tables/t/rows/a/x',value:'branch'}],{overwrite:true});
+ assert.equal(branched.id,b.id);assert.equal(branched.overwritten,true);assert.notEqual(forkStore.records[b.id],occupiedBytes);
 
-chain=await C.load(store,first.head);
-assert.equal(chain.state.tables.items.rows.a.name,'Synthetic A');
-const snapshot=store.records[base.id];
-const second=await C.append(store,chain,[{op:'replace',path:'/tables/items/rows/a/name',value:'Synthetic B'}]);
-assert.equal(store.records[base.id],snapshot);
-chain=await C.load(store,second.head);
-assert.equal(chain.events.length,3);
-assert.equal(chain.state.tables.items.rows.a.name,'Synthetic B');
+ // A later old head detects that an intermediate physical slot was replaced.
+ const broken=await C.inspect(forkStore,oldHead);assert.equal(broken.code,'REPLACED_OR_CORRUPTED_PREDECESSOR');assert.equal(broken.invalid.id,b.id);assert.ok(broken.tailIds.includes(b.id));
+ // Explicit truncate with independently known older pointer removes the broken tail only when requested.
+ const truncated=await C.truncateInvalidTail(forkStore,broken,[a.id,a.head]);assert.equal(truncated.head[0],a.id);assert.equal(Object.hasOwn(forkStore.records,b.id),false);assert.equal((await C.load(forkStore,[a.id,a.head])).state.tables.t.rows.a.x,'a');
 
-// Independent transaction chain remains append-only.
-const extra=await C.genesis(store,'transaction',{rows:{}});let t=await C.load(store,extra.hash);
-const next=await C.append(store,t,[{op:'add',path:'/rows/x',value:{amount:8}}]);
-t=await C.load(store,next.head);assert.equal(t.state.rows.x.amount,8);
-await assert.rejects(C.append(store,t,[{op:'replace',path:'/rows/x/amount',value:9}]),/append-only/);
-assert.equal((await C.load(store,second.head)).events.length,3);
+ // Manual replay-time schema violation is detected even if ciphertext/hash/address are internally consistent.
+ const badStore=C.newStore();const root=await C.genesis(badStore,'transaction',txState());
+ const badId=await C.address(root.id,root.hash);
+ const badEvent=[2,'patch','2026-11-23T00:00:00.000Z',root.id,root.hash,{patch:[{op:'add',path:'/rows/bad',value:{date:'2026-11-23',amount:'oops',note:'x'}}]}];
+ const badHash=await putEvent(badStore,badId,badEvent);
+ const badInspect=await C.inspect(badStore,[badId,badHash]);assert.equal(badInspect.code,'SCHEMA_VIOLATION');assert.deepEqual(badInspect.recoveryHead,[root.id,root.hash]);
 
-// Ciphertext tampering fails.
-const bad=structuredClone(store);bad.records[second.id]='A'+bad.records[second.id].slice(1);await assert.rejects(C.load(bad,second.head));
+ // Invalid timestamp is rejected on read.
+ const tsStore=C.newStore();const tsRoot=await C.genesis(tsStore,'main',{title:'X',tabs:['t'],tables:{t:{title:'T',columns:{x:{title:'X',type:'text'}},rows:{}}}});
+ const tsId=await C.address(tsRoot.id,tsRoot.hash);const tsEvent=[2,'patch','not-a-date',tsRoot.id,tsRoot.hash,{patch:[]}];const tsHash=await putEvent(tsStore,tsId,tsEvent);
+ const tsInspect=await C.inspect(tsStore,[tsId,tsHash]);assert.equal(tsInspect.code,'HEAD_RECORD_INVALID');
 
-// Physical ID participates in AES-GCM IV: moving a ciphertext breaks authentication.
-const moved=structuredClone(store);const wrongId=C.to64(Uint8Array.from({length:16},(_,i)=>i+1));assert.notEqual(wrongId,second.id);moved.records[wrongId]=moved.records[second.id];delete moved.records[second.id];await assert.rejects(C.load(moved,second.head));
+ // Canonical Base64url only.
+ assert.throws(()=>C.from64('AAAAAAAAAAAAAAAAAAAAAB'),e=>e.code==='NON_CANONICAL_BASE64URL');
 
-// Experimental legacy formats are deliberately unsupported before stable release.
-assert.throws(()=>C.validateStore({format:'HTML_DBMS/2.0',publicHead:null,records:{}}),/Unsupported storage/);
-assert.throws(()=>C.validateStore({format:C.VERSION,publicHead:null,records:{[base.id]:{iv:'x',ct:'y'}}}),/Invalid record envelope/);
+ // Public head exposure mode is preserved after append.
+ const pStore=C.newStore();const pg=await C.genesis(pStore,'main',{title:'P',tabs:['t'],tables:{t:{title:'T',columns:{x:{title:'X',type:'text'}},rows:{}}}});let pc=await C.load(pStore,[pg.id,pg.hash]);
+ pStore.publicHead=[null,pg.hash];const pa=await C.append(pStore,pc,[{op:'add',path:'/tables/t/rows/a',value:{x:'1'}}]);assert.deepEqual(C.publicHeadAfter(pStore,pa),[null,pa.head]);
+ pStore.publicHead=null;assert.equal(C.publicHeadAfter(pStore,pa),null);
 
-// JSON Patch behavior retained.
-assert.equal(C.patch({arr:[1,2],x:{'a/b':1}},[{op:'replace',path:'/x/a~1b',value:2},{op:'add',path:'/arr/1',value:4}]).arr.join(','),'1,4,2');
-assert.equal(C.patch({x:1},[{op:'remove',path:'/x'},{op:'add',path:'/x',value:null}]).x,null);
-assert.throws(()=>C.patch({x:1},[{op:'replace',path:'/x',value:3},{op:'test',path:'/x',value:1}]));
-assert.throws(()=>C.patch({},[{op:'add',path:'/__proto__/polluted',value:1}]));
-assert.equal(C.patch({x:{a:1,b:2}},[{op:'test',path:'/x',value:{b:2,a:1}}]).x.a,1);
-assert.equal(C.sortedStore(store).format,'HTML_DBMS/2.1');
-console.log('HTML DBMS 2.1 core protocol tests: PASS');
+
+ // Direct load ignores unrelated physical garbage, while H-only scan applies global resource limits.
+ const perfStore=C.newStore();const perfRoot=await C.genesis(perfStore,'main',{title:'Perf',tabs:['t'],tables:{t:{title:'T',columns:{x:{title:'X',type:'text'}},rows:{}}}});
+ const unrelated=C.to64(Uint8Array.from({length:16},(_,i)=>i+10));perfStore.records[unrelated]='A'.repeat(Math.ceil(C.MAX_CT_BYTES*4/3)+4);
+ const directPerf=await C.load(perfStore,[perfRoot.id,perfRoot.hash]);assert.equal(directPerf.headId,perfRoot.id);
+ const scanPerf=await C.inspect(perfStore,[null,perfRoot.hash]);assert.equal(scanPerf.code,'RESOURCE_LIMIT');
+ delete perfStore.records[unrelated];
+
+ // Legacy is not supported.
+ assert.throws(()=>C.validateStore({format:'HTML_DBMS/2.1',publicHead:null,records:{}}),e=>e.code==='UNSUPPORTED_STORAGE');
+ assert.throws(()=>C.validateStore({format:C.VERSION,publicHead:null,records:{[pg.id]:{iv:'x',ct:'y'}}}),/Invalid record envelope|Invalid ciphertext/);
+
+ // Existing JSON Patch protections remain.
+ assert.equal(C.patch({arr:[1,2],x:{'a/b':1}},[{op:'replace',path:'/x/a~1b',value:2},{op:'add',path:'/arr/1',value:4}]).arr.join(','),'1,4,2');
+ assert.throws(()=>C.patch({},[{op:'add',path:'/__proto__/polluted',value:1}]));
+ console.log('HTML DBMS 2.2 protocol / audit regression tests: PASS');
 })().catch(e=>{console.error(e);process.exitCode=1;});

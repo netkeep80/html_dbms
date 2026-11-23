@@ -14,5 +14,6 @@ jobs:
         with:
           node-version: '24'
       - run: node tests/core.test.cjs
+      - run: node tests/app.test.cjs
       - run: node tests/docs-language.test.cjs
       - run: python3 build.py && git diff --exit-code -- dist/html_dbms.html

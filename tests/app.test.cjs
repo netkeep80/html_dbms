@@ -1,0 +1,12 @@
+'use strict';
+const assert=require('node:assert/strict');const fs=require('node:fs');
+const app=fs.readFileSync(require('node:path').join(__dirname,'../src/app.js'),'utf8');
+const index=fs.readFileSync(require('node:path').join(__dirname,'../src/index.html'),'utf8');
+assert.match(app,/new DOMParser\(\)\.parseFromString\(raw,'text\/html'\)/);
+assert.doesNotMatch(app,/raw\.match\(/);
+assert.match(app,/querySelectorAll\('script#db-store\[type="application\/json"\]'\)/);
+assert.match(app,/SUCCESSOR_OCCUPIED/);
+assert.match(app,/truncateInvalidTail/);
+assert.match(index,/"format":"HTML_DBMS\/2\.2"/);
+assert.match(index,/id="open-id"/);assert.match(index,/id="open-hash"/);
+console.log('UI / verifier regression checks: PASS');
