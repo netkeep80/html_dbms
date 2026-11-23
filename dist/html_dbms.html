@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HTML DBMS 3.0.1</title>
+<title>HTML DBMS 3.0.2</title>
 <style>
 :root{font:14px/1.45 system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#eaf0f8;background:#0c1520;color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select{font:inherit;color:inherit;background:#172739;border:1px solid #3b526c;border-radius:5px}button{cursor:pointer;padding:5px 9px;white-space:nowrap}button:hover{background:#24435e}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #86c3f5;outline-offset:1px}button:disabled{cursor:not-allowed;opacity:.55}input,select{min-height:29px;padding:4px 7px}input{min-width:0}.brand{font-size:16px;font-weight:750;white-space:nowrap}.version{color:#98b4d0;font-size:12px;white-space:nowrap}.toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:7px;padding:6px 10px;background:#142338;border-bottom:1px solid #40516a;min-height:43px;overflow-x:auto;white-space:nowrap}.toolbar .divider{height:20px;width:1px;background:#43556b;flex:none}.toolbar .stretch{flex:1}.toolbar select{max-width:180px;min-width:130px}.toolbar label{font-size:11px;color:#a9bfd6;display:flex;align-items:center;gap:5px}.toolbar input{font:11px/1.4 ui-monospace,Consolas,monospace}#head-id{width:185px}#head-hash{width:325px}.primary{border-color:#208d74;background:#126756}.secondary{border-color:#476684}.app-main{min-height:calc(100vh - 44px);max-width:1450px;margin:auto;padding:12px}.notice{font-size:12px;color:#9db5ca;min-height:19px;margin:0 0 8px}.notice.error{color:#ffacac}.notice.good{color:#9edec4}.entry-area{min-height:56vh}.placeholder{background:#132236;border:1px dashed #3a526a;border-radius:9px;padding:24px;color:#9fb7ce;text-align:center}.pane{background:#142338;border:1px solid #34506a;border-radius:8px;padding:14px;margin:10px 0}.entry-area pre,.debug pre{background:#07111c;color:#c4e1e8;padding:12px;border-radius:5px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:70vh;overflow:auto;font:12px/1.5 ui-monospace,Consolas,monospace}.entry-area iframe{border:0;display:block;width:100%;min-height:72vh;background:#0d1724;border-radius:7px}.debug{border-color:#907550}.diagnostic{white-space:pre-wrap;overflow:auto;max-height:55vh;padding:12px;background:#07111c;color:#c4e1e8;border-radius:6px;font:12px/1.45 ui-monospace,Consolas,monospace}.pane h2{font-size:15px;margin:0 0 9px}.pane p{margin:8px 0}.pane .row{margin:8px 0}.pane label{font-size:12px;color:#adc4d9}.pane label input{font:12px ui-monospace,Consolas,monospace;width:290px;max-width:85vw}.danger{background:#703039;border-color:#a65964}details#recovery-section{border-top:1px solid #43556b;margin-top:14px;padding-top:12px}details#recovery-section summary{cursor:pointer}.debug h2{font-size:15px;margin:0 0 7px}.entry-launch{display:inline-flex;gap:8px;align-items:center;margin:9px 0}.meta{color:#a1bacd;font-size:12px}.toolbar-menu{position:relative;flex:none}.toolbar-menu summary{border:1px solid #3b526c;padding:5px 9px;border-radius:5px;cursor:pointer;list-style:none}.toolbar-menu summary::-webkit-details-marker{display:none}.toolbar-menu .menu{position:fixed;right:8px;top:44px;background:#142338;border:1px solid #3b526c;border-radius:6px;box-shadow:0 7px 24px #050c16b3;padding:8px;display:flex;flex-direction:column;gap:5px;z-index:12}.toolbar-menu button{text-align:left}.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}@media(max-width:800px){.toolbar{padding:6px}.app-main{padding:8px}#head-id{width:150px}#head-hash{width:210px}}
 </style></head>
 <body>
 <header class="toolbar" aria-label="Базовые операции HTML DBMS">
-  <strong class="brand">HTML DBMS</strong><span class="version">3.0.1</span>
+  <strong class="brand">HTML DBMS</strong><span class="version">3.0.2</span>
   <span class="divider"></span>
   <button id="new-db" class="primary">Новая</button>
   <select id="databases" aria-label="Выбрать опубликованную БД" title="Выбор подставляет ID/H без открытия"><option value="" disabled selected>— БД отсутствуют —</option></select>
@@ -51,7 +51,7 @@ export async function main(db, mount) {
   const css = document.createElement('style');
   css.textContent = 'body{font:14px/1.5 system-ui;color:#e5edf8;background:#0d1724;margin:0}button,select,textarea,input{font:inherit;color:inherit;background:#192c41;border:1px solid #435c77;border-radius:5px;padding:6px}button{cursor:pointer}button:hover{background:#2b4f6e}button:disabled{opacity:.6}header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 8px;border-bottom:1px solid #35516b}strong{margin-right:auto}main{padding:12px}h2{font-size:16px}pre,textarea{font:12px/1.5 ui-monospace,Consolas,monospace;background:#081522;padding:12px;border-radius:6px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}textarea{width:100%;box-sizing:border-box;min-height:130px}pre{max-height:65vh}button.active{background:#236d83}.meta{color:#92aec8;font-size:12px}#message{min-height:19px;color:#a9d8bd}table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid #34465a;padding:7px}';
   document.head.appendChild(css);
-  mount.innerHTML = '<header><strong id="db-title">Документы JSON</strong><span class="meta" id="entry-state">● Приложение запущено из entry</span><button id="add-document">+ Документ</button><button id="edit-document">JSON Patch</button><button id="refresh">Обновить</button></header><main><nav id="document-nav"></nav><p id="message" role="status"></p><section id="editor" hidden><h2>Изменить документ · RFC 6902</h2><textarea id="patch" spellcheck="false">[{"op":"add","path":"/example","value":1}]</textarea><p><button id="write">Записать</button><button id="cancel">Отмена</button></p></section><h2 id="document-title">Корневой документ</h2><pre id="json"></pre></main>';
+  mount.innerHTML = '<header><strong id="db-title">Документы JSON</strong><span class="meta" id="entry-state">● Приложение запущено из entry</span><button id="add-document">+ Документ</button><button id="edit-document">JSON Patch</button><button id="refresh">Обновить</button></header><main><nav id="document-nav"></nav><p id="message" role="status"></p><section id="new-document" hidden><h2>Новый документ</h2><label>Имя документа <input id="new-document-name" autocomplete="off"></label><p>Начальное JSON-состояние</p><textarea id="new-document-json" spellcheck="false">{}</textarea><p><button id="create-document">Создать документ</button><button id="cancel-create">Отмена</button></p></section><section id="editor" hidden><h2>Изменить документ · RFC 6902</h2><textarea id="patch" spellcheck="false">[{"op":"add","path":"/example","value":1}]</textarea><p><button id="write">Записать</button><button id="cancel">Отмена</button></p></section><h2 id="document-title">Корневой документ</h2><pre id="json"></pre></main>';
   const $ = id => document.getElementById(id);
   let current = '';
   const msg=(text,bad=false)=>{$('message').textContent=text;$('message').style.color=bad?'#ffa4a4':'#9bd9b8';};
@@ -70,7 +70,16 @@ export async function main(db, mount) {
     }
     $('json').textContent=JSON.stringify(visible,null,2);
   }
-  $('add-document').onclick=async()=>{try{const name=prompt('Имя нового документа');if(name===null)return;const raw=prompt('Начальное состояние JSON','{}');if(raw===null)return;await db.createDocument(name,JSON.parse(raw));current=name;await draw();msg('Документ создан');}catch(e){msg(e.message,true);}};
+  $('add-document').onclick=()=>{$('new-document').hidden=!$('new-document').hidden;if(!$('new-document').hidden)$('new-document-name').focus();};
+  $('cancel-create').onclick=()=>{$('new-document').hidden=true;};
+  $('create-document').onclick=async()=>{try{
+    const name=$('new-document-name').value.trim();
+    if(!name)throw Error('Введите имя нового документа');
+    const state=JSON.parse($('new-document-json').value);
+    await db.createDocument(name,state);
+    current=name;$('new-document').hidden=true;$('new-document-name').value='';$('new-document-json').value='{}';
+    await draw();msg('Документ создан');
+  }catch(e){msg(e.message,true);}};
   $('edit-document').onclick=()=>{$('editor').hidden=!$('editor').hidden;};
   $('cancel').onclick=()=>{$('editor').hidden=true;};
   $('write').onclick=async()=>{try{await db.patch(current,JSON.parse($('patch').value));$('editor').hidden=true;await draw();msg('Изменение записано. Сохраните HTML в системной строке.');}catch(e){msg(e.message,true);}};
@@ -177,25 +186,28 @@ async function resolve(s,rootHead,currentHead,reference,{maxDepth=16}={}){ensure
 function staging(s){validateStore(s);return clone(s);}
 function publish(staged,alias,newHead,oldHead=null){ensure(validHead(newHead),'INVALID_HEAD','Bad published head');if(!own(staged,'publicHeads'))staged.publicHeads={};ensure(plain(staged.publicHeads),'INVALID_PUBLIC_HEADS','Invalid publicHeads');if(oldHead!==null)ensure(sameHead(staged.publicHeads[alias],oldHead),'STALE_PUBLIC_HEAD','Published version changed');put(staged.publicHeads,alias,clone(newHead));}
 async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(tx.publicHeads||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);return {store:tx,rootHead:g.head,genesis:g};}
-async function createDocument(s,rootHead,name,initial,alias=null){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);const n=alias||name;ensure(n.length>0&&!n.includes('/')&&!own(refs,n),'DUPLICATE_DOCUMENT','Name already exists');const g=await genesis(tx,name,initial,rootHead);const ops=own(root.state,'$refs')?[{op:'add',path:'/$refs/'+escapePtr(n),value:g.head}]:[{op:'add',path:'/$refs',value:{[n]:g.head}}];const r=await append(tx,rootHead,ops);return {store:tx,rootHead:r.head,documentHead:g.head};}
-async function patchDocument(s,rootHead,alias,operations,options={}){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);ensure(own(refs,alias),'UNKNOWN_DOCUMENT','Unknown document');const p=await append(tx,refs[alias],operations,options);const r=await append(tx,rootHead,[{op:'replace',path:'/$refs/'+escapePtr(alias),value:p.head}]);return {store:tx,rootHead:r.head,documentHead:p.head};}
+async function createDocument(s,rootHead,name,initial,alias=null,options={}){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);const n=alias||name;ensure(n.length>0&&!n.includes('/')&&!own(refs,n),'DUPLICATE_DOCUMENT','Name already exists');const g=await genesis(tx,name,initial,rootHead);const ops=own(root.state,'$refs')?[{op:'add',path:'/$refs/'+escapePtr(n),value:g.head}]:[{op:'add',path:'/$refs',value:{[n]:g.head}}];const r=await append(tx,rootHead,ops,{overwrite:!!options.overwriteRoot});return {store:tx,rootHead:r.head,documentHead:g.head};}
+async function patchDocument(s,rootHead,alias,operations,options={}){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);ensure(own(refs,alias),'UNKNOWN_DOCUMENT','Unknown document');let p,r;try{p=await append(tx,refs[alias],operations,{overwrite:!!options.overwriteChild});}catch(e){if(e.code==='SUCCESSOR_OCCUPIED')e.phase='child';throw e;}try{r=await append(tx,rootHead,[{op:'replace',path:'/$refs/'+escapePtr(alias),value:p.head}],{overwrite:!!options.overwriteRoot});}catch(e){if(e.code==='SUCCESSOR_OCCUPIED')e.phase='root';throw e;}return {store:tx,rootHead:r.head,documentHead:p.head};}
 // Validate a database snapshot, including the historical references published by its root.
 // Unlike cryptographic validation, reference policy is a separate optional check.
 async function verifyDatabase(s, rootHead, options={}) {
   validateStore(s);
-  const root = await load(s,rootHead);
+  const root=await load(s,rootHead);
   let state=clone(root.genesis.state);
-  const aliases=new Map(), warnings=[], checks={rootEvents:root.events.length, documents:0, historicalReferences:0, causalOrigins:0};
-  function scan(refMap, beforeHead, introduced) {
-    for(const [name,h] of Object.entries(refMap)){
-      const old=aliases.get(name);
-      if(old&&sameHead(old.head,h))continue;
-      if(old&&introduced) old.transitions.push({beforeHead,from:old.head,to:h});
-      if(!old)aliases.set(name,{head:h,transitions:[],firstBefore:beforeHead,firstEvent:introduced});
-      else old.head=h;
-      checks.historicalReferences++;
+  // NEVER forget an alias when it disappears from an effective root state.
+  // A removal does not erase earlier references or reset the rollback baseline.
+  const history=new Map(), warnings=[];
+  const checks={rootEvents:root.events.length,documents:0,activeDocuments:0,historicalReferences:0,causalOrigins:0};
+  function scan(references, beforeHead, introduced) {
+    for(const [name,head] of Object.entries(references)) {
+      let entry=history.get(name);
+      if(!entry){entry={firstBefore:clone(beforeHead),firstEvent:introduced,heads:[]};history.set(name,entry);}
+      const previous=entry.heads.at(-1);
+      if(!previous||!sameHead(previous,head)) {
+        entry.heads.push(clone(head));
+        checks.historicalReferences++;
+      }
     }
-    for(const name of aliases.keys())if(!own(refMap,name))aliases.delete(name);
   }
   scan(getRootRefs(state),root.events[0].head,false);
   for(let i=1;i<root.events.length;i++){
@@ -203,21 +215,30 @@ async function verifyDatabase(s, rootHead, options={}) {
     state=patch(state,root.events[i].r[3]);
     scan(getRootRefs(state),before,true);
   }
-  const documents={};
-  for(const [name,meta] of aliases){
-    const child=await load(s,meta.head);
-    checks.documents++;
-    const ancestry=new Set(child.events.map(e=>key(e.head)));
-    for(const move of meta.transitions){
-      ensure(ancestry.has(key(move.from)),'REFERENCE_ROLLBACK','Reference "'+name+'" does not extend an earlier version');
+  const activeRefs=getRootRefs(state),documents={};
+  for(const [name,meta] of history){
+    // The most recently referenced head must descend from EVERY earlier head,
+    // including ones removed and subsequently reintroduced. Loading it checks
+    // the entire authenticated child ancestry (genesis, patches, ciphertext).
+    const lastHead=meta.heads.at(-1),child=await load(s,lastHead);
+    const indices=new Map(child.events.map((e,i)=>[key(e.head),i]));
+    let previousIndex=-1;
+    for(const referencedHead of meta.heads){
+      const index=indices.get(key(referencedHead));
+      ensure(index!==undefined&&index>=previousIndex,'REFERENCE_ROLLBACK',
+        'Document "'+name+'" was replaced, rolled back or diverged across historical $refs');
+      previousIndex=index;
     }
+    checks.documents++;
+    const active=own(activeRefs,name);
+    if(active)checks.activeDocuments++;
     const parent=child.genesis.parent;
-    if(meta.firstEvent && sameHead(parent,meta.firstBefore))checks.causalOrigins++;
-    else if(parent!==null && !root.events.some(e=>sameHead(e.head,parent)))
+    if(meta.firstEvent&&sameHead(parent,meta.firstBefore))checks.causalOrigins++;
+    else if(parent!==null&&!root.events.some(e=>sameHead(e.head,parent)))
       warnings.push('Документ '+name+': genesis.parent не входит в ancestry выбранного корня');
-    else if(meta.firstEvent && parent!==null && !sameHead(parent,meta.firstBefore))
+    else if(meta.firstEvent&&parent!==null&&!sameHead(parent,meta.firstBefore))
       warnings.push('Документ '+name+': origin не совпадает с версией корня перед первой регистрацией (возможно, импортирован)');
-    documents[name]={head:meta.head,events:child.events.length,origin:parent};
+    documents[name]={head:clone(lastHead),active,events:child.events.length,referencedVersions:meta.heads.length,origin:parent};
   }
   if(options.anchorHash!==undefined){
     ensure(validHash(options.anchorHash),'INVALID_HASH','Invalid trusted historical H');
@@ -281,7 +302,8 @@ function needRoot(){if(!rootHead)throw Error('Сначала откройте б
 function activePublished(){return !!(publicName&&store.publicHeads&&db.sameHead(store.publicHeads[publicName],rootHead));}
 function updateInfo(){
  if(!store)return;
- $('store-summary').textContent='Физических сообщений: '+Object.keys(store.records).length+' · опубликованных БД: '+Object.keys(store.publicHeads||{}).length+'.';
+ const bytes=new TextEncoder().encode(JSON.stringify(store)).length;
+ $('store-summary').textContent='Физических сообщений: '+Object.keys(store.records).length+' · размер хранилища: '+bytes+' байт · опубликованных БД: '+Object.keys(store.publicHeads||{}).length+'.';
  $('current-root').textContent='Открытая версия: '+format(rootHead)+(publicName?' · '+publicName:' · не опубликована');
 }
 function togglePanel(which){
@@ -297,25 +319,42 @@ function setFields(head){$('head-id').value=head?.[0]||'';$('head-hash').value=h
 function fieldHead(){const h=[$('head-id').value.trim(),$('head-hash').value.trim()];if(!db.validHead(h))throw Error('Введите корректные ID (22 символа) и H (43 символа)');return h;}
 function syncCatalog(preselect=false){
  updateInfo();
- const sel=$('databases'),prev=sel.value,names=Object.keys(store.publicHeads||{});
+ const sel=$('databases'),names=Object.keys(store.publicHeads||{});
  sel.replaceChildren();
- const empty=new Option(names.length?'— выберите БД —':'— БД отсутствуют —','');
- empty.disabled=true;
+ const empty=new Option(names.length?'— существующая —':'— БД отсутствуют —','');
  sel.add(empty);
  for(const name of names)sel.add(new Option(name,name));
  sel.disabled=names.length===0;
- if(names.includes(prev))sel.value=prev;
- else if(preselect&&names.length){sel.value=names[0];setFields(store.publicHeads[names[0]]);}
- else sel.value='';
+ // The select is an ACTION, not the currently opened database's state.
+ sel.value='';
+ if(preselect&&names.length)setFields(store.publicHeads[names[0]]);
 }
-function selectAlias(alias){const h=store.publicHeads?.[alias];if(!db.validHead(h))return;setFields(h);notice('ID и H подставлены для «'+alias+'». Нажмите «Открыть».');}
-function findPublicName(h){const selected=$('databases').value;if(selected&&db.sameHead(store.publicHeads?.[selected],h))return selected;return Object.keys(store.publicHeads||{}).find(n=>db.sameHead(store.publicHeads[n],h))||null;}
+function selectAlias(alias){
+ const h=store.publicHeads?.[alias];
+ $('databases').value=''; // enables choosing the same alias again
+ if(!db.validHead(h))return;
+ setFields(h);
+ notice('ID и H подставлены для «'+alias+'». Нажмите «Открыть»; активная БД пока не изменена.');
+}
+function findPublicName(h){return Object.keys(store.publicHeads||{}).find(n=>db.sameHead(store.publicHeads[n],h))||null;}
 function stopApp(){if(activeFrame){activeFrame.remove();activeFrame=null;}}
 function clearEntry(){stopApp();$('entry-area').replaceChildren();}
 function element(tag,text,cls){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;}
 function placeholder(text){const e=element('div',text,'placeholder');$('entry-area').appendChild(e);}
 function getRootRefs(root){return db.getRootRefs?db.getRootRefs(root):root?.$refs||{};}
-async function openFields(){await openHead(fieldHead());}
+function clearOpened(){rootHead=null;publicName=null;lastDiagnosis=null;clearEntry();placeholder('БД не открыта. Проверьте ID/H и нажмите «Открыть».');updateInfo();}
+async function openFields(){
+  // A failed Open MUST revoke the previous iframe's ability to issue writes.
+  const requested=[$('head-id').value.trim(),$('head-hash').value.trim()];
+  clearOpened();
+  if(!db.validHead(requested))throw Error('Введите корректные ID (22 символа) и H (43 символа)');
+  await openHead(requested);
+}
+function assertWriteTarget(){
+  needRoot();
+  const h=[$('head-id').value.trim(),$('head-hash').value.trim()];
+  if(!db.sameHead(h,rootHead))throw Error('Поля ID/H отличаются от открытой БД. Для записи откройте нужную версию кнопкой «Открыть».');
+}
 async function openHead(head){const chain=await db.load(store,head);getRootRefs(chain.state);rootHead=[...head];publicName=findPublicName(head);debug=false;show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');setFields(head);updateInfo();await renderEntry();notice('Открыто: '+(chain.state?.name||'JSON')+' · '+format(head));}
 function entryValue(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).length===1&&typeof x.$ref==='string';}
 async function renderEntry(){clearEntry();if(!rootHead){placeholder('Выберите БД, укажите ID/H и нажмите «Открыть».');return;}const root=(await db.load(store,rootHead)).state;let value=root?.entry;if(entryValue(value))value=(await db.resolve(store,rootHead,rootHead,value)).value;
@@ -344,6 +383,24 @@ async function launchSandbox(entry){if(activeFrame)stopApp();const f=document.cr
  const startup=e=>{if(e.source!==f.contentWindow||!e.data||e.data.kind!=='html-dbms-ready')return;window.removeEventListener('message',startup);if(activeFrame===f)f.contentWindow.postMessage({kind:'html-dbms-start',source:entry.source,exportName:entry.export||'main'},'*');};window.addEventListener('message',startup);f.addEventListener('load',()=>{if(activeFrame!==f)window.removeEventListener('message',startup);},{once:true});
  $('entry-area').appendChild(f);f.srcdoc=SANDBOX_DOCUMENT;
 }
+async function confirmOccupied(operation,error){
+  const slot=error.id||'неизвестен';
+  const predecessor=JSON.stringify(error.predecessor||null);
+  return confirm('ВНИМАНИЕ: физический successor занят.\nОперация: '+operation+'\nID слота: '+slot+'\nПредыдущий head: '+predecessor+'\n\nПерезапись может необратимо нарушить доступность старых цепочек и исторических БД. Существующий ciphertext будет заменён без удаления потомков.\n\nПодтвердить ФИЗИЧЕСКУЮ ПЕРЕЗАПИСЬ?');
+}
+async function retryOccupied(operation,perform){
+  const opts={overwriteChild:false,overwriteRoot:false};
+  for(let attempt=0;attempt<3;attempt++){
+    try{return await perform(opts);}catch(e){
+      if(e.code!=='SUCCESSOR_OCCUPIED')throw e;
+      const phase=e.phase||'root';
+      if(!await confirmOccupied(operation+' / '+phase,e))throw Error('Физическая перезапись отменена');
+      if(phase==='child')opts.overwriteChild=true;
+      else opts.overwriteRoot=true;
+    }
+  }
+  throw Error('Не удалось разрешить конфликт successor');
+}
 async function stagedUpdate(result,previous){if(activePublished())db.publish(result.store,publicName,result.rootHead,previous);db.commit(store,result.store);rootHead=result.rootHead;setFields(rootHead);syncCatalog();notice('Изменение записано · новый root: '+format(rootHead)+' · сохраните HTML.');if(debug)await showDebug();}
 async function authorizeWrite(promptText){if(!confirm(promptText+'\nИзменение будет сохранено в рабочей копии HTML DBMS. Продолжить?'))throw Error('Запись отменена пользователем');}
 window.addEventListener('message',event=>{if(!activeFrame||event.source!==activeFrame.contentWindow)return;const msg=event.data;if(!msg||typeof msg!=='object')return;if(msg.kind==='html-dbms-error'){notice('entry: '+msg.error,true);return;}if(msg.kind!=='html-dbms-rpc')return;
@@ -352,10 +409,10 @@ window.addEventListener('message',event=>{if(!activeFrame||event.source!==active
 async function runRpc(message){needRoot();const params=message.payload||{};switch(message.method){
  case 'read':{const ref=params.ref;if(typeof ref!=='string')throw Error('Неверная ссылка');if(ref==='')return (await db.load(store,rootHead)).state;return (await db.resolve(store,rootHead,rootHead,{$ref:ref})).value;}
  case 'getHead':return [...rootHead];
- case 'patch':{const name=params.document;const ops=params.operations;if(typeof name!=='string'||!Array.isArray(ops))throw Error('Неверный запрос patch');await authorizeWrite('JSON Patch: '+(name||'(корень)')+' ('+ops.length+' операций)');const previous=[...rootHead];let result;if(name===''){const staged=db.staging(store),r=await db.append(staged,rootHead,ops);result={store:staged,rootHead:r.head};}else result=await db.patchDocument(store,rootHead,name,ops);await stagedUpdate(result,previous);return {rootHead:[...rootHead]};}
- case 'createDocument':{if(!validName(params.name))throw Error('Недопустимое имя документа');db.assertJson(params.state);await authorizeWrite('Создать документ «'+params.name+'»');const previous=[...rootHead];const result=await db.createDocument(store,rootHead,params.name,params.state);await stagedUpdate(result,previous);return {rootHead:[...rootHead],documentHead:result.documentHead};}
+ case 'patch':{assertWriteTarget();const name=params.document;const ops=params.operations;if(typeof name!=='string'||!Array.isArray(ops))throw Error('Неверный запрос patch');await authorizeWrite('JSON Patch: '+(name||'(корень)')+' ('+ops.length+' операций)');const previous=[...rootHead];const result=await retryOccupied('JSON Patch '+(name||'(корень)'),async opts=>{if(name===''){const staged=db.staging(store),r=await db.append(staged,rootHead,ops,{overwrite:opts.overwriteRoot});return {store:staged,rootHead:r.head};}return db.patchDocument(store,rootHead,name,ops,opts);});await stagedUpdate(result,previous);return {rootHead:[...rootHead]};}
+ case 'createDocument':{assertWriteTarget();if(!validName(params.name))throw Error('Недопустимое имя документа');db.assertJson(params.state);await authorizeWrite('Создать документ «'+params.name+'»');const previous=[...rootHead];const result=await retryOccupied('Создание документа '+params.name,opts=>db.createDocument(store,rootHead,params.name,params.state,null,opts));await stagedUpdate(result,previous);return {rootHead:[...rootHead],documentHead:result.documentHead};}
  default:throw Error('Неподдерживаемая операция entry: '+String(message.method));}}
-async function createDatabase(){const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});db.commit(store,result.store);syncCatalog();$('databases').value=name;setFields(result.rootHead);await openHead(result.rootHead);notice('БД «'+name+'» создана и открыта. Чтобы сохранить её для следующего запуска, нажмите «Сохранить» и откройте скачанный HTML.');}
+async function createDatabase(){const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});db.commit(store,result.store);syncCatalog();setFields(result.rootHead);await openHead(result.rootHead);notice('БД «'+name+'» создана и открыта. Чтобы сохранить её для следующего запуска, нажмите «Сохранить» и откройте скачанный HTML.');}
 async function showDebug(){
  const h=rootHead||fieldHead(),root=await db.inspect(store,h);
  const children={};
@@ -406,12 +463,14 @@ async function verifyFile(){
  const h=rootHead||fieldHead();
  let external;
  try{external=await db.verifyDatabase(other,h);}catch(e){external={status:'failed',code:e.code||'ERROR',message:e.message};}
- const changed=[];let shared=0;
- for(const [id,ct]of Object.entries(store.records))if(Object.prototype.hasOwnProperty.call(other.records,id)){
-   shared++;if(other.records[id]!==ct)changed.push(id);
+ const changedIds=[],missingIds=[],addedIds=[];let shared=0;
+ for(const [id,ct]of Object.entries(store.records)){
+   if(!OWN(other.records,id))missingIds.push(id);
+   else {shared++;if(other.records[id]!==ct)changedIds.push(id);}
  }
- validationOutput({target:file.name,verifiedHead:h,external,sharedSlots:shared,changedPhysicalSlots:changed.length,changedIds:changed.slice(0,100),note:'Внешний HTML прочитан только как данные. Разные шифротексты одного ID — возможная физическая перезапись.'});
- notice(changed.length?'Внешняя проверка: изменены физические слоты '+changed.length:'Внешний HTML проверен. Общих слотов: '+shared,changed.length>0);
+ for(const id of Object.keys(other.records))if(!OWN(store.records,id))addedIds.push(id);
+ validationOutput({target:file.name,verifiedHead:h,external,sharedSlots:shared,missingIds,addedIds,changedIds,changedPhysicalSlots:changedIds.length,note:'missingIds отсутствуют во внешнем HTML; addedIds появились во внешнем HTML; changedIds имеют другой ciphertext при том же ID.'});
+ notice('Внешняя проверка: удалены '+missingIds.length+', добавлены '+addedIds.length+', изменены '+changedIds.length,!!(missingIds.length||changedIds.length||external.status!=='complete'));
 }
 async function truncate(){
  if(!lastDiagnosis)throw Error('Сначала выполните проверку и получите диагноз разрыва');
@@ -426,17 +485,17 @@ async function truncate(){
  await renderEntry();validationOutput({status:'recovered',recoveryHead:recovery,deletedIds:result.deletedIds,keptInvalidSlot:result.keptInvalidSlot});
  notice('Восстановление выполнено. Сохраните новый HTML.');
 }
-async function publish(){needRoot();const root=(await db.load(store,rootHead)).state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=store.publicHeads?.[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;const tx=db.staging(store);db.publish(tx,name,rootHead);db.commit(store,tx);publicName=name;syncCatalog();$('databases').value=name;notice('Опубликована «'+name+'»');}
+async function publish(){needRoot();const root=(await db.load(store,rootHead)).state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=store.publicHeads?.[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;const tx=db.staging(store);db.publish(tx,name,rootHead);db.commit(store,tx);publicName=name;syncCatalog();notice('Опубликована «'+name+'»');}
 async function hideHead(){needRoot();if(!publicName||!store.publicHeads||!OWN(store.publicHeads,publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните пару ID/H перед скрытием.'))return;const tx=db.staging(store);delete tx.publicHeads[publicName];if(!Object.keys(tx.publicHeads).length)delete tx.publicHeads;db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте ID/H.');}
 async function copyHead(){const h=fieldHead(),t=format(h);try{await navigator.clipboard.writeText(t);notice('Скопировано: '+t);}catch{prompt('Скопируйте ID/H:',t);}}
-async function loadHtml(file){if(!file)return;const raw=await file.text();const candidate=readStoreFromHTML(raw);store=candidate;rootHead=null;publicName=null;debug=false;lastDiagnosis=null;setFields(null);$('databases').value='';syncCatalog(true);show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');clearEntry();const count=Object.keys(store.publicHeads||{}).length;placeholder(count?'БД выбрана и её ID/H подставлены. Нажмите «Открыть».':'В загруженном файле нет опубликованных БД. Можно открыть скрытую по ID/H или создать новую.');notice('Контейнер загружен. Опубликованных БД: '+count+(count?'. Выбрана «'+$('databases').value+'», нажмите «Открыть».':'.'));}
+async function loadHtml(file){if(!file)return;const raw=await file.text();const candidate=readStoreFromHTML(raw);store=candidate;rootHead=null;publicName=null;debug=false;lastDiagnosis=null;setFields(null);$('databases').value='';syncCatalog(true);show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');clearEntry();const count=Object.keys(store.publicHeads||{}).length;placeholder(count?'БД выбрана и её ID/H подставлены. Нажмите «Открыть».':'В загруженном файле нет опубликованных БД. Можно открыть скрытую по ID/H или создать новую.');notice('Контейнер загружен. Опубликованных БД: '+count+(count?'. ID/H первой опубликованной БД подставлены, нажмите «Открыть».':'.'));}
 function exportDocument(){const doc=exportTemplate.cloneNode(true);const s=doc.querySelector('#db-store');s.textContent=JSON.stringify(store).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');return '<!doctype html>\n'+doc.outerHTML;}
 function save(){db.validateStore(store);const html=exportDocument();const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='html_dbms_3_saved.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);notice('Новый HTML-файл скачан. Исходный файл на диске не перезаписывается: открывайте сохранённую копию.');}
 async function init(){
  store=JSON.parse($('db-store').textContent);
  db.validateStore(store);setFields(null);syncCatalog(true);
  const names=Object.keys(store.publicHeads||{});
- if(names.length)notice('Опубликованных БД: '+names.length+'. Выбрана «'+$('databases').value+'»: ID и H подставлены, нажмите «Открыть».');
+ if(names.length)notice('Опубликованных БД: '+names.length+'. ID и H первой опубликованной БД подставлены, нажмите «Открыть».');
  else{clearEntry();placeholder('Этот HTML пока не содержит опубликованных БД. Нажмите «Новая» или загрузите другой HTML через «Инфо».');notice('Контейнер пуст: опубликованных БД нет. Создайте новую БД и сохраните новый HTML-файл.');}
 }
 $('new-db').onclick=()=>run(createDatabase);
