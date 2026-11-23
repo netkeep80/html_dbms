@@ -93,7 +93,7 @@ with sync_playwright() as pw:
  page.locator('.form select[name="toTypeId"]').select_option(label='Фонд')
  page.locator('.form select[name="toId"]').select_option(label='Фонд_F002')
  page.locator('.form select[name="fromId"]').select_option(label='Участник_ПЕРЕИМЕНОВАН')
- page.locator('.form select[name="typeId"]').select_option(label='Нал')
+ page.locator('.form select[name="typeId"]').select_option(label='Взнос')
  page.locator('.form input[name="date"]').fill('2026-09-27')
  page.locator('.form input[name="amount"]').fill('345')
  page.locator('.form button',has_text='Записать транзакцию').click()

@@ -21,10 +21,10 @@ Object.defineProperty(crypto,'subtle',{configurable:true,value:{
 """
 
 def pair(page):
-    return (page.locator('#head-id').input_value(),page.locator('#head-hash').input_value())
+    return page.locator('#head').input_value()
 
 def fill_pair(page,p):
-    page.locator('#head-id').fill(p[0]);page.locator('#head-hash').fill(p[1])
+    page.locator('#head').fill(p)
 
 def choose(page,name):
     page.locator('#databases').select_option(name)
@@ -80,7 +80,7 @@ with sync_playwright() as pl:
     choose(page,'Касса')
     assert pair(page)==root_after_doc
     assert frame(page).locator('#db-title').inner_text()=='Склад'
-    page.locator('#head-id').fill('not-current')
+    page.locator('#head').fill('not-current')
     choose(page,'Касса')
     assert pair(page)==root_after_doc,'repeat choosing same alias must restore head'
     page.locator('#open-head').click()
@@ -93,16 +93,16 @@ with sync_playwright() as pl:
     fill_pair(page,sklad)
     frame(page).locator('#edit-document').click()
     frame(page).locator('#write').click()
-    expect(frame(page).locator('#message')).to_contain_text('отличаются от открытой БД')
+    expect(frame(page).locator('#message')).to_contain_text('отличается от открытой БД')
     # Restore active state by explicit Open.
     fill_pair(page,root_after_doc)
     page.locator('#open-head').click()
     expect(frame(page).locator('#db-title')).to_have_text('Касса')
     # Failed Open must revoke old app entirely.
-    page.locator('#head-id').fill('invalid')
+    page.locator('#head').fill('invalid')
     page.locator('#open-head').click()
     expect(page.locator('#entry-area iframe')).to_have_count(0)
-    expect(page.locator('#status')).to_contain_text('ID')
+    expect(page.locator('#status')).to_contain_text('HEAD')
     page.locator('#info-toggle').click()
     expect(page.locator('#current-root')).to_contain_text('Открытая версия: —')
     page.locator('#info-toggle').click()

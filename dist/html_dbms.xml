@@ -1,18 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <html xmlns="http://www.w3.org/1999/xhtml" lang="ru"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>HTML DBMS 3.0.2</title>
+<title>HTML DBMS 4.0.0</title>
 <style><![CDATA[
-[hidden]{display:none!important}:root{font:14px/1.45 system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#eaf0f8;background:#0c1520;color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select{font:inherit;color:inherit;background:#172739;border:1px solid #3b526c;border-radius:5px}button{cursor:pointer;padding:5px 9px;white-space:nowrap}button:hover{background:#24435e}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #86c3f5;outline-offset:1px}button:disabled{cursor:not-allowed;opacity:.55}input,select{min-height:29px;padding:4px 7px}input{min-width:0}.brand{font-size:16px;font-weight:750;white-space:nowrap}.version{color:#98b4d0;font-size:12px;white-space:nowrap}.toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:7px;padding:6px 10px;background:#142338;border-bottom:1px solid #40516a;min-height:43px;overflow-x:auto;white-space:nowrap}.toolbar .divider{height:20px;width:1px;background:#43556b;flex:none}.toolbar .stretch{flex:1}.toolbar select{max-width:180px;min-width:130px}.toolbar label{font-size:11px;color:#a9bfd6;display:flex;align-items:center;gap:5px}.toolbar input{font:11px/1.4 ui-monospace,Consolas,monospace}#head-id{width:185px}#head-hash{width:325px}.primary{border-color:#208d74;background:#126756}.secondary{border-color:#476684}.app-main{min-height:calc(100vh - 44px);max-width:1450px;margin:auto;padding:12px}.notice{font-size:12px;color:#9db5ca;min-height:19px;margin:0 0 8px}.notice.error{color:#ffacac}.notice.good{color:#9edec4}.entry-area{min-height:56vh}.placeholder{background:#132236;border:1px dashed #3a526a;border-radius:9px;padding:24px;color:#9fb7ce;text-align:center}.pane{background:#142338;border:1px solid #34506a;border-radius:8px;padding:14px;margin:10px 0}.entry-area pre,.debug pre{background:#07111c;color:#c4e1e8;padding:12px;border-radius:5px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:70vh;overflow:auto;font:12px/1.5 ui-monospace,Consolas,monospace}.entry-area iframe{border:0;display:block;width:100%;min-height:72vh;background:#0d1724;border-radius:7px}.debug{border-color:#907550}.diagnostic{white-space:pre-wrap;overflow:auto;max-height:55vh;padding:12px;background:#07111c;color:#c4e1e8;border-radius:6px;font:12px/1.45 ui-monospace,Consolas,monospace}.pane h2{font-size:15px;margin:0 0 9px}.pane p{margin:8px 0}.pane .row{margin:8px 0}.pane label{font-size:12px;color:#adc4d9}.pane label input{font:12px ui-monospace,Consolas,monospace;width:290px;max-width:85vw}.danger{background:#703039;border-color:#a65964}details#recovery-section{border-top:1px solid #43556b;margin-top:14px;padding-top:12px}details#recovery-section summary{cursor:pointer}.debug h2{font-size:15px;margin:0 0 7px}.entry-launch{display:inline-flex;gap:8px;align-items:center;margin:9px 0}.meta{color:#a1bacd;font-size:12px}.toolbar-menu{position:relative;flex:none}.toolbar-menu summary{border:1px solid #3b526c;padding:5px 9px;border-radius:5px;cursor:pointer;list-style:none}.toolbar-menu summary::-webkit-details-marker{display:none}.toolbar-menu .menu{position:fixed;right:8px;top:44px;background:#142338;border:1px solid #3b526c;border-radius:6px;box-shadow:0 7px 24px #050c16b3;padding:8px;display:flex;flex-direction:column;gap:5px;z-index:12}.toolbar-menu button{text-align:left}.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}@media(max-width:800px){.toolbar{padding:6px}.app-main{padding:8px}#head-id{width:150px}#head-hash{width:210px}}
+[hidden]{display:none!important}:root{font:14px/1.45 system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#eaf0f8;background:#0c1520;color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select{font:inherit;color:inherit;background:#172739;border:1px solid #3b526c;border-radius:5px}button{cursor:pointer;padding:5px 9px;white-space:nowrap}button:hover{background:#24435e}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #86c3f5;outline-offset:1px}button:disabled{cursor:not-allowed;opacity:.55}input,select{min-height:29px;padding:4px 7px}input{min-width:0}.brand{font-size:16px;font-weight:750;white-space:nowrap}.version{color:#98b4d0;font-size:12px;white-space:nowrap}.toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:7px;padding:6px 10px;background:#142338;border-bottom:1px solid #40516a;min-height:43px;overflow-x:auto;white-space:nowrap}.toolbar .divider{height:20px;width:1px;background:#43556b;flex:none}.toolbar .stretch{flex:1}.toolbar select{max-width:180px;min-width:130px}.toolbar label{font-size:11px;color:#a9bfd6;display:flex;align-items:center;gap:5px}.toolbar input{font:11px/1.4 ui-monospace,Consolas,monospace}#head{width:485px}.primary{border-color:#208d74;background:#126756}.secondary{border-color:#476684}.app-main{min-height:calc(100vh - 44px);max-width:1450px;margin:auto;padding:12px}.notice{font-size:12px;color:#9db5ca;min-height:19px;margin:0 0 8px}.notice.error{color:#ffacac}.notice.good{color:#9edec4}.entry-area{min-height:56vh}.placeholder{background:#132236;border:1px dashed #3a526a;border-radius:9px;padding:24px;color:#9fb7ce;text-align:center}.pane{background:#142338;border:1px solid #34506a;border-radius:8px;padding:14px;margin:10px 0}.entry-area pre,.debug pre{background:#07111c;color:#c4e1e8;padding:12px;border-radius:5px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:70vh;overflow:auto;font:12px/1.5 ui-monospace,Consolas,monospace}.entry-area iframe{border:0;display:block;width:100%;min-height:72vh;background:#0d1724;border-radius:7px}.debug{border-color:#907550}.diagnostic{white-space:pre-wrap;overflow:auto;max-height:55vh;padding:12px;background:#07111c;color:#c4e1e8;border-radius:6px;font:12px/1.45 ui-monospace,Consolas,monospace}.pane h2{font-size:15px;margin:0 0 9px}.pane p{margin:8px 0}.pane .row{margin:8px 0}.pane label{font-size:12px;color:#adc4d9}.pane label input{font:12px ui-monospace,Consolas,monospace;width:290px;max-width:85vw}.danger{background:#703039;border-color:#a65964}details#recovery-section{border-top:1px solid #43556b;margin-top:14px;padding-top:12px}details#recovery-section summary{cursor:pointer}.debug h2{font-size:15px;margin:0 0 7px}.entry-launch{display:inline-flex;gap:8px;align-items:center;margin:9px 0}.meta{color:#a1bacd;font-size:12px}.toolbar-menu{position:relative;flex:none}.toolbar-menu summary{border:1px solid #3b526c;padding:5px 9px;border-radius:5px;cursor:pointer;list-style:none}.toolbar-menu summary::-webkit-details-marker{display:none}.toolbar-menu .menu{position:fixed;right:8px;top:44px;background:#142338;border:1px solid #3b526c;border-radius:6px;box-shadow:0 7px 24px #050c16b3;padding:8px;display:flex;flex-direction:column;gap:5px;z-index:12}.toolbar-menu button{text-align:left}.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}@media(max-width:800px){.toolbar{padding:6px}.app-main{padding:8px}#head{width:320px}}
 ]]></style></head>
 <body>
 <header class="toolbar" aria-label="Базовые операции HTML DBMS">
-  <strong class="brand">HTML DBMS</strong><span class="version">3.0.2</span>
+  <strong class="brand">HTML DBMS</strong><span class="version">4.0.0</span>
   <span class="divider"></span>
   <button id="new-db" class="primary">Новая</button>
-  <select id="databases" aria-label="Выбрать опубликованную БД" title="Выбор подставляет ID/H без открытия"><option value="" disabled="disabled" selected="selected">— БД отсутствуют —</option></select>
-  <label for="head-id">ID</label><input id="head-id" placeholder="22 символа" autocomplete="off" spellcheck="false" aria-label="Физический идентификатор версии" />
-  <label for="head-hash">H</label><input id="head-hash" placeholder="43 символа" autocomplete="off" spellcheck="false" aria-label="Хеш версии" />
+  <select id="databases" aria-label="Выбрать опубликованную БД" title="Выбор подставляет HEAD без открытия"><option value="" disabled="disabled" selected="selected">— БД отсутствуют —</option></select>
+  <label for="head">HEAD</label><input id="head" placeholder="64 символа Base64url" autocomplete="off" spellcheck="false" aria-label="HEAD версии" />
   <button id="open-head" class="primary">Открыть</button>
   <button id="save" class="primary">Сохранить</button>
   <button id="info-toggle" aria-controls="info-panel" aria-expanded="false">Инфо</button>
@@ -23,30 +22,30 @@
 <main class="app-main">
   <div id="status" class="notice" role="status" aria-live="polite"></div>
   <section id="info-panel" class="pane" aria-label="Информация и операции с контейнером" hidden="hidden">
-    <h2>Инфо · HTML DBMS/3</h2>
+    <h2>Инфо · HTML DBMS/4</h2>
     <div class="row"><span id="store-summary" class="meta"></span><span id="current-root" class="meta"></span></div>
     <p class="meta">Системная оболочка управляет версиями и контейнером. Всё прикладное содержимое определяется полем <code>entry</code> корневого JSON.</p>
-    <div class="row"><button id="import">Загрузить HTML/XML</button><button id="copy-head">Копировать ID + H</button><button id="publish">Публиковать текущую БД</button><button id="hide-head">Скрыть публикацию</button></div>
-    <p class="meta">Отсутствие имени в publicHeads не удаляет записи. Сохраните ID и H до скрытия публикации. H — секретный материал в экспериментальной схеме шифрования.</p>
+    <div class="row"><button id="import">Загрузить HTML/XML</button><button id="copy-head">Копировать HEAD</button><button id="copy-link">Скопировать ссылку доступа</button><button id="publish-site">Подготовить index.html для публикации</button><button id="publish">Публиковать текущую БД</button><button id="hide-head">Скрыть публикацию</button></div>
+    <p class="meta">Отсутствие имени в publicHeads не удаляет записи. Сохраните HEAD до скрытия публикации. HEAD не обеспечивает авторизацию. Публикация index.html сохраняет все ciphertext; серверный файл не изменяется автоматически.</p>
   </section>
   <section id="validation-panel" class="pane" aria-label="Валидация цепочек и хранилища" hidden="hidden">
     <h2>Валидация · проверка версий и целостности</h2>
     <div class="row"><button id="verify" class="primary">Проверить открытую БД</button><button id="verify-store">Проверить контейнер</button></div>
     <p class="meta">Проверяются SHA-256, AES-GCM, адреса, ancestry, JSON Patch, ссылки $refs и исторические обновления heads. Указанное время — показание часов, не доверенный timestamp.</p>
-    <div class="row"><label>Доверенный исторический H <input id="anchor" placeholder="43 символа Base64url" autocomplete="off" spellcheck="false" /></label><button id="verify-anchor">Проверить исторический H</button></div>
+    <div class="row"><label>Доверенный исторический HEAD <input id="anchor" placeholder="64 символа Base64url" autocomplete="off" spellcheck="false" /></label><button id="verify-anchor">Проверить исторический HEAD</button></div>
     <div class="row"><label>Другой HTML/XML <input id="external" type="file" accept=".html,.xml,text/html,text/xml,application/xml" /></label><button id="verify-file">Проверить HTML/XML как данные</button></div>
     <pre id="validation-report" class="diagnostic" aria-live="polite">Проверка ещё не выполнялась.</pre>
     <details id="recovery-section"><summary>Диагностика разрыва и явное восстановление</summary>
       <p class="meta">Никаких автоматических удалений. При перезаписи предшественника повреждённые потомки не удаляются сами собой.</p>
-      <div class="row"><label>Recovery ID <input id="recovery-id" autocomplete="off" spellcheck="false" /></label><label>Recovery H <input id="recovery-hash" autocomplete="off" spellcheck="false" /></label><button id="truncate" class="danger">Удалить диагностированный хвост</button></div>
+      <div class="row"><label>Recovery HEAD <input id="recovery-head" autocomplete="off" spellcheck="false" /></label><button id="truncate" class="danger">Удалить диагностированный хвост</button></div>
     </details>
   </section>
   <section id="debug-panel" class="pane debug" hidden="hidden"><h2>Отладка · расшифрованная цепочка (read-only)</h2><pre id="debug-raw"></pre></section>
   <section id="entry-area" class="entry-area" aria-label="Приложение из JSON entry">
-    <div class="placeholder">Выберите опубликованную БД или введите ID и H, затем нажмите «Открыть».</div>
+    <div class="placeholder">Выберите опубликованную БД или введите HEAD, затем нажмите «Открыть».</div>
   </section>
 </main>
-<script id="db-store" type="application/json"><![CDATA[{"format":"HTML_DBMS/3","publicHeads":{},"records":{}}]]></script>
+<script id="db-store" type="application/json"><![CDATA[{"format":"HTML_DBMS/4","publicHeads":{},"records":{}}]]></script>
 <script id="starter-source" type="text/plain"><![CDATA[/* Default application template. This source is stored in the newly created root JSON entry. */
 export async function main(db, mount) {
   const css = document.createElement('style');
@@ -89,10 +88,10 @@ export async function main(db, mount) {
   msg('Приложение из entry успешно запущено. Выберите документ или создайте новый.');
 }
 ]]></script>
-<script><![CDATA[/* HTML_DBMS/3 — standalone JSON temporal store. No v2 compatibility. */
+<script><![CDATA[/* HTML_DBMS/4 — standalone JSON temporal store. No legacy compatibility. */
 (function (g) {
 'use strict';
-const VERSION = 'HTML_DBMS/3';
+const VERSION = 'HTML_DBMS/4';
 const encoder = new TextEncoder(), decoder = new TextDecoder('utf-8', {fatal:true});
 const subtle = g.crypto?.subtle || (typeof require === 'function' ? require('node:crypto').webcrypto.subtle : null);
 const MAX_RECORDS = 200000, MAX_BYTES = 12 * 1024 * 1024, MAX_PATCH = 10000, MAX_DEPTH = 32;
@@ -115,21 +114,25 @@ function encode64(b){if(typeof Buffer!=='undefined')return Buffer.from(b).toStri
 function decode64(s){ensure(typeof s==='string'&&/^[A-Za-z0-9_-]*$/.test(s)&&s.length%4!==1,'INVALID_BASE64','Invalid Base64url');let b;if(typeof Buffer!=='undefined') b=new Uint8Array(Buffer.from(s,'base64url'));else{const v=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4));b=Uint8Array.from(v,c=>c.charCodeAt(0));}ensure(encode64(b)===s,'INVALID_BASE64','Non-canonical Base64url');return b;}
 function validId(s){try{return decode64(s).length===16;}catch{return false;}}
 function validHash(s){try{return decode64(s).length===32;}catch{return false;}}
-function validHead(h){return Array.isArray(h)&&h.length===2&&validId(h[0])&&validHash(h[1]);}
-function sameHead(a,b){return validHead(a)&&validHead(b)&&a[0]===b[0]&&a[1]===b[1];}
-function key(h){return h[0]+'\0'+h[1];}
+function componentBytes(value,size){const bytes=typeof value==='string'?decode64(value):value;ensure(bytes instanceof Uint8Array&&bytes.length===size,'INVALID_HEAD','Invalid HEAD component');return bytes;}
+function packHead(id,hash){const b=new Uint8Array(48);b.set(componentBytes(id,16));b.set(componentBytes(hash,32),16);return encode64(b);}
+function unpackHead(head){ensure(typeof head==='string'&&head.length===64&&/^[A-Za-z0-9_-]{64}$/.test(head),'INVALID_HEAD','Invalid HEAD');const bytes=decode64(head);ensure(bytes.length===48,'INVALID_HEAD','Invalid HEAD bytes');const idBytes=bytes.slice(0,16),hashBytes=bytes.slice(16);return {idBytes,hashBytes,id:encode64(idBytes),hash:encode64(hashBytes)};}
+function validHead(h){try{unpackHead(h);return true;}catch{return false;}}
+function sameHead(a,b){return validHead(a)&&a===b;}
+function key(h){return h;}
+function physicalId(h){return unpackHead(h).id;}
 async function sha(b){return new Uint8Array(await subtle.digest('SHA-256',b));}
 async function rootId(hash){return encode64((await sha(decode64(hash))).slice(0,16));}
-async function successorId(prev){ensure(validHead(prev),'INVALID_HEAD','Invalid predecessor head');let b=new Uint8Array(48);b.set(decode64(prev[0]));b.set(decode64(prev[1]),16);return encode64((await sha(b)).slice(0,16));}
+async function successorId(prev){ensure(validHead(prev),'INVALID_HEAD','Invalid predecessor head');const b=decode64(prev);return encode64((await sha(b)).slice(0,16));}
 function ivFrom(id){return decode64(id).slice(0,12);}
 async function encrypt(record,id){assertJson(record);ensure(validId(id),'INVALID_ID','Invalid address');const bytes=encoder.encode(JSON.stringify(record));ensure(bytes.length<=MAX_BYTES,'RESOURCE_LIMIT','Record too large');const h=await sha(bytes);const aes=await subtle.importKey('raw',h,'AES-GCM',false,['encrypt']);const data=new Uint8Array(await subtle.encrypt({name:'AES-GCM',iv:ivFrom(id),tagLength:128},aes,bytes));return {hash:encode64(h),ct:encode64(data)};}
-async function decrypt(ct,head){ensure(validHead(head),'INVALID_HEAD','Bad head');let data=decode64(ct);ensure(data.length>=16&&data.length<=MAX_BYTES+16,'RESOURCE_LIMIT','Bad ciphertext length');const h=decode64(head[1]);const aes=await subtle.importKey('raw',h,'AES-GCM',false,['decrypt']);let plaintext;try{plaintext=new Uint8Array(await subtle.decrypt({name:'AES-GCM',iv:ivFrom(head[0]),tagLength:128},aes,data));}catch{throw error('INVALID_GCM','Authentication failed');}
-ensure(encode64(await sha(plaintext))===head[1],'HASH_MISMATCH','Hash mismatch');let r;try{r=JSON.parse(decoder.decode(plaintext));}catch{throw error('INVALID_JSON','Invalid record JSON');}assertJson(r);return r;}
-function validateStore(s){ensure(plain(s)&&s.format===VERSION&&plain(s.records),'UNSUPPORTED_STORAGE','Expected HTML_DBMS/3');ensure(!own(s,'publicHead'),'UNSUPPORTED_STORAGE','Legacy publicHead is unsupported');if(own(s,'publicHeads')){ensure(plain(s.publicHeads),'INVALID_PUBLIC_HEADS','publicHeads must be an object');for(const [n,h] of Object.entries(s.publicHeads)){ensure(n.length>0&&validHead(h),'INVALID_PUBLIC_HEADS','Invalid public head: '+n);}}
+async function decrypt(ct,head){ensure(validHead(head),'INVALID_HEAD','Bad head');let data=decode64(ct);ensure(data.length>=16&&data.length<=MAX_BYTES+16,'RESOURCE_LIMIT','Bad ciphertext length');const {id,hash,hashBytes:h}=unpackHead(head);const aes=await subtle.importKey('raw',h,'AES-GCM',false,['decrypt']);let plaintext;try{plaintext=new Uint8Array(await subtle.decrypt({name:'AES-GCM',iv:ivFrom(id),tagLength:128},aes,data));}catch{throw error('INVALID_GCM','Authentication failed');}
+ensure(encode64(await sha(plaintext))===hash,'HASH_MISMATCH','Hash mismatch');let r;try{r=JSON.parse(decoder.decode(plaintext));}catch{throw error('INVALID_JSON','Invalid record JSON');}assertJson(r);return r;}
+function validateStore(s){ensure(plain(s)&&s.format===VERSION&&plain(s.records),'UNSUPPORTED_STORAGE','Expected HTML_DBMS/4');ensure(!own(s,'publicHead'),'UNSUPPORTED_STORAGE','Legacy publicHead is unsupported');if(own(s,'publicHeads')){ensure(plain(s.publicHeads),'INVALID_PUBLIC_HEADS','publicHeads must be an object');for(const [n,h] of Object.entries(s.publicHeads)){ensure(n.length>0&&validHead(h),'INVALID_PUBLIC_HEADS','Invalid public head: '+n);}}
   const ids=Object.keys(s.records);ensure(ids.length<=MAX_RECORDS,'RESOURCE_LIMIT','Too many records');for(const id of ids)ensure(validId(id)&&typeof s.records[id]==='string'&&s.records[id].length<=Math.ceil((MAX_BYTES+16)*4/3),'INVALID_RECORD','Invalid physical record');return s;}
 function newStore(){return {format:VERSION,publicHeads:{},records:{}};}
 function iso(s){return typeof s==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(s)&&!Number.isNaN(Date.parse(s))&&new Date(s).toISOString()===s;}
-// Compact v3 format: genesis = [null,{name,parent,state}], patch = [ISO-time,prevId,prevHash,RFC6902-operations].
+// Compact v4 format: genesis = [null,{name,parent,state}], patch = [ISO-time,previousHEAD,RFC6902-operations].
 // Sequence is derived from verified ancestry; it is NEVER serialized.
 function isGenesis(r){return Array.isArray(r)&&r.length===2&&r[0]===null;}
 function validateRecord(r){
@@ -138,12 +141,12 @@ function validateRecord(r){
   const v=r[1];ensure(plain(v)&&typeof v.name==='string'&&v.name.trim()&&(v.parent===null||validHead(v.parent))&&own(v,'state'),'INVALID_GENESIS','Invalid genesis');
   ensure(Object.keys(v).length===3&&['name','parent','state'].every(k=>own(v,k)),'INVALID_GENESIS','Genesis fields');
  }else{
-  ensure(r.length===4&&iso(r[0])&&validId(r[1])&&validHash(r[2])&&Array.isArray(r[3])&&r[3].length>=1&&r[3].length<=MAX_PATCH,'INVALID_EVENT','Invalid patch header');
+  ensure(r.length===3&&iso(r[0])&&validHead(r[1])&&Array.isArray(r[2])&&r[2].length>=1&&r[2].length<=MAX_PATCH,'INVALID_EVENT','Invalid patch header');
  }
  return r;
 }
-async function expectedId(r,hash){return isGenesis(r)?rootId(hash):successorId([r[1],r[2]]);}
-async function readRecord(s,head){ensure(validHead(head),'INVALID_HEAD','Invalid head');ensure(own(s.records,head[0]),'MISSING_RECORD','Missing record '+head[0]);let r=validateRecord(await decrypt(s.records[head[0]],head));ensure((await expectedId(r,head[1]))===head[0],'ADDRESS_MISMATCH','Wrong physical address');return r;}
+async function expectedId(r,hash){return isGenesis(r)?rootId(hash):successorId(r[1]);}
+async function readRecord(s,head){ensure(validHead(head),'INVALID_HEAD','Invalid head');const {id,hash}=unpackHead(head);ensure(own(s.records,id),'MISSING_RECORD','Missing record '+id);let r=validateRecord(await decrypt(s.records[id],head));ensure((await expectedId(r,hash))===id,'ADDRESS_MISMATCH','Wrong physical address');return r;}
 function parts(pointer){ensure(typeof pointer==='string'&&(pointer===''||pointer[0]==='/'),'INVALID_POINTER','Not a JSON Pointer');if(pointer==='')return [];return pointer.slice(1).split('/').map(s=>{ensure(!/~(?![01])/.test(s),'INVALID_POINTER','Invalid tilde escape');return s.replace(/~1/g,'/').replace(/~0/g,'~');});}
 function indexOfToken(t,len,insert=false){ensure(t==='-'&&insert||/^(0|[1-9]\d*)$/.test(t),'INVALID_POINTER','Invalid array index');if(t==='-')return len;const i=Number(t);ensure(Number.isSafeInteger(i)&&i<=(insert?len:len-1),'INVALID_POINTER','Array index out of bounds');return i;}
 function jsonEqual(a,b){
@@ -166,16 +169,16 @@ function patch(json,ops){assertJson(json);ensure(Array.isArray(ops)&&ops.length>
  const [p,k]=parentAndKey(out,dest);if(Array.isArray(p)){if(op.op==='replace')p[indexOfToken(k,p.length)]=value;else p.splice(indexOfToken(k,p.length,true),0,value);}else{ensure(plain(p),'INVALID_POINTER','Parent is not object');put(p,k,value);}
  }assertJson(out);return out;}
 function remove(out,tokens){if(!tokens.length)return null;const [p,k]=parentAndKey(out,tokens);if(Array.isArray(p))p.splice(indexOfToken(k,p.length),1);else{ensure(plain(p)&&own(p,k),'INVALID_POINTER','Missing remove target');delete p[k];}return out;}
-function diagnose(e,head,events=[]){return {status:'broken',code:e.code||'INVALID_CHAIN',message:e.message||String(e),sourceHead:head,tailIds:events.map(x=>x.head[0])};}
-async function inspect(s,head,limit=MAX_RECORDS){try{validateStore(s);ensure(validHead(head),'INVALID_HEAD','Head required');const rev=[],seen=new Set();let h=head;while(true){ensure(!seen.has(h[0]),'CYCLE','Cycle in physical chain');seen.add(h[0]);ensure(rev.length<limit,'RESOURCE_LIMIT','Chain too long');let r;try{r=await readRecord(s,h);}catch(e){const d=diagnose(e,head,rev);d.invalid=h;d.tailIds=[h[0],...d.tailIds];d.recoveryHead=null;return d;}
- rev.push({head:h,r});if(isGenesis(r))break;h=[r[1],r[2]];}
-const events=rev.reverse();let state=clone(events[0].r[1].state);for(let i=1;i<events.length;i++)try{state=patch(state,events[i].r[3]);}catch(e){const d=diagnose(e,head,events.slice(i));d.invalid=events[i].head;return d;}
+function diagnose(e,head,events=[]){return {status:'broken',code:e.code||'INVALID_CHAIN',message:e.message||String(e),sourceHead:validHead(head)?head:null,tailIds:events.map(x=>physicalId(x.head))};}
+async function inspect(s,head,limit=MAX_RECORDS){try{validateStore(s);ensure(validHead(head),'INVALID_HEAD','Head required');const rev=[],seen=new Set();let h=head;while(true){ensure(!seen.has(physicalId(h)),'CYCLE','Cycle in physical chain');seen.add(physicalId(h));ensure(rev.length<limit,'RESOURCE_LIMIT','Chain too long');let r;try{r=await readRecord(s,h);}catch(e){const d=diagnose(e,head,rev);d.invalid=h;d.tailIds=[physicalId(h),...d.tailIds];d.recoveryHead=null;return d;}
+ rev.push({head:h,r});if(isGenesis(r))break;h=r[1];}
+const events=rev.reverse();let state=clone(events[0].r[1].state);for(let i=1;i<events.length;i++)try{state=patch(state,events[i].r[2]);}catch(e){const d=diagnose(e,head,events.slice(i));d.invalid=events[i].head;return d;}
 return {status:'complete',chain:{head:clone(head),genesis:clone(events[0].r[1]),state,events}};
 }catch(e){return diagnose(e,head);}}
 async function load(s,head){const x=await inspect(s,head);if(x.status!=='complete')throw error(x.code,x.message,{diagnosis:x});return x.chain;}
-async function genesis(s,name,state,parent=null,options={}){validateStore(s);ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state)}]);const bytes=encoder.encode(JSON.stringify(r));const h=encode64(await sha(bytes)),id=await rootId(h);const occupied=own(s.records,id);if(occupied&&!options.overwrite){const old=await readRecord(s,[id,h]).catch(()=>null);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head:[id,h],existing:true,overwritten:false};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
-const e=await encrypt(r,id);ensure(e.hash===h,'INTERNAL_ERROR','Unexpected hash');s.records[id]=e.ct;return {head:[id,h],existing:false,overwritten:occupied};}
-async function append(s,head,operations,options={}){validateStore(s);const chain=await load(s,head);const state=patch(chain.state,operations);const id=await successorId(head);const occupied=own(s.records,id);if(occupied&&!options.overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=options.timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head[0],head[1],clone(operations)]);const e=await encrypt(r,id);s.records[id]=e.ct;return {head:[id,e.hash],state,overwritten:occupied};}
+async function genesis(s,name,state,parent=null,options={}){validateStore(s);ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state)}]);const bytes=encoder.encode(JSON.stringify(r));const h=encode64(await sha(bytes)),id=await rootId(h);const occupied=own(s.records,id);if(occupied&&!options.overwrite){const old=await readRecord(s,packHead(id,h)).catch(()=>null);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head:packHead(id,h),existing:true,overwritten:false};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
+const e=await encrypt(r,id);ensure(e.hash===h,'INTERNAL_ERROR','Unexpected hash');s.records[id]=e.ct;return {head:packHead(id,h),existing:false,overwritten:occupied};}
+async function append(s,head,operations,options={}){validateStore(s);const chain=await load(s,head);const state=patch(chain.state,operations);const id=await successorId(head);const occupied=own(s.records,id);if(occupied&&!options.overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=options.timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head,clone(operations)]);const e=await encrypt(r,id);s.records[id]=e.ct;return {head:packHead(id,e.hash),state,overwritten:occupied};}
 function pointer(value,path){return clone(atPath(value,parts(path)));}
 function escapePtr(k){return k.replace(/~/g,'~0').replace(/\//g,'~1');}
 function getRootRefs(root){if(!plain(root))return {};if(!own(root,'$refs'))return {};ensure(plain(root.$refs),'INVALID_ROOT','$refs must be an object');for(const [k,h] of Object.entries(root.$refs))ensure(k.length>0&&!k.includes('/')&&validHead(h),'INVALID_ROOT','Invalid $refs: '+k);return root.$refs;}
@@ -213,7 +216,7 @@ async function verifyDatabase(s, rootHead, options={}) {
   scan(getRootRefs(state),root.events[0].head,false);
   for(let i=1;i<root.events.length;i++){
     const before=root.events[i-1].head;
-    state=patch(state,root.events[i].r[3]);
+    state=patch(state,root.events[i].r[2]);
     scan(getRootRefs(state),before,true);
   }
   const activeRefs=getRootRefs(state),documents={};
@@ -241,10 +244,10 @@ async function verifyDatabase(s, rootHead, options={}) {
       warnings.push('Документ '+name+': origin не совпадает с версией корня перед первой регистрацией (возможно, импортирован)');
     documents[name]={head:clone(lastHead),active,events:child.events.length,referencedVersions:meta.heads.length,origin:parent};
   }
-  if(options.anchorHash!==undefined){
-    ensure(validHash(options.anchorHash),'INVALID_HASH','Invalid trusted historical H');
-    const index=root.events.findIndex(e=>e.head[1]===options.anchorHash);
-    ensure(index>=0,'ANCHOR_MISMATCH','Trusted H is not in the root ancestry');
+  if(options.anchorHead!==undefined){
+    ensure(validHead(options.anchorHead),'INVALID_HEAD','Invalid trusted historical HEAD');
+    const index=root.events.findIndex(e=>sameHead(e.head,options.anchorHead));
+    ensure(index>=0,'ANCHOR_MISMATCH','Trusted HEAD is not in the root ancestry');
     checks.anchorIndex=index;
   }
   return {status:'complete',rootHead,checks,documents,warnings};
@@ -259,7 +262,7 @@ async function truncateInvalidTail(s,diagnosis,recoveryHead) {
   ensure(fresh.status==='broken'&&fresh.code===diagnosis.code&&JSON.stringify(fresh.tailIds)===JSON.stringify(diagnosis.tailIds),'STALE_DIAGNOSIS','Diagnosis is stale');
   // If the first corrupt slot is not a successor of the proposed recovery head,
   // there is no proof that the manual anchor is the right recovery boundary.
-  const invalid=Array.isArray(fresh.invalid)?fresh.invalid[0]:null;
+  const invalid=validHead(fresh.invalid)?physicalId(fresh.invalid):null;
   ensure(validId(invalid),'INVALID_TRUNCATION','No identifiable corrupt physical slot');
   ensure(await successorId(recoveryHead)===invalid,'INVALID_RECOVERY_HEAD','Recovery head must precede the corrupt slot');
   const recovered=await load(s,recoveryHead);
@@ -280,11 +283,11 @@ async function truncateInvalidTail(s,diagnosis,recoveryHead) {
 function commit(s,tx){validateStore(tx);for(const k of Object.keys(s))delete s[k];Object.assign(s,tx);return s;}
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
-const api={VERSION,newStore,validateStore,validHead,sameHead,assertJson,patch,pointer,resolve,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,verifyDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
+const api={VERSION,newStore,validateStore,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,verifyDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
 g.HTML_DBMS=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
 ]]></script>
-<script><![CDATA[/* HTML_DBMS/3 minimal physical shell. All database UI is provided by the JSON entry. */
+<script><![CDATA[/* HTML_DBMS/4 minimal physical shell. All database UI is provided by the JSON entry. */
 (function(){
 'use strict';
 const db=HTML_DBMS, $=id=>document.querySelector('[id="'+id+'"]');
@@ -295,12 +298,12 @@ function makeOption(label,value){const e=makeElement('option');e.textContent=lab
 // Export from a pristine template: never copy decrypted application DOM into saved HTML.
 const exportTemplate=document.documentElement.cloneNode(true);
 const STARTER_SOURCE=$('starter-source').textContent;
-let store, rootHead=null, publicName=null, debug=false, busy=false, activeFrame=null, lastDiagnosis=null;
+let store, rootHead=null, publicName=null, debug=false, busy=false, activeFrame=null, lastDiagnosis=null, openEpoch=0, rpcBusy=false;
 const OWN=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function notice(message,bad=false){$('status').textContent=message;$('status').className='notice '+(bad?'error':'good');}
 function err(e){notice((e?.code?e.code+': ':'')+(e?.message||String(e)),true);}
 async function run(fn){if(busy)return;busy=true;try{await fn();}catch(e){err(e);}finally{busy=false;}}
-function format(h){return h?JSON.stringify(h):'—';}
+function format(h){return h||'—';}
 function show(id,on){const el=$(id);on?el.removeAttribute('hidden'):el.setAttribute('hidden','hidden');}
 function validName(s){return typeof s==='string'&&s.trim().length>0&&!s.includes('/')&&!['__proto__','constructor','prototype'].includes(s);}
 function needRoot(){if(!rootHead)throw Error('Сначала откройте базу');}
@@ -320,8 +323,8 @@ function togglePanel(which){
  return next;
 }
 function validationOutput(value){$('validation-report').textContent=typeof value==='string'?value:JSON.stringify(value,null,2);}
-function setFields(head){$('head-id').value=head?.[0]||'';$('head-hash').value=head?.[1]||'';}
-function fieldHead(){const h=[$('head-id').value.trim(),$('head-hash').value.trim()];if(!db.validHead(h))throw Error('Введите корректные ID (22 символа) и H (43 символа)');return h;}
+function setFields(head){$('head').value=head||'';}
+function fieldHead(){const h=$('head').value;if(!db.validHead(h))throw Error('Введите корректный HEAD (64 символа Base64url)');return h;}
 function syncCatalog(preselect=false){
  updateInfo();
  const sel=$('databases'),names=Object.keys(store.publicHeads||{});
@@ -339,7 +342,7 @@ function selectAlias(alias){
  $('databases').value=''; // enables choosing the same alias again
  if(!db.validHead(h))return;
  setFields(h);
- notice('ID и H подставлены для «'+alias+'». Нажмите «Открыть»; активная БД пока не изменена.');
+ notice('HEAD подставлены для «'+alias+'». Нажмите «Открыть»; активная БД пока не изменена.');
 }
 function findPublicName(h){return Object.keys(store.publicHeads||{}).find(n=>db.sameHead(store.publicHeads[n],h))||null;}
 function stopApp(){if(activeFrame){activeFrame.remove();activeFrame=null;}}
@@ -347,26 +350,21 @@ function clearEntry(){stopApp();$('entry-area').replaceChildren();}
 function element(tag,text,cls){const el=makeElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;}
 function placeholder(text){const e=element('div',text,'placeholder');$('entry-area').appendChild(e);}
 function getRootRefs(root){return db.getRootRefs?db.getRootRefs(root):root?.$refs||{};}
-function clearOpened(){rootHead=null;publicName=null;lastDiagnosis=null;clearEntry();placeholder('БД не открыта. Проверьте ID/H и нажмите «Открыть».');updateInfo();}
-async function openFields(){
-  // A failed Open MUST revoke the previous iframe's ability to issue writes.
-  const requested=[$('head-id').value.trim(),$('head-hash').value.trim()];
-  clearOpened();
-  if(!db.validHead(requested))throw Error('Введите корректные ID (22 символа) и H (43 символа)');
-  await openHead(requested);
-}
-function assertWriteTarget(){
-  needRoot();
-  const h=[$('head-id').value.trim(),$('head-hash').value.trim()];
-  if(!db.sameHead(h,rootHead))throw Error('Поля ID/H отличаются от открытой БД. Для записи откройте нужную версию кнопкой «Открыть».');
-}
-async function openHead(head){const chain=await db.load(store,head);getRootRefs(chain.state);rootHead=[...head];publicName=findPublicName(head);debug=false;show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');setFields(head);updateInfo();await renderEntry();notice('Открыто: '+(chain.state?.name||'JSON')+' · '+format(head));}
+function clearOpened(){openEpoch++;notice('БД не открыта');rootHead=null;publicName=null;lastDiagnosis=null;debug=false;show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');$('debug-raw').textContent='';validationOutput('Проверка ещё не выполнялась.');clearEntry();placeholder('БД не открыта. Укажите HEAD или выберите БД.');updateInfo();return openEpoch;}
+function fragmentHead(hash){if(!hash)return null;const match=/^#head=([A-Za-z0-9_-]{64})$/.exec(hash);if(!match||!db.validHead(match[1]))throw Error('Некорректный HEAD в URL');return match[1];}
+function accessUrl(head){const url=new URL(location.href);url.search='';url.hash='head='+head;return url.href;}
+function syncUrl(head){if(!location.hash)return;const url=new URL(location.href);url.hash=head?'head='+head:'';history.replaceState(null,'',url.href);}
+async function openFields(){const requested=$('head').value;await openHead(requested,true);}
+function assertWriteTarget(){needRoot();if(!db.sameHead($('head').value,rootHead))throw Error('Поле HEAD отличается от открытой БД. Для записи откройте нужную версию кнопкой «Открыть».');}
+async function openHead(head,updateUrl=false){const epoch=clearOpened(),requestedHash=location.hash,snapshot=store;setFields(head);try{if(!db.validHead(head))throw Error('Некорректный HEAD (64 символа Base64url)');await db.verifyDatabase(snapshot,head);const chain=await db.load(snapshot,head);if(epoch!==openEpoch||requestedHash!==location.hash||snapshot!==store)return;rootHead=head;publicName=findPublicName(head);if(updateUrl)syncUrl(head);updateInfo();await renderEntry(epoch);if(epoch===openEpoch)notice('Открыто: '+(chain.state?.name||'JSON')+' · '+format(head));}catch(e){if(epoch===openEpoch){clearOpened();throw e;}}}
+async function openInitial(useFragment=true){clearOpened();setFields(null);syncCatalog();const names=Object.keys(store.publicHeads||{});const explicit=useFragment?fragmentHead(location.hash):null;if(explicit){await openHead(explicit);return;}if(names.length===1){await openHead(store.publicHeads[names[0]]);return;}clearEntry();placeholder(names.length?'Выберите опубликованную БД, затем нажмите «Открыть».':'Для открытия требуется HEAD или ссылка доступа.');notice(names.length?'Выберите БД · опубликовано '+names.length:'Контейнер пуст: опубликованных БД нет.');}
 function entryValue(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).length===1&&typeof x.$ref==='string';}
-async function renderEntry(){clearEntry();if(!rootHead){placeholder('Выберите БД, укажите ID/H и нажмите «Открыть».');return;}const root=(await db.load(store,rootHead)).state;let value=root?.entry;if(entryValue(value))value=(await db.resolve(store,rootHead,rootHead,value)).value;
+async function renderEntry(epoch=openEpoch){clearEntry();if(!rootHead){placeholder('Выберите БД, укажите HEAD и нажмите «Открыть».');return;}const root=(await db.load(store,rootHead)).state;let value=root?.entry;if(entryValue(value))value=(await db.resolve(store,rootHead,rootHead,value)).value;
+ if(epoch!==openEpoch)return;
  if(value===undefined||value===null){placeholder('В корневом JSON-документе отсутствует entry. Приложение не задано.');return;}
  if(value&&typeof value==='object'&&!Array.isArray(value)&&value.type==='application/javascript'&&typeof value.source==='string'){
    const host=$('entry-area'), block=element('div',undefined,'pane');block.appendChild(element('div','Исполняемое entry: '+(value.export||'main'),'meta'));const btn=element('button','Запустить приложение','primary');btn.classList.add('entry-launch');block.appendChild(btn);block.appendChild(element('p','JavaScript выполняется только после подтверждения, в изолированном iframe. Запись в БД требует отдельного подтверждения.','meta'));host.appendChild(block);
-   btn.onclick=()=>run(async()=>{block.remove();await launchSandbox(value);});
+   btn.onclick=()=>run(async()=>{if(epoch!==openEpoch)return;block.remove();await launchSandbox(value);});
    // Автозапуск разрешён исключительно для поставляемого неизменённого стартового приложения.
    if(value.source===STARTER_SOURCE&&value.export==='main'){block.remove();await launchSandbox(value);}
    return;
@@ -406,18 +404,18 @@ async function retryOccupied(operation,perform){
   }
   throw Error('Не удалось разрешить конфликт successor');
 }
-async function stagedUpdate(result,previous){if(activePublished())db.publish(result.store,publicName,result.rootHead,previous);db.commit(store,result.store);rootHead=result.rootHead;setFields(rootHead);syncCatalog();notice('Изменение записано · новый root: '+format(rootHead)+' · сохраните HTML.');if(debug)await showDebug();}
-async function authorizeWrite(promptText){if(!confirm(promptText+'\nИзменение будет сохранено в рабочей копии HTML DBMS. Продолжить?'))throw Error('Запись отменена пользователем');}
+async function stagedUpdate(result,previous){if(activePublished())db.publish(result.store,publicName,result.rootHead,previous);syncUrl(result.rootHead);db.commit(store,result.store);rootHead=result.rootHead;setFields(rootHead);syncCatalog();notice('Изменение записано · новый root: '+format(rootHead)+' · сохраните контейнер.');if(debug)await showDebug();}
+async function authorizeWrite(promptText){if(!confirm(promptText+'\nИзменение будет сохранено только в рабочей копии HTML DBMS, не на сервере. Продолжить?'))throw Error('Запись отменена пользователем');}
 window.addEventListener('message',event=>{if(!activeFrame||event.source!==activeFrame.contentWindow)return;const msg=event.data;if(!msg||typeof msg!=='object')return;if(msg.kind==='html-dbms-error'){notice('entry: '+msg.error,true);return;}if(msg.kind!=='html-dbms-rpc')return;
- runRpc(msg).then(value=>{if(activeFrame&&event.source===activeFrame.contentWindow)event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:true,value},'*');}).catch(e=>{if(activeFrame&&event.source===activeFrame.contentWindow)event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))},'*');});
+ const epoch=openEpoch,requestedHash=location.hash;runRpc(msg,epoch,requestedHash).then(value=>{if(epoch===openEpoch&&activeFrame&&event.source===activeFrame.contentWindow&&(!location.hash||location.hash==='#head='+rootHead))event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:true,value},'*');}).catch(e=>{if(epoch===openEpoch&&activeFrame&&event.source===activeFrame.contentWindow&&(!location.hash||location.hash==='#head='+rootHead))event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))},'*');});
 });
-async function runRpc(message){needRoot();const params=message.payload||{};switch(message.method){
+async function runRpc(message,epoch,requestedHash){needRoot();if(location.hash&&fragmentHead(location.hash)!==rootHead)throw Error('Контекст URL изменился');const params=message.payload||{};switch(message.method){
  case 'read':{const ref=params.ref;if(typeof ref!=='string')throw Error('Неверная ссылка');if(ref==='')return (await db.load(store,rootHead)).state;return (await db.resolve(store,rootHead,rootHead,{$ref:ref})).value;}
- case 'getHead':return [...rootHead];
- case 'patch':{assertWriteTarget();const name=params.document;const ops=params.operations;if(typeof name!=='string'||!Array.isArray(ops))throw Error('Неверный запрос patch');await authorizeWrite('JSON Patch: '+(name||'(корень)')+' ('+ops.length+' операций)');const previous=[...rootHead];const result=await retryOccupied('JSON Patch '+(name||'(корень)'),async opts=>{if(name===''){const staged=db.staging(store),r=await db.append(staged,rootHead,ops,{overwrite:opts.overwriteRoot});return {store:staged,rootHead:r.head};}return db.patchDocument(store,rootHead,name,ops,opts);});await stagedUpdate(result,previous);return {rootHead:[...rootHead]};}
- case 'createDocument':{assertWriteTarget();if(!validName(params.name))throw Error('Недопустимое имя документа');db.assertJson(params.state);await authorizeWrite('Создать документ «'+params.name+'»');const previous=[...rootHead];const result=await retryOccupied('Создание документа '+params.name,opts=>db.createDocument(store,rootHead,params.name,params.state,null,opts));await stagedUpdate(result,previous);return {rootHead:[...rootHead],documentHead:result.documentHead};}
+ case 'getHead':return rootHead;
+ case 'patch':{assertWriteTarget();if(rpcBusy)throw Error('Запись уже выполняется');rpcBusy=true;try{const name=params.document;const ops=params.operations;if(typeof name!=='string'||!Array.isArray(ops))throw Error('Неверный запрос patch');await authorizeWrite('JSON Patch: '+(name||'(корень)')+' ('+ops.length+' операций)');const previous=rootHead;const result=await retryOccupied('JSON Patch '+(name||'(корень)'),async opts=>{if(name===''){const staged=db.staging(store),r=await db.append(staged,rootHead,ops,{overwrite:opts.overwriteRoot});return {store:staged,rootHead:r.head};}return db.patchDocument(store,rootHead,name,ops,opts);});if(epoch!==openEpoch||requestedHash!==location.hash||!db.sameHead(rootHead,previous))throw Error('Контекст записи изменился');assertWriteTarget();await stagedUpdate(result,previous);return {rootHead};}finally{rpcBusy=false;}}
+ case 'createDocument':{assertWriteTarget();if(rpcBusy)throw Error('Запись уже выполняется');rpcBusy=true;try{if(!validName(params.name))throw Error('Недопустимое имя документа');db.assertJson(params.state);await authorizeWrite('Создать документ «'+params.name+'»');const previous=rootHead;const result=await retryOccupied('Создание документа '+params.name,opts=>db.createDocument(store,rootHead,params.name,params.state,null,opts));if(epoch!==openEpoch||requestedHash!==location.hash||!db.sameHead(rootHead,previous))throw Error('Контекст записи изменился');assertWriteTarget();await stagedUpdate(result,previous);return {rootHead,documentHead:result.documentHead};}finally{rpcBusy=false;}}
  default:throw Error('Неподдерживаемая операция entry: '+String(message.method));}}
-async function createDatabase(){const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});db.commit(store,result.store);syncCatalog();setFields(result.rootHead);await openHead(result.rootHead);notice('БД «'+name+'» создана и открыта. Чтобы сохранить её для следующего запуска, нажмите «Сохранить» и откройте скачанный HTML.');}
+async function createDatabase(){const epoch=openEpoch,requestedHash=location.hash;const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});if(epoch!==openEpoch||requestedHash!==location.hash)throw Error('Контекст открытия изменился');db.commit(store,result.store);syncCatalog();setFields(result.rootHead);await openHead(result.rootHead,true);notice('БД «'+name+'» создана и открыта. Чтобы сохранить её для следующего запуска, нажмите «Сохранить» и откройте скачанный файл.');}
 async function showDebug(){
  const h=rootHead||fieldHead(),root=await db.inspect(store,h);
  const children={};
@@ -449,11 +447,11 @@ async function verifyStore(){
  notice('Проверка контейнера завершена. Детали в «Валидация».');
 }
 async function verifyAnchor(){
- const h=rootHead||fieldHead(),anchor=$('anchor').value.trim();
- if(!anchor)throw Error('Укажите доверенный исторический H');
+ const h=rootHead||fieldHead(),anchor=$('anchor').value;
+ if(!anchor)throw Error('Укажите доверенный исторический HEAD');
  try{
- const result=await db.verifyDatabase(store,h,{anchorHash:anchor});
- validationOutput(result);notice('Доверенный H найден в проверенной ancestry.');
+ const result=await db.verifyDatabase(store,h,{anchorHead:anchor});
+ validationOutput(result);notice('Доверенный HEAD найден в проверенной ancestry.');
  }catch(e){validationOutput({status:'failed',code:e.code||'ANCHOR_FAILED',message:e.message});throw e;}
 }
 function readStoreFromDocument(raw){
@@ -492,54 +490,53 @@ async function verifyFile(){
 }
 async function truncate(){
  if(!lastDiagnosis)throw Error('Сначала выполните проверку и получите диагноз разрыва');
- const recovery=[$('recovery-id').value.trim(),$('recovery-hash').value.trim()];
- if(!db.validHead(recovery))throw Error('Укажите корректные Recovery ID и H');
+ const recovery=$('recovery-head').value;
+ if(!db.validHead(recovery))throw Error('Укажите корректные Recovery HEAD');
  const result=await db.truncateInvalidTail(store,lastDiagnosis,recovery);
  const aliases=Object.entries(store.publicHeads||{}).filter(([_,h])=>db.sameHead(h,lastDiagnosis.sourceHead)).map(([n])=>n);
  const message='Восстановление необратимо.\nСохранится повреждённый physical slot: '+result.keptInvalidSlot+'\nБудут удалены ID: '+JSON.stringify(result.deletedIds)+'\nПубличные записи будут перенаправлены на recovery head: '+aliases.join(', ')+'\nПодтвердить?';
  if(!confirm(message))return;
  for(const alias of aliases)db.publish(result.store,alias,recovery,lastDiagnosis.sourceHead);
- db.commit(store,result.store);rootHead=recovery;publicName=aliases[0]||null;setFields(recovery);syncCatalog();lastDiagnosis=null;
+ db.commit(store,result.store);rootHead=recovery;syncUrl(recovery);publicName=aliases[0]||null;setFields(recovery);syncCatalog();lastDiagnosis=null;
  await renderEntry();validationOutput({status:'recovered',recoveryHead:recovery,deletedIds:result.deletedIds,keptInvalidSlot:result.keptInvalidSlot});
  notice('Восстановление выполнено. Сохраните новый HTML.');
 }
 async function publish(){needRoot();const root=(await db.load(store,rootHead)).state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=store.publicHeads?.[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;const tx=db.staging(store);db.publish(tx,name,rootHead);db.commit(store,tx);publicName=name;syncCatalog();notice('Опубликована «'+name+'»');}
-async function hideHead(){needRoot();if(!publicName||!store.publicHeads||!OWN(store.publicHeads,publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните пару ID/H перед скрытием.'))return;const tx=db.staging(store);delete tx.publicHeads[publicName];if(!Object.keys(tx.publicHeads).length)delete tx.publicHeads;db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте ID/H.');}
-async function copyHead(){const h=fieldHead(),t=format(h);try{await navigator.clipboard.writeText(t);notice('Скопировано: '+t);}catch{prompt('Скопируйте ID/H:',t);}}
-async function loadHtml(file){if(!file)return;const raw=await file.text();const candidate=readStoreFromDocument(raw);store=candidate;rootHead=null;publicName=null;debug=false;lastDiagnosis=null;setFields(null);$('databases').value='';syncCatalog(true);show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');clearEntry();const count=Object.keys(store.publicHeads||{}).length;placeholder(count?'БД выбрана и её ID/H подставлены. Нажмите «Открыть».':'В загруженном файле нет опубликованных БД. Можно открыть скрытую по ID/H или создать новую.');notice('Контейнер загружен. Опубликованных БД: '+count+(count?'. ID/H первой опубликованной БД подставлены, нажмите «Открыть».':'.'));}
-function exportDocument(){
+async function hideHead(){needRoot();if(!publicName||!store.publicHeads||!OWN(store.publicHeads,publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните HEAD перед скрытием.'))return;const tx=db.staging(store);delete tx.publicHeads[publicName];if(!Object.keys(tx.publicHeads).length)delete tx.publicHeads;db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте HEAD.');}
+async function copyText(t,label){try{await navigator.clipboard.writeText(t);notice('Скопировано: '+label);}catch{prompt(label,t);}}
+async function copyHead(){needRoot();await copyText(rootHead,'HEAD открытой версии');}
+async function copyLink(){needRoot();await copyText(accessUrl(rootHead),'Ссылка доступа');}
+async function loadHtml(file){if(!file)return;const candidate=readStoreFromDocument(await file.text());clearOpened();store=candidate;syncUrl(null);await openInitial(false);if(rootHead)notice('Контейнер загружен. БД открыта.');else notice('Контейнер загружен. Опубликованных БД: '+Object.keys(store.publicHeads||{}).length);}
+// Convert the pristine XHTML template to HTML, never the live application DOM.
+function htmlSerialize(node){if(node.nodeType===3||node.nodeType===4)return node.textContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');if(node.nodeType===8)return '<!--'+node.data+'-->';if(node.nodeType!==1)return '';const tag=node.localName;const attrs=Array.from(node.attributes).filter(a=>a.name!=='xmlns').map(a=>' '+a.name+'="'+a.value.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')+'"').join('');const start='<'+tag+attrs+'>';if(/^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/.test(tag))return start;const content=tag==='script'?node.textContent.replace(/<\/script/gi,'<\\/script'):tag==='style'?node.textContent:Array.from(node.childNodes).map(htmlSerialize).join('');return start+content+'</'+tag+'>';}
+function exportDocument(data=store,asXML=XML_CONTAINER){
   const doc=exportTemplate.cloneNode(true);
   const storeNode=doc.querySelector('#db-store');
   // DOM textContent is safely serialized by each container's native serializer.
   // This clone is pristine; no app iframe, debug output or decrypted DOM is copied.
-  storeNode.textContent=JSON.stringify(store).replace(/</g,'\\u003c')
+  storeNode.textContent=JSON.stringify(data).replace(/</g,'\\u003c')
     .replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
-  if(XML_CONTAINER){
+  if(asXML){
     const xml='<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(doc);
     // Defensive reparse: fail closed if XML could not be round-tripped.
     const parsed=new DOMParser().parseFromString(xml,'application/xml');
     if(parsed.getElementsByTagName('parsererror').length)throw Error('Экспорт XML некорректен');
     return xml;
   }
-  return '<!doctype html>\n'+doc.outerHTML;
+  return '<!doctype html>\n'+(XML_CONTAINER?htmlSerialize(doc):doc.outerHTML);
 }
-function save(){
- db.validateStore(store);
- const output=exportDocument(),extension=XML_CONTAINER?'xml':'html';
- const mime=XML_CONTAINER?'application/xml':'text/html';
+function save(publishSite=false){
+ db.validateStore(store);const data=publishSite?{...store,publicHeads:{}}:store;
+ const asXML=XML_CONTAINER&&!publishSite,output=exportDocument(data,asXML),extension=asXML?'xml':'html';
+ const mime=asXML?'application/xml':'text/html';
  const url=URL.createObjectURL(new Blob([output],{type:mime+';charset=utf-8'}));
- const a=makeElement('a');a.href=url;a.download='html_dbms_3_saved.'+extension;
+ const a=makeElement('a');a.href=url;a.download=publishSite?'index.html':'html_dbms_4_saved.'+extension;
  document.querySelector('body').appendChild(a);a.click();a.remove();
  setTimeout(()=>URL.revokeObjectURL(url),2000);
  notice('Новый '+extension.toUpperCase()+'-файл скачан. Исходный файл на диске не перезаписывается.');
 }
-async function init(){
- store=JSON.parse($('db-store').textContent);
- db.validateStore(store);setFields(null);syncCatalog(true);
- const names=Object.keys(store.publicHeads||{});
- if(names.length)notice('Опубликованных БД: '+names.length+'. ID и H первой опубликованной БД подставлены, нажмите «Открыть».');
- else{clearEntry();placeholder('Этот HTML пока не содержит опубликованных БД. Нажмите «Новая» или загрузите другой HTML через «Инфо».');notice('Контейнер пуст: опубликованных БД нет. Создайте новую БД и сохраните новый HTML-файл.');}
-}
+async function init(){store=JSON.parse($('db-store').textContent);db.validateStore(store);await openInitial();}
+window.addEventListener('hashchange',()=>{if(store)openInitial().catch(err);});
 $('new-db').onclick=()=>run(createDatabase);
 $('databases').onchange=()=>selectAlias($('databases').value);
 $('open-head').onclick=()=>run(openFields);
@@ -550,6 +547,8 @@ $('debug-toggle').onclick=()=>run(async()=>{debug=togglePanel('debug')&&await sh
 $('import').onclick=()=>{$('input-html').click();};
 $('input-html').onchange=()=>run(async()=>{const f=$('input-html').files[0];await loadHtml(f);$('input-html').value='';});
 $('copy-head').onclick=()=>run(copyHead);
+$('copy-link').onclick=()=>run(copyLink);
+$('publish-site').onclick=()=>run(()=>save(true));
 $('verify').onclick=()=>run(verify);
 $('verify-store').onclick=()=>run(verifyStore);
 $('verify-anchor').onclick=()=>run(verifyAnchor);

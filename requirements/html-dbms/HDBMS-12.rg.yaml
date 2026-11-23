@@ -1,0 +1,28 @@
+format: repo-guard/requirement-v1
+id: HDBMS-12
+normative: |
+  ### HDBMS-12 — Канонический HEAD64, открытие по fragment URL, публикация сайта
+  Только HTML_DBMS/4: HEAD = Base64url(ID_BYTES[16] || H_BYTES[32]), ровно 64 ASCII символа без padding, строгая каноничность. Декодирование всего токена до split 16/32; packHead/unpackHead/validHead/sameHead общие для всех контейнеров. publicHeads, $refs, genesis.parent, patch predecessor, API, diagnostics, anchor и recovery содержат HEAD строкой; patch = [timestamp, previousHEAD, operations]. Криптографические алгоритмы и физический ID не меняются. Старые протоколы не читаются. Один ввод HEAD. Явный строгий #head=HEAD64 имеет приоритет, ошибочный/неоткрываемый fragment запрещает fallback и отзывает старый iframe. Без fragment 0 публичных записей — нейтральный экран, 1 — автооткрытие с проверкой исторических $refs, 2+ — ручной выбор; hashchange следует той же матрице. Копирование ссылки использует реально открытый HEAD. Подготовка index.html из HTML или XML экспортирует HTML с пустым publicHeads и неизменными records, без открытого HEAD и расшифрованного DOM, не меняет рабочую копию. Локальные записи не обновляют сервер, ссылка не является доказанной авторизацией; AES-key=SHA256(plaintext) допускает офлайн-подбор. В обеих сборках сохраняются sandbox, проверка исторической непрерывности, явное подтверждение overwrite и прежние регрессии. CI отличает native Web Crypto от test-only shim. Демо кассы использует синтетические категории и заметки, сохраняет числовую сверку с обновлённым XLSX.
+relations:
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/core.js'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/app.js'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/index.html'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'dist/html_dbms.html'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'dist/html_dbms.xml'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/core.test.cjs'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_head_url.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_native_crypto.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: '.github/workflows/quality.yml'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'docs/SRS.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'README.md'}

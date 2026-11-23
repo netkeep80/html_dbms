@@ -1,5 +1,5 @@
 'use strict';
-/** Build the Cash example using only the generic v3 DBMS core and physical JSON store. */
+/** Build the Cash example using only the generic v4 DBMS core and physical JSON store. */
 const fs=require('node:fs'),path=require('node:path');
 const project=path.resolve(__dirname,'../..');
 const db=require(path.join(project,'src/core.js'));
@@ -31,7 +31,7 @@ async function main(){
  html=html.replace(allow,"if((value.source===STARTER_SOURCE||value.source===DEMO_CASH_SOURCE)&&value.export==='main')");
  const fullscreenCss='<style id="cash-fullscreen-css">.app-main{max-width:none;width:100%;height:calc(100vh - 44px);min-height:0;margin:0;padding:5px 8px;display:flex;flex-direction:column}.app-main>.notice{flex:0 0 auto;margin-bottom:3px}.entry-area{flex:1;min-height:0;overflow:hidden}.entry-area iframe{height:100%;min-height:0;width:100%;border-radius:0}</style>';
  html=html.replace('</head>',fullscreenCss+'</head>');
- html=html.replace('<title>HTML DBMS 3.0.2</title>','<title>HTML DBMS · Касса 2026 (демо)</title>');
+ html=html.replace('<title>HTML DBMS 4.0.0</title>','<title>HTML DBMS · Касса 2026 (демо)</title>');
  fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,html);
  const parsed=db.validateStore(JSON.parse(html.match(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/)[1]));
  const rr=await db.load(parsed,head);if(Object.keys(rr.state.$refs).length!==11)throw Error('Missing documents');

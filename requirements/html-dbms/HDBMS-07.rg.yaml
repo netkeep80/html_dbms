@@ -2,7 +2,8 @@ format: repo-guard/requirement-v1
 id: HDBMS-07
 normative: |
   ### HDBMS-07 — Необязательный publicHeads, независимые БД и явная перезапись
-  **Обязательно:** physical store = {format,records,publicHeads?}; publicHeads — необязательный плоский словарь произвольных имён БД в пары [ID,H]. Отсутствие поля или части имён не удаляет скрытые криптоцепочки; прямое открытие по известной внешней паре [ID,H] поддерживается. Нет единственного publicHead, null и [null,H] как легаси. Публикация не изменяет криптоцепочки. Из [prevID,prevH] следует единственный canonical successor slot; занятый slot вызывает SUCCESSOR_OCCUPIED, overwrite допускается только отдельно и явно, без неявного удаления потомков.
+  **Обязательно:** physical store = {format,records,publicHeads?}; publicHeads — необязательный плоский словарь произвольных имён БД в канонические строки HEAD. Отсутствие поля или части имён не удаляет скрытые криптоцепочки; прямое открытие по известной внешней строке HEAD поддерживается. Нет единственного publicHead, null и [null,H] как легаси. Публикация не изменяет криптоцепочки. Из previousHEAD следует единственный canonical successor slot; занятый slot вызывает SUCCESSOR_OCCUPIED, overwrite допускается только отдельно и явно, без неявного удаления потомков.
+  Экспорт index.html очищает publicHeads в копии, сохраняя records и открытую рабочую БД.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}

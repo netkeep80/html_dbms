@@ -2,7 +2,8 @@ format: repo-guard/requirement-v1
 id: HDBMS-01
 normative: |
   ### HDBMS-01 — Детерминированные проверяемые криптоцепочки
-  **Обязательно:** запись шифруется AES-256-GCM при K=SHA256(UTF8(JSON.stringify(record))) и IV=first12(physicalID). Genesis адресуется по first16(SHA256(raw(Hgenesis))); successor — по first16(SHA256(raw(prevID)||raw(prevH))). При чтении проверяются адрес, GCM, SHA-256 и predecessor ID/H. Порядковый номер вычисляется по длине проверенной ancestry и НЕ хранится в сообщении. Разрыв ancestry после перезаписи должен обнаруживаться; старый head не должен молча переходить на новую историю.
+  **Обязательно:** запись шифруется AES-256-GCM при K=SHA256(UTF8(JSON.stringify(record))) и IV=first12(physicalID). Genesis адресуется по first16(SHA256(raw(Hgenesis))); successor — по first16(SHA256(raw(prevID)||raw(prevH))). При чтении проверяются адрес, GCM, SHA-256 и предшествующий HEAD. Порядковый номер вычисляется по длине проверенной ancestry и НЕ хранится в сообщении. Разрыв ancestry после перезаписи должен обнаруживаться; старый head не должен молча переходить на новую историю.
+  HEAD = Base64url(rawID || rawH), строго 48 декодированных байт; граница компонентов определяется только по байтам. Алгоритмы криптографии неизменны.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}

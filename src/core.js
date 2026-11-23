@@ -1,7 +1,7 @@
-/* HTML_DBMS/3 — standalone JSON temporal store. No v2 compatibility. */
+/* HTML_DBMS/4 — standalone JSON temporal store. No legacy compatibility. */
 (function (g) {
 'use strict';
-const VERSION = 'HTML_DBMS/3';
+const VERSION = 'HTML_DBMS/4';
 const encoder = new TextEncoder(), decoder = new TextDecoder('utf-8', {fatal:true});
 const subtle = g.crypto?.subtle || (typeof require === 'function' ? require('node:crypto').webcrypto.subtle : null);
 const MAX_RECORDS = 200000, MAX_BYTES = 12 * 1024 * 1024, MAX_PATCH = 10000, MAX_DEPTH = 32;
@@ -24,21 +24,25 @@ function encode64(b){if(typeof Buffer!=='undefined')return Buffer.from(b).toStri
 function decode64(s){ensure(typeof s==='string'&&/^[A-Za-z0-9_-]*$/.test(s)&&s.length%4!==1,'INVALID_BASE64','Invalid Base64url');let b;if(typeof Buffer!=='undefined') b=new Uint8Array(Buffer.from(s,'base64url'));else{const v=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4));b=Uint8Array.from(v,c=>c.charCodeAt(0));}ensure(encode64(b)===s,'INVALID_BASE64','Non-canonical Base64url');return b;}
 function validId(s){try{return decode64(s).length===16;}catch{return false;}}
 function validHash(s){try{return decode64(s).length===32;}catch{return false;}}
-function validHead(h){return Array.isArray(h)&&h.length===2&&validId(h[0])&&validHash(h[1]);}
-function sameHead(a,b){return validHead(a)&&validHead(b)&&a[0]===b[0]&&a[1]===b[1];}
-function key(h){return h[0]+'\0'+h[1];}
+function componentBytes(value,size){const bytes=typeof value==='string'?decode64(value):value;ensure(bytes instanceof Uint8Array&&bytes.length===size,'INVALID_HEAD','Invalid HEAD component');return bytes;}
+function packHead(id,hash){const b=new Uint8Array(48);b.set(componentBytes(id,16));b.set(componentBytes(hash,32),16);return encode64(b);}
+function unpackHead(head){ensure(typeof head==='string'&&head.length===64&&/^[A-Za-z0-9_-]{64}$/.test(head),'INVALID_HEAD','Invalid HEAD');const bytes=decode64(head);ensure(bytes.length===48,'INVALID_HEAD','Invalid HEAD bytes');const idBytes=bytes.slice(0,16),hashBytes=bytes.slice(16);return {idBytes,hashBytes,id:encode64(idBytes),hash:encode64(hashBytes)};}
+function validHead(h){try{unpackHead(h);return true;}catch{return false;}}
+function sameHead(a,b){return validHead(a)&&a===b;}
+function key(h){return h;}
+function physicalId(h){return unpackHead(h).id;}
 async function sha(b){return new Uint8Array(await subtle.digest('SHA-256',b));}
 async function rootId(hash){return encode64((await sha(decode64(hash))).slice(0,16));}
-async function successorId(prev){ensure(validHead(prev),'INVALID_HEAD','Invalid predecessor head');let b=new Uint8Array(48);b.set(decode64(prev[0]));b.set(decode64(prev[1]),16);return encode64((await sha(b)).slice(0,16));}
+async function successorId(prev){ensure(validHead(prev),'INVALID_HEAD','Invalid predecessor head');const b=decode64(prev);return encode64((await sha(b)).slice(0,16));}
 function ivFrom(id){return decode64(id).slice(0,12);}
 async function encrypt(record,id){assertJson(record);ensure(validId(id),'INVALID_ID','Invalid address');const bytes=encoder.encode(JSON.stringify(record));ensure(bytes.length<=MAX_BYTES,'RESOURCE_LIMIT','Record too large');const h=await sha(bytes);const aes=await subtle.importKey('raw',h,'AES-GCM',false,['encrypt']);const data=new Uint8Array(await subtle.encrypt({name:'AES-GCM',iv:ivFrom(id),tagLength:128},aes,bytes));return {hash:encode64(h),ct:encode64(data)};}
-async function decrypt(ct,head){ensure(validHead(head),'INVALID_HEAD','Bad head');let data=decode64(ct);ensure(data.length>=16&&data.length<=MAX_BYTES+16,'RESOURCE_LIMIT','Bad ciphertext length');const h=decode64(head[1]);const aes=await subtle.importKey('raw',h,'AES-GCM',false,['decrypt']);let plaintext;try{plaintext=new Uint8Array(await subtle.decrypt({name:'AES-GCM',iv:ivFrom(head[0]),tagLength:128},aes,data));}catch{throw error('INVALID_GCM','Authentication failed');}
-ensure(encode64(await sha(plaintext))===head[1],'HASH_MISMATCH','Hash mismatch');let r;try{r=JSON.parse(decoder.decode(plaintext));}catch{throw error('INVALID_JSON','Invalid record JSON');}assertJson(r);return r;}
-function validateStore(s){ensure(plain(s)&&s.format===VERSION&&plain(s.records),'UNSUPPORTED_STORAGE','Expected HTML_DBMS/3');ensure(!own(s,'publicHead'),'UNSUPPORTED_STORAGE','Legacy publicHead is unsupported');if(own(s,'publicHeads')){ensure(plain(s.publicHeads),'INVALID_PUBLIC_HEADS','publicHeads must be an object');for(const [n,h] of Object.entries(s.publicHeads)){ensure(n.length>0&&validHead(h),'INVALID_PUBLIC_HEADS','Invalid public head: '+n);}}
+async function decrypt(ct,head){ensure(validHead(head),'INVALID_HEAD','Bad head');let data=decode64(ct);ensure(data.length>=16&&data.length<=MAX_BYTES+16,'RESOURCE_LIMIT','Bad ciphertext length');const {id,hash,hashBytes:h}=unpackHead(head);const aes=await subtle.importKey('raw',h,'AES-GCM',false,['decrypt']);let plaintext;try{plaintext=new Uint8Array(await subtle.decrypt({name:'AES-GCM',iv:ivFrom(id),tagLength:128},aes,data));}catch{throw error('INVALID_GCM','Authentication failed');}
+ensure(encode64(await sha(plaintext))===hash,'HASH_MISMATCH','Hash mismatch');let r;try{r=JSON.parse(decoder.decode(plaintext));}catch{throw error('INVALID_JSON','Invalid record JSON');}assertJson(r);return r;}
+function validateStore(s){ensure(plain(s)&&s.format===VERSION&&plain(s.records),'UNSUPPORTED_STORAGE','Expected HTML_DBMS/4');ensure(!own(s,'publicHead'),'UNSUPPORTED_STORAGE','Legacy publicHead is unsupported');if(own(s,'publicHeads')){ensure(plain(s.publicHeads),'INVALID_PUBLIC_HEADS','publicHeads must be an object');for(const [n,h] of Object.entries(s.publicHeads)){ensure(n.length>0&&validHead(h),'INVALID_PUBLIC_HEADS','Invalid public head: '+n);}}
   const ids=Object.keys(s.records);ensure(ids.length<=MAX_RECORDS,'RESOURCE_LIMIT','Too many records');for(const id of ids)ensure(validId(id)&&typeof s.records[id]==='string'&&s.records[id].length<=Math.ceil((MAX_BYTES+16)*4/3),'INVALID_RECORD','Invalid physical record');return s;}
 function newStore(){return {format:VERSION,publicHeads:{},records:{}};}
 function iso(s){return typeof s==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(s)&&!Number.isNaN(Date.parse(s))&&new Date(s).toISOString()===s;}
-// Compact v3 format: genesis = [null,{name,parent,state}], patch = [ISO-time,prevId,prevHash,RFC6902-operations].
+// Compact v4 format: genesis = [null,{name,parent,state}], patch = [ISO-time,previousHEAD,RFC6902-operations].
 // Sequence is derived from verified ancestry; it is NEVER serialized.
 function isGenesis(r){return Array.isArray(r)&&r.length===2&&r[0]===null;}
 function validateRecord(r){
@@ -47,12 +51,12 @@ function validateRecord(r){
   const v=r[1];ensure(plain(v)&&typeof v.name==='string'&&v.name.trim()&&(v.parent===null||validHead(v.parent))&&own(v,'state'),'INVALID_GENESIS','Invalid genesis');
   ensure(Object.keys(v).length===3&&['name','parent','state'].every(k=>own(v,k)),'INVALID_GENESIS','Genesis fields');
  }else{
-  ensure(r.length===4&&iso(r[0])&&validId(r[1])&&validHash(r[2])&&Array.isArray(r[3])&&r[3].length>=1&&r[3].length<=MAX_PATCH,'INVALID_EVENT','Invalid patch header');
+  ensure(r.length===3&&iso(r[0])&&validHead(r[1])&&Array.isArray(r[2])&&r[2].length>=1&&r[2].length<=MAX_PATCH,'INVALID_EVENT','Invalid patch header');
  }
  return r;
 }
-async function expectedId(r,hash){return isGenesis(r)?rootId(hash):successorId([r[1],r[2]]);}
-async function readRecord(s,head){ensure(validHead(head),'INVALID_HEAD','Invalid head');ensure(own(s.records,head[0]),'MISSING_RECORD','Missing record '+head[0]);let r=validateRecord(await decrypt(s.records[head[0]],head));ensure((await expectedId(r,head[1]))===head[0],'ADDRESS_MISMATCH','Wrong physical address');return r;}
+async function expectedId(r,hash){return isGenesis(r)?rootId(hash):successorId(r[1]);}
+async function readRecord(s,head){ensure(validHead(head),'INVALID_HEAD','Invalid head');const {id,hash}=unpackHead(head);ensure(own(s.records,id),'MISSING_RECORD','Missing record '+id);let r=validateRecord(await decrypt(s.records[id],head));ensure((await expectedId(r,hash))===id,'ADDRESS_MISMATCH','Wrong physical address');return r;}
 function parts(pointer){ensure(typeof pointer==='string'&&(pointer===''||pointer[0]==='/'),'INVALID_POINTER','Not a JSON Pointer');if(pointer==='')return [];return pointer.slice(1).split('/').map(s=>{ensure(!/~(?![01])/.test(s),'INVALID_POINTER','Invalid tilde escape');return s.replace(/~1/g,'/').replace(/~0/g,'~');});}
 function indexOfToken(t,len,insert=false){ensure(t==='-'&&insert||/^(0|[1-9]\d*)$/.test(t),'INVALID_POINTER','Invalid array index');if(t==='-')return len;const i=Number(t);ensure(Number.isSafeInteger(i)&&i<=(insert?len:len-1),'INVALID_POINTER','Array index out of bounds');return i;}
 function jsonEqual(a,b){
@@ -75,16 +79,16 @@ function patch(json,ops){assertJson(json);ensure(Array.isArray(ops)&&ops.length>
  const [p,k]=parentAndKey(out,dest);if(Array.isArray(p)){if(op.op==='replace')p[indexOfToken(k,p.length)]=value;else p.splice(indexOfToken(k,p.length,true),0,value);}else{ensure(plain(p),'INVALID_POINTER','Parent is not object');put(p,k,value);}
  }assertJson(out);return out;}
 function remove(out,tokens){if(!tokens.length)return null;const [p,k]=parentAndKey(out,tokens);if(Array.isArray(p))p.splice(indexOfToken(k,p.length),1);else{ensure(plain(p)&&own(p,k),'INVALID_POINTER','Missing remove target');delete p[k];}return out;}
-function diagnose(e,head,events=[]){return {status:'broken',code:e.code||'INVALID_CHAIN',message:e.message||String(e),sourceHead:head,tailIds:events.map(x=>x.head[0])};}
-async function inspect(s,head,limit=MAX_RECORDS){try{validateStore(s);ensure(validHead(head),'INVALID_HEAD','Head required');const rev=[],seen=new Set();let h=head;while(true){ensure(!seen.has(h[0]),'CYCLE','Cycle in physical chain');seen.add(h[0]);ensure(rev.length<limit,'RESOURCE_LIMIT','Chain too long');let r;try{r=await readRecord(s,h);}catch(e){const d=diagnose(e,head,rev);d.invalid=h;d.tailIds=[h[0],...d.tailIds];d.recoveryHead=null;return d;}
- rev.push({head:h,r});if(isGenesis(r))break;h=[r[1],r[2]];}
-const events=rev.reverse();let state=clone(events[0].r[1].state);for(let i=1;i<events.length;i++)try{state=patch(state,events[i].r[3]);}catch(e){const d=diagnose(e,head,events.slice(i));d.invalid=events[i].head;return d;}
+function diagnose(e,head,events=[]){return {status:'broken',code:e.code||'INVALID_CHAIN',message:e.message||String(e),sourceHead:validHead(head)?head:null,tailIds:events.map(x=>physicalId(x.head))};}
+async function inspect(s,head,limit=MAX_RECORDS){try{validateStore(s);ensure(validHead(head),'INVALID_HEAD','Head required');const rev=[],seen=new Set();let h=head;while(true){ensure(!seen.has(physicalId(h)),'CYCLE','Cycle in physical chain');seen.add(physicalId(h));ensure(rev.length<limit,'RESOURCE_LIMIT','Chain too long');let r;try{r=await readRecord(s,h);}catch(e){const d=diagnose(e,head,rev);d.invalid=h;d.tailIds=[physicalId(h),...d.tailIds];d.recoveryHead=null;return d;}
+ rev.push({head:h,r});if(isGenesis(r))break;h=r[1];}
+const events=rev.reverse();let state=clone(events[0].r[1].state);for(let i=1;i<events.length;i++)try{state=patch(state,events[i].r[2]);}catch(e){const d=diagnose(e,head,events.slice(i));d.invalid=events[i].head;return d;}
 return {status:'complete',chain:{head:clone(head),genesis:clone(events[0].r[1]),state,events}};
 }catch(e){return diagnose(e,head);}}
 async function load(s,head){const x=await inspect(s,head);if(x.status!=='complete')throw error(x.code,x.message,{diagnosis:x});return x.chain;}
-async function genesis(s,name,state,parent=null,options={}){validateStore(s);ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state)}]);const bytes=encoder.encode(JSON.stringify(r));const h=encode64(await sha(bytes)),id=await rootId(h);const occupied=own(s.records,id);if(occupied&&!options.overwrite){const old=await readRecord(s,[id,h]).catch(()=>null);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head:[id,h],existing:true,overwritten:false};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
-const e=await encrypt(r,id);ensure(e.hash===h,'INTERNAL_ERROR','Unexpected hash');s.records[id]=e.ct;return {head:[id,h],existing:false,overwritten:occupied};}
-async function append(s,head,operations,options={}){validateStore(s);const chain=await load(s,head);const state=patch(chain.state,operations);const id=await successorId(head);const occupied=own(s.records,id);if(occupied&&!options.overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=options.timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head[0],head[1],clone(operations)]);const e=await encrypt(r,id);s.records[id]=e.ct;return {head:[id,e.hash],state,overwritten:occupied};}
+async function genesis(s,name,state,parent=null,options={}){validateStore(s);ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state)}]);const bytes=encoder.encode(JSON.stringify(r));const h=encode64(await sha(bytes)),id=await rootId(h);const occupied=own(s.records,id);if(occupied&&!options.overwrite){const old=await readRecord(s,packHead(id,h)).catch(()=>null);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head:packHead(id,h),existing:true,overwritten:false};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
+const e=await encrypt(r,id);ensure(e.hash===h,'INTERNAL_ERROR','Unexpected hash');s.records[id]=e.ct;return {head:packHead(id,h),existing:false,overwritten:occupied};}
+async function append(s,head,operations,options={}){validateStore(s);const chain=await load(s,head);const state=patch(chain.state,operations);const id=await successorId(head);const occupied=own(s.records,id);if(occupied&&!options.overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=options.timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head,clone(operations)]);const e=await encrypt(r,id);s.records[id]=e.ct;return {head:packHead(id,e.hash),state,overwritten:occupied};}
 function pointer(value,path){return clone(atPath(value,parts(path)));}
 function escapePtr(k){return k.replace(/~/g,'~0').replace(/\//g,'~1');}
 function getRootRefs(root){if(!plain(root))return {};if(!own(root,'$refs'))return {};ensure(plain(root.$refs),'INVALID_ROOT','$refs must be an object');for(const [k,h] of Object.entries(root.$refs))ensure(k.length>0&&!k.includes('/')&&validHead(h),'INVALID_ROOT','Invalid $refs: '+k);return root.$refs;}
@@ -122,7 +126,7 @@ async function verifyDatabase(s, rootHead, options={}) {
   scan(getRootRefs(state),root.events[0].head,false);
   for(let i=1;i<root.events.length;i++){
     const before=root.events[i-1].head;
-    state=patch(state,root.events[i].r[3]);
+    state=patch(state,root.events[i].r[2]);
     scan(getRootRefs(state),before,true);
   }
   const activeRefs=getRootRefs(state),documents={};
@@ -150,10 +154,10 @@ async function verifyDatabase(s, rootHead, options={}) {
       warnings.push('Документ '+name+': origin не совпадает с версией корня перед первой регистрацией (возможно, импортирован)');
     documents[name]={head:clone(lastHead),active,events:child.events.length,referencedVersions:meta.heads.length,origin:parent};
   }
-  if(options.anchorHash!==undefined){
-    ensure(validHash(options.anchorHash),'INVALID_HASH','Invalid trusted historical H');
-    const index=root.events.findIndex(e=>e.head[1]===options.anchorHash);
-    ensure(index>=0,'ANCHOR_MISMATCH','Trusted H is not in the root ancestry');
+  if(options.anchorHead!==undefined){
+    ensure(validHead(options.anchorHead),'INVALID_HEAD','Invalid trusted historical HEAD');
+    const index=root.events.findIndex(e=>sameHead(e.head,options.anchorHead));
+    ensure(index>=0,'ANCHOR_MISMATCH','Trusted HEAD is not in the root ancestry');
     checks.anchorIndex=index;
   }
   return {status:'complete',rootHead,checks,documents,warnings};
@@ -168,7 +172,7 @@ async function truncateInvalidTail(s,diagnosis,recoveryHead) {
   ensure(fresh.status==='broken'&&fresh.code===diagnosis.code&&JSON.stringify(fresh.tailIds)===JSON.stringify(diagnosis.tailIds),'STALE_DIAGNOSIS','Diagnosis is stale');
   // If the first corrupt slot is not a successor of the proposed recovery head,
   // there is no proof that the manual anchor is the right recovery boundary.
-  const invalid=Array.isArray(fresh.invalid)?fresh.invalid[0]:null;
+  const invalid=validHead(fresh.invalid)?physicalId(fresh.invalid):null;
   ensure(validId(invalid),'INVALID_TRUNCATION','No identifiable corrupt physical slot');
   ensure(await successorId(recoveryHead)===invalid,'INVALID_RECOVERY_HEAD','Recovery head must precede the corrupt slot');
   const recovered=await load(s,recoveryHead);
@@ -189,6 +193,6 @@ async function truncateInvalidTail(s,diagnosis,recoveryHead) {
 function commit(s,tx){validateStore(tx);for(const k of Object.keys(s))delete s[k];Object.assign(s,tx);return s;}
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
-const api={VERSION,newStore,validateStore,validHead,sameHead,assertJson,patch,pointer,resolve,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,verifyDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
+const api={VERSION,newStore,validateStore,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,verifyDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
 g.HTML_DBMS=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

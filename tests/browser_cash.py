@@ -18,7 +18,7 @@ try:
   page.on('dialog',lambda dlg:dlg.accept())
   page.goto(url,wait_until='domcontentloaded',timeout=30000)
   assert page.evaluate('isSecureContext && !!crypto.subtle'),'Real WebCrypto missing'
-  assert page.locator('#head-id').input_value(),'Cash root head not advertised'
+  assert page.locator('#head').input_value(),'Cash root head not advertised'
   page.locator('#open-head').click()
   app=page.frame_locator('iframe[title="Приложение из JSON entry"]')
   expect(app.locator('h1')).to_contain_text('Касса',timeout=30000)
@@ -44,7 +44,7 @@ try:
   app.locator('.form input[name="date"]').fill('2026-09-27')
   app.locator('.form select[name="toId"]').select_option(label='Фонд_F002')
   app.locator('.form select[name="fromId"]').select_option(label='Участник_A001')
-  app.locator('.form select[name="typeId"]').select_option(label='Нал')
+  app.locator('.form select[name="typeId"]').select_option(label='Взнос')
   app.locator('.form input[name="amount"]').fill('345')
   app.locator('.form button',has_text='Записать транзакцию').click()
   expect(app.locator('#cash-count')).to_contain_text('1\u00a0642',timeout=30000)

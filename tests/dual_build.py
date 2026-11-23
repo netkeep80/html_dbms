@@ -58,12 +58,12 @@ def main():
     assert 'allow-scripts' in xml and 'allow-same-origin' not in xml
     # Audit unusual but valid JSON content while leaving encrypted records untouched.
     sentinel='\u003cscript/> & ]]> </script> \u2028 π'
-    physical={'format':'HTML_DBMS/3','records':{'ABCD':sentinel},'publicHeads':{'Участники':['X','Y']}}
+    physical={'format':'HTML_DBMS/4','records':{'ABCD':sentinel},'publicHeads':{'Участники':'A'*64}}
     raw=json.dumps(physical,ensure_ascii=False)
     from importlib.machinery import SourceFileLoader
     build=SourceFileLoader('hdbms_builder',str(ROOT/'build.py')).load_module()
     # XML text may use escaped characters or split CDATA, but must round-trip.
-    xml_modified=xml.replace('<![CDATA[{"format":"HTML_DBMS/3","publicHeads":{},"records":{}}]]>',build.cdata(raw))
+    xml_modified=xml.replace('<![CDATA[{"format":"HTML_DBMS/4","publicHeads":{},"records":{}}]]>',build.cdata(raw))
     assert get_xml_store(xml_modified)==physical
     assert ET.fromstring(xml_modified).tag=='{'+XHTML+'}html'
     from importlib.machinery import SourceFileLoader

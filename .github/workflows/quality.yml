@@ -41,4 +41,6 @@ jobs:
           .venv/bin/python tests/browser_cash_acceptance.py
           .venv/bin/python tests/browser_smoke.py
           .venv/bin/python tests/browser_dual.py
+          .venv/bin/python tests/browser_head_url.py
           .venv/bin/python tests/browser_native_crypto.py
+          HDBMS_REAL_CRYPTO=1 .venv/bin/python tests/browser_head_url.py
