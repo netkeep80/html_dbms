@@ -21,8 +21,8 @@ function needRoot(){if(!rootHead)throw Error('Сначала откройте б
 function activePublished(){return !!(publicName&&store.publicHeads&&db.sameHead(store.publicHeads[publicName],rootHead));}
 function updateInfo(){
  if(!store)return;
- const bytes=new TextEncoder().encode(JSON.stringify(store)).length;
- $('store-summary').textContent='Физических сообщений: '+Object.keys(store.records).length+' · размер хранилища: '+bytes+' байт · опубликованных БД: '+Object.keys(store.publicHeads||{}).length+'.';
+ if(!$('info-panel').hasAttribute('hidden')){const bytes=new TextEncoder().encode(JSON.stringify(store)).length;
+ $('store-summary').textContent='Физических сообщений: '+Object.keys(store.records).length+' · размер хранилища: '+bytes+' байт · опубликованных БД: '+Object.keys(store.publicHeads||{}).length+'.';}
  $('current-root').textContent='Открытая версия: '+format(rootHead)+(publicName?' · '+publicName:' · не опубликована');
 }
 function togglePanel(which){
@@ -119,7 +119,7 @@ window.addEventListener('message',event=>{if(!activeFrame||event.source!==active
  const epoch=openEpoch,requestedHash=location.hash;runRpc(msg,epoch,requestedHash).then(value=>{if(epoch===openEpoch&&activeFrame&&event.source===activeFrame.contentWindow&&(!location.hash||location.hash==='#head='+rootHead))event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:true,value},'*');}).catch(e=>{if(epoch===openEpoch&&activeFrame&&event.source===activeFrame.contentWindow&&(!location.hash||location.hash==='#head='+rootHead))event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))},'*');});
 });
 async function runRpc(message,epoch,requestedHash){needRoot();if(location.hash&&fragmentHead(location.hash)!==rootHead)throw Error('Контекст URL изменился');const params=message.payload||{};switch(message.method){
- case 'read':{const ref=params.ref;if(typeof ref!=='string')throw Error('Неверная ссылка');if(ref==='')return (await db.load(store,rootHead)).state;return (await db.resolve(store,rootHead,rootHead,{$ref:ref})).value;}
+ case 'read':{const ref=params.ref;if(typeof ref!=='string')throw Error('Неверная ссылка');if(ref==='')return db.readState(store,rootHead);return (await db.resolve(store,rootHead,rootHead,{$ref:ref})).value;}
  case 'getHead':return rootHead;
  case 'patch':{assertWriteTarget();if(busy||rpcBusy)throw Error('Запись уже выполняется');rpcBusy=true;try{const name=params.document;const ops=params.operations;if(typeof name!=='string'||!Array.isArray(ops))throw Error('Неверный запрос patch');await authorizeWrite('JSON Patch: '+(name||'(корень)')+' ('+ops.length+' операций)');const previous=rootHead;const result=await retryOccupied('JSON Patch '+(name||'(корень)'),async opts=>{if(name==='')return db.patchRoot(store,rootHead,ops,{overwrite:opts.overwriteRoot});return db.patchDocument(store,rootHead,name,ops,opts);});if(epoch!==openEpoch||requestedHash!==location.hash||!db.sameHead(rootHead,previous))throw Error('Контекст записи изменился');assertWriteTarget();await stagedUpdate(result,previous);return {rootHead};}finally{rpcBusy=false;}}
  case 'createDocument':{assertWriteTarget();if(busy||rpcBusy)throw Error('Запись уже выполняется');rpcBusy=true;try{if(!validName(params.name))throw Error('Недопустимое имя документа');db.assertJson(params.state);await authorizeWrite('Создать документ «'+params.name+'»');const previous=rootHead;const result=await retryOccupied('Создание документа '+params.name,opts=>db.createDocument(store,rootHead,params.name,params.state,null,opts));if(epoch!==openEpoch||requestedHash!==location.hash||!db.sameHead(rootHead,previous))throw Error('Контекст записи изменился');assertWriteTarget();await stagedUpdate(result,previous);return {rootHead,documentHead:result.documentHead};}finally{rpcBusy=false;}}

@@ -20,5 +20,37 @@ const assert=require('node:assert/strict'),db=require('../src/core.js');
   assert.throws(()=>db.validateStore(invalid),{code:'INVALID_RECORD'});
  }
  assert.equal(s.records[id],ct);
+ // Concurrent staging: both start from one revision, only the first can commit.
+ const cs=db.newStore(),cg=await db.createDatabase(cs,'Concurrent');db.commit(cs,cg.store);
+ const one=await db.patchRoot(cs,cg.rootHead,[{op:'add',path:'/x',value:1}]);
+ const two=await db.patchRoot(cs,cg.rootHead,[{op:'add',path:'/x',value:2}]);
+ db.publish(one.store,'Concurrent',one.rootHead,cg.rootHead);db.commit(cs,one.store);
+ const committed=JSON.stringify(cs);
+ assert.throws(()=>db.commit(cs,two.store),{code:'STALE_TRANSACTION'});
+ assert.throws(()=>JSON.stringify(two.store),{code:'STALE_TRANSACTION'});
+ assert.equal(JSON.stringify(cs),committed);
+ assert.equal((await db.load(cs,one.rootHead)).state.x,1);
+ // Even the physical primitive rejects a concurrent write after its await.
+ const physical=db.newStore(),pg=await db.genesis(physical,'Primitive',{});
+ const attempts=await Promise.allSettled([1,2].map(v=>db.append(physical,pg.head,[{op:'add',path:'/x',value:v}])));
+ assert.equal(attempts.filter(x=>x.status==='fulfilled').length,1);
+ assert.ok(['STALE_TRANSACTION','SUCCESSOR_OCCUPIED'].includes(attempts.find(x=>x.status==='rejected').reason.code));
+ assert.equal(Object.keys(physical.records).length,2);
+ // A direct controlled mutation invalidates the proof; the next checked write
+ // must detect an authenticated-history violation instead of trusting stale state.
+ const broken=db.adoptStore(JSON.parse(JSON.stringify(cs)));
+ await db.openDatabase(broken,one.rootHead);
+ const rootId=db.unpackHead(cg.rootHead).id,patchId=db.unpackHead(one.rootHead).id;
+ broken.records[rootId]=broken.records[patchId];
+ const damaged=JSON.stringify(broken);
+ await assert.rejects(db.patchRoot(broken,one.rootHead,[{op:'add',path:'/y',value:3}]),{code:'INVALID_GCM'});
+ assert.equal(JSON.stringify(broken),damaged);
+ // Verify cached results cannot be modified through external state objects.
+ const leaked=await db.readState(cs,one.rootHead);leaked.x=999;
+ assert.equal((await db.readState(cs,one.rootHead)).x,1);
+ const opened=await db.openDatabase(cs,one.rootHead);opened.chain.state.x=999;
+ assert.equal((await db.readState(cs,one.rootHead)).x,1);
+ assert.throws(()=>{cs.records[patchId]='A'.repeat(23)+'\n';},{code:'INVALID_RECORD'});
+ console.log('STABILITY PASS: concurrent commit/append, proof invalidation, state isolation, strict hidden records');
  console.log('STABILITY PASS: checked root write, rollback rejection, atomic failure, direct physical lookup, strict ciphertext');
 })().catch(e=>{console.error(e);process.exitCode=1;});
