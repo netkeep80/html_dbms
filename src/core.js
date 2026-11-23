@@ -116,9 +116,28 @@ async function verifyNestedChains(store,mainChain){ensure(mainChain&&mainChain.p
 async function verifyNestedTransition(store,oldState,newState){const names=new Set();for(const [name,t] of Object.entries(oldState.tables||{}))if(t?.type==='chain')names.add(name);for(const [name,t] of Object.entries(newState.tables||{}))if(t?.type==='chain')names.add(name);for(const name of names){const a=oldState.tables?.[name],b=newState.tables?.[name];ensure(a?.type==='chain'&&b?.type==='chain','Chain table cannot disappear or change type: '+name,'NESTED_CHAIN_ROLLBACK');if(samePointer(a.head,b.head))continue;const nested=await load(store,b.head);ensure(nested.policy==='transaction','Nested chain policy mismatch','NESTED_CHAIN_ROLLBACK');ensure(nested.events.some(e=>e.id===a.head[0]&&e.hash===a.head[1]),'New nested head does not extend previous head','NESTED_CHAIN_ROLLBACK',{name,previous:a.head,next:b.head});}return true;}
 async function append(store,chain,operations,options={}){validateStoreHeader(store);ensure(chain&&chain.events?.length>=1,'Missing chain','INVALID_CHAIN');assertJson(operations);validateState(chain.policy,chain.state);checkPatch(chain.policy,chain.state,operations);const nextState=patch(chain.state,operations);validateState(chain.policy,nextState);if(chain.policy==='main')await verifyNestedTransition(store,chain.state,nextState);const old=chain.events.at(-1),id=await address(old.id,chain.head);const occupied=has(store.records,id);if(occupied&&!options.overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor address is already occupied',{id,predecessor:[old.id,chain.head]});const r=[old.r[0]+1,'patch',new Date().toISOString(),old.id,chain.head,{patch:jsonClone(operations)}];validateEvent(r);const enc=await encrypt(r,id);const check=await decrypt(enc.ct,enc.hash,id);validateEvent(check);store.records[id]=enc.ct;return {head:enc.hash,id,state:nextState,overwritten:occupied};}
 function publicHeadAfter(store,result){const p=store.publicHead;if(p===null)return null;if(p[0]===null)return [null,result.head];return [result.id,result.head];}
-async function truncateInvalidTail(store,diag,recoveryPointer){validateStoreHeader(store);ensure(diag&&diag.status==='broken'&&Array.isArray(diag.tailIds)&&diag.tailIds.length,'No truncatable tail','INVALID_TRUNCATION');let recovery=diag.recoveryHead||recoveryPointer;ensure(recovery,'Recovery head is required for opaque break','RECOVERY_HEAD_REQUIRED');const checked=await inspect(store,recovery);ensure(checked.status==='complete','Recovery head is not a complete valid chain','INVALID_RECOVERY_HEAD');recovery=[checked.chain.headId,checked.chain.head];const tail=new Set(diag.tailIds);ensure(!tail.has(recovery[0]),'Recovery head belongs to removed tail','INVALID_RECOVERY_HEAD');let removed=0;for(const id of tail){if(has(store.records,id)){delete store.records[id];removed++;}}
- if(Array.isArray(store.publicHead)&&diag.sourceHead&&store.publicHead[1]===diag.sourceHead[1])store.publicHead=store.publicHead[0]===null?[null,recovery[1]]:recovery;
- return {removed,head:recovery};}
+async function truncateInvalidTail(store,diag,recoveryPointer){
+ validateStoreHeader(store);
+ ensure(diag&&diag.status==='broken'&&Array.isArray(diag.tailIds)&&diag.tailIds.length&&diag.sourceHead,'No truncatable tail','INVALID_TRUNCATION');
+ // Reject stale diagnostics to prevent deletion after a concurrent change.
+ const fresh=await inspect(store,diag.sourceHead);
+ ensure(fresh.status==='broken'&&fresh.code===diag.code&&JSON.stringify(fresh.tailIds)===JSON.stringify(diag.tailIds)&&JSON.stringify(fresh.invalid||null)===JSON.stringify(diag.invalid||null),'Diagnosis no longer matches storage','STALE_DIAGNOSIS');
+ let recovery=diag.recoveryHead||recoveryPointer;
+ ensure(Array.isArray(recovery)&&recovery.length===2&&validId(recovery[0])&&validHash(recovery[1]),'Recovery head is required','RECOVERY_HEAD_REQUIRED');
+ const checked=await inspect(store,recovery);
+ ensure(checked.status==='complete','Recovery head is not a complete valid chain','INVALID_RECOVERY_HEAD');
+ recovery=[checked.chain.headId,checked.chain.head];
+ const tail=new Set(fresh.tailIds);
+ ensure(!tail.has(recovery[0]),'Recovery head belongs to removed tail','INVALID_RECOVERY_HEAD');
+ if(fresh.invalid?.id)ensure(await address(recovery[0],recovery[1])===fresh.invalid.id,'Recovery head does not precede diagnosed slot','INVALID_RECOVERY_HEAD');
+ // A replaced slot may already contain a valid successor of a different branch.
+ const preservedIds=[];
+ if(fresh.code==='REPLACED_OR_CORRUPTED_PREDECESSOR'&&fresh.invalid?.id&&has(store.records,fresh.invalid.id))preservedIds.push(fresh.invalid.id);
+ let removed=0;
+ for(const id of tail){if(preservedIds.includes(id))continue;if(has(store.records,id)){delete store.records[id];removed++;}}
+ if(Array.isArray(store.publicHead)&&fresh.sourceHead&&store.publicHead[1]===fresh.sourceHead[1])store.publicHead=store.publicHead[0]===null?[null,recovery[1]]:recovery;
+ return {removed,head:recovery,preservedIds};
+}
 function sortedStore(store){validateStore(store);return {format:VERSION,publicHead:store.publicHead===null?null:[store.publicHead[0],store.publicHead[1]],records:Object.fromEntries(Object.entries(store.records).sort(([a],[b])=>a<b?-1:a>b?1:0))};}
 root.HTMLDBMSCore=Object.freeze({VERSION,MAX_RECORDS,MAX_CT_BYTES,MAX_TOTAL_CT_BYTES,to64,from64,validHash,validId,validHeadPointer,directHead,assertJson,rootAddress,address,ivForId,newStore,validateStore,genesis,inspect,load,verifyNestedChains,append,publicHeadAfter,truncateInvalidTail,patch,segments,sortedStore});
 })(globalThis);
