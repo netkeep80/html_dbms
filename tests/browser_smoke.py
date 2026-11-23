@@ -33,7 +33,8 @@ def frame(page):
     return page.frame_locator('iframe[title="Приложение из JSON entry"]')
 
 with sync_playwright() as pl:
-    browser=pl.chromium.launch(headless=True,executable_path=shutil.which('chromium') or pl.chromium.executable_path,args=['--no-sandbox','--disable-dev-shm-usage'])
+    binary={'executable_path':shutil.which('chromium')} if shutil.which('chromium') else {}
+    browser=pl.chromium.launch(headless=True,**binary,args=['--no-sandbox','--disable-dev-shm-usage'])
     page=browser.new_page(accept_downloads=True)
     errors=[];prompts=iter(['Касса','Склад'])
     confirmation_policy={'overwrite':False}; dialogs=[]

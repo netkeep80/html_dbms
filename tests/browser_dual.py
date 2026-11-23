@@ -96,7 +96,8 @@ def scenario(browser,kind,tmp_path):
 def main():
     from tempfile import TemporaryDirectory
     with sync_playwright() as pw,TemporaryDirectory() as tmp:
-        browser=pw.chromium.launch(executable_path=shutil.which('chromium') or pw.chromium.executable_path,headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
+        binary={'executable_path':shutil.which('chromium')} if shutil.which('chromium') else {}
+        browser=pw.chromium.launch(**binary,headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
         html_store,html_file=scenario(browser,'html',tmp)
         xml_store,xml_file=scenario(browser,'xml',tmp)
         # Same logical workflow with shim should give identical ciphertext
