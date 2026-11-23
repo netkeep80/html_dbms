@@ -18,7 +18,7 @@ assert.match(app,/\$\('databases'\)\.onchange=\(\)=>selectAlias/);
 assert.match(app,/\$\('open-head'\)\.onclick=\(\)=>run\(openFields\)/);
 assert.match(app,/async function openFields\(\)/);
 assert.match(app,/function selectAlias\(alias\)/);assert.match(app,/setFields\(h\)/);
-assert.match(app,/function syncCatalog\(preselect=false\)/);
+assert.match(app,/function syncCatalog\(\)/);
 assert.match(app,/sel\.value='';/);
 assert.match(app,/function clearOpened\(/);
 assert.match(app,/async function retryOccupied\(/);
