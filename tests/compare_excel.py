@@ -71,7 +71,7 @@ def main():
  variants=0
  for i,(r,rowidx) in enumerate(zip(rows,expected)):
   same(r['excelRow'],rowidx,f'transaction {i} Excel row');same(r['n'],get(s,'C',rowidx),f'transaction {i} number')
-  for k,col in [('date','D'),('amount','J'),('note','K'),('dd','L'),('plan','M')]:same(r[k],get(s,col,rowidx),f'transaction {i} {k}')
+  for k,col in [('date','D'),('amount','J'),('note','K'),('dd','L')]:same(r[k],get(s,col,rowidx),f'transaction {i} {k}')
   for k,col in [('toTypeId','E'),('typeId','G'),('fromTypeId','H')]:
    assert isinstance(r[k],str) and r[k] in docs['entityTypes' if k!='typeId' else 'transactionTypes']['entries']
    value=docs['entityTypes' if k!='typeId' else 'transactionTypes']['entries'][r[k]]['name']
@@ -84,6 +84,9 @@ def main():
    assert fold(value)==fold(get(s,col,rowidx)),f'transaction {i} {k}: {value} vs {get(s,col,rowidx)}'
    if str(value)!=str(get(s,col,rowidx)):variants+=1
  assert len(rows)==1641,'Unexpected import row count'
+ assert all('plan' not in row for row in rows),'Plan/Fact must not be stored in the DBMS demo'
+ assert len(data['transactions']['headers'])==10,'Plan/Fact must not be shown in the ledger'
+ assert sum(get(s,'M',i)=='План' for i in expected)==3,'Source Excel plan flags changed unexpectedly'
  dict_cells=0
  for name,alias in SHEET_TO_ALIAS.items():
   raw=book[name];d=docs[alias]

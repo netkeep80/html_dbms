@@ -46,9 +46,10 @@ function createModel(f){
   const typeId=lookup('transactionTypes',row.type);
   const canonical=catalogs.transactionTypes.entries[typeId].name;
   if(row.type!==canonical){variants[row.type]=(variants[row.type]||0)+1;}
-  return {excelRow:row.excelRow,n:row.n,date:row.date,toTypeId,toId:lookup(toAlias,row.to),typeId,fromTypeId,fromId:lookup(fromAlias,row.from),amount:row.amount,note:row.note,dd:row.dd,plan:row.plan};
+  return {excelRow:row.excelRow,n:row.n,date:row.date,toTypeId,toId:lookup(toAlias,row.to),typeId,fromTypeId,fromId:lookup(fromAlias,row.from),amount:row.amount,note:row.note,dd:row.dd};
  });
- const transactions={sourceSheet:'Транзакции',headers:f.headers,period:f.period,rows,source:{file:f.sourceFile,sha256:f.sourceSha256,excelSheets:f.sheetNames.length,sourceRows:rows.length,caseVariants:variants}};
+ for(const id of catalogs.entityTypes.order){const entry=catalogs.entityTypes.entries[id];const alias=TYPE_DOCUMENTS[entry.name];if(alias)entry.documentAlias=alias;}
+ const transactions={sourceSheet:'Транзакции',headers:f.headers.slice(0,10),period:f.period,rows,source:{file:f.sourceFile,sha256:f.sourceSha256,excelSheets:f.sheetNames.length,sourceRows:rows.length,caseVariants:variants}};
  return {transactions,catalogs,typeDocuments:TYPE_DOCUMENTS};
 }
 module.exports={SHEETS,TYPE_DOCUMENTS,createModel,fold};

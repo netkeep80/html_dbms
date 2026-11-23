@@ -29,6 +29,8 @@ async function main(){
  const allow="if(value.source===STARTER_SOURCE&&value.export==='main')";
  if(!html.includes(allow))throw Error('Missing shell entry launch gate');
  html=html.replace(allow,"if((value.source===STARTER_SOURCE||value.source===DEMO_CASH_SOURCE)&&value.export==='main')");
+ const fullscreenCss='<style id="cash-fullscreen-css">.app-main{max-width:none;width:100%;height:calc(100vh - 44px);min-height:0;margin:0;padding:5px 8px;display:flex;flex-direction:column}.app-main>.notice{flex:0 0 auto;margin-bottom:3px}.entry-area{flex:1;min-height:0;overflow:hidden}.entry-area iframe{height:100%;min-height:0;width:100%;border-radius:0}</style>';
+ html=html.replace('</head>',fullscreenCss+'</head>');
  html=html.replace('<title>HTML DBMS 3.0.2</title>','<title>HTML DBMS · Касса 2026 (демо)</title>');
  fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,html);
  const parsed=db.validateStore(JSON.parse(html.match(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/)[1]));
