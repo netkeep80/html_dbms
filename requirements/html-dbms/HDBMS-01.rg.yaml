@@ -1,9 +1,9 @@
 format: repo-guard/requirement-v1
 id: HDBMS-01
 normative: |
-  ### HDBMS-01 — Детерминированные проверяемые криптоцепочки
-
-  **Обязательно:** plaintext записи хэшируется SHA-256, полученный 256-битный H используется также как ключ AES-GCM. Genesis адресуется первыми 128 битами SHA-256 от H. Successor адресуется первыми 128 битами SHA-256 от конкатенации 16-байтового ID и 32-байтового H предшественника. IV равен первым 12 байтам physical ID. При чтении проверяются AES-GCM, SHA-256 plaintext, physical address, sequence и predecessor ID/H. Разрыв ancestry должен обнаруживаться явно; старый поздний head после замены промежуточного slot не должен молча переходить на новую историю.
+  ### HDBMS-01 — Проверяемые криптоцепочки JSON-документов
+  
+  Обязательно: SHA-256 сериализованной UTF-8 JSON-записи вычисляет H, который используется как AES-256-GCM key. Genesis адресуется first16(SHA256(H)), successor — first16(SHA256(raw(prevID)||raw(prevH))), IV=first12(raw(ID)). При воспроизведении проверяются AES-GCM, H, physical ID, predecessor ID/H, корректность JSON Patch и ancestry. Порядковый номер вычисляется по позиции в проверенной цепочке и не хранится. Перезапись промежуточного physical slot диагностируется без молчаливого изменения истории.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}
@@ -12,6 +12,6 @@ relations:
   - predicates: [verified_by]
     target: {kind: artifact, path: 'tests/core.test.cjs'}
   - predicates: [documents]
-    target: {kind: artifact, path: 'docs/SRS.md'}
+    target: {kind: artifact, path: 'docs/SRS-3.md'}
   - predicates: [documents]
     target: {kind: artifact, path: 'README.md'}
