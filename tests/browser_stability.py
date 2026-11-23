@@ -74,8 +74,18 @@ def scenario(browser, kind, tmp):
     expect(frame(page).locator('#db-title')).to_have_text('Alpha')
     assert page.evaluate('typeof window.evil')=='undefined'
     assert save(page,kind,tmp/f'imported.{kind}')==data
+    # Check size BEFORE reading the blob without allocating a huge fixture.
+    page.evaluate('''()=>{const p=Blob.prototype;window.sizeGate={descriptor:Object.getOwnPropertyDescriptor(p,'size'),text:p.text,read:false};
+      Object.defineProperty(p,'size',{configurable:true,get:()=>256*1024*1024+1});
+      p.text=function(){window.sizeGate.read=true;return window.sizeGate.text.call(this);};
+    }''')
+    upload(page,'large.html',hostile)
+    expect(page.locator('#status')).to_contain_text('Превышен размер контейнера')
+    assert page.evaluate('window.sizeGate.read') is False
+    page.evaluate('''()=>{Object.defineProperty(Blob.prototype,'size',window.sizeGate.descriptor);Blob.prototype.text=window.sizeGate.text;}''')
     for name,raw,error in [
         ('duplicate.html','<!doctype html><html><body>'+tag+'<template>'+tag+'</template></body></html>','единственный'),
+        ('templates.html','<!doctype html><html><body>'+tag+'<template></template>'*10001+'</body></html>','Слишком много вложенных template'),
         ('dtd.xml','<?xml version="1.0"?><!DOCTYPE html SYSTEM "https://invalid.example/dtd"><html xmlns="http://www.w3.org/1999/xhtml">'+tag+'</html>','декларации запрещены'),
         ('stylesheet.xml','<?xml version="1.0"?><?xml-stylesheet href="https://invalid.example/xsl" type="text/xsl"?><html xmlns="http://www.w3.org/1999/xhtml">'+tag+'</html>','декларации запрещены'),
         ('malformed.xml','<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml">'+tag,'Некорректный XML')
