@@ -1,9 +1,8 @@
 format: repo-guard/requirement-v1
 id: HDBMS-08
 normative: |
-  ### HDBMS-08 — JSON-only domain, schema replay и явный truncate
-
-  **Обязательно:** все хэшируемые данные принадлежат строгому JSON-domain; undefined, NaN/Infinity, BigInt, функции, Symbol, циклы, sparse arrays и неплоские JavaScript-объекты отвергаются до hash/ID/commit. Transaction rows валидируются одной schema-функцией и при append, и при load/replay. Успешно записанная штатным API запись должна быть воспроизводима чтением. load/inspect не удаляют и не исправляют данные; при первой некорректной записи возвращается структурированная диагностика. truncateInvalidTail является отдельной явной destructive operation, перепроверяет актуальность диагноза, требует валидный recovery head, непосредственно предшествующий повреждённому slot, и сохраняет сам занятый slot с отличающейся криптографической историей; удаляться могут только диагностированные потомки старого хвоста.
+  ### HDBMS-08 — Произвольный JSON, ссылки, воспроизведение и безопасное восстановление
+  **Обязательно:** в криптоядре нет обязательных политик main/transaction или схем таблиц. Строгий JSON-domain исключает undefined, NaN/Infinity, BigInt, функции, Symbol, циклы, sparse arrays, экзотические объекты. Патчи корректно применяются повторно к универсальному JSON. Поле $refs выбранного root содержит alias → [ID,H], адрес {$ref:"/pointer"} локален, {$ref:"alias/pointer"} разрешается относительно выбранной root-версии. Разрешение диагностирует циклы и отсутствующие ссылки. Верификация отдельно проверяет историю корня и объявленных дочерних версий. Чтение не изменяет ciphertext; truncateInvalidTail требует свежий диагноз и непосредственно предшествующий проверенный recovery head, сохраняет изменённый occupied slot, удаляет только подтверждённых потомков после явного подтверждения.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}
@@ -13,3 +12,6 @@ relations:
     target: {kind: artifact, path: 'tests/core.test.cjs'}
   - predicates: [documents]
     target: {kind: artifact, path: 'docs/SRS.md'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_smoke.py'}

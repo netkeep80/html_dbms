@@ -1,247 +1,439 @@
-<!DOCTYPE html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HTML DBMS 2.2 — автономное криптографическое хранилище</title>
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HTML DBMS 3</title>
 <style>
-:root{font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:#eaf1f9;background:#101923}*{box-sizing:border-box}body{max-width:1200px;margin:0 auto;padding:24px}h1{font-size:1.7rem;margin:0}h2{font-size:1.15rem}small,.muted{color:#a9b9c9}header,.panel{border:1px solid #36495d;border-radius:12px;padding:18px;background:#182434;margin-bottom:14px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.grow{flex:1}input,button{font:inherit;border-radius:6px;padding:9px;background:#0d1721;color:#edf6ff;border:1px solid #496079}input{min-width:120px}input[type=file]{max-width:300px}button{cursor:pointer;background:#24364b}button:hover,.selected{background:#34618b}button:disabled{opacity:.6;cursor:not-allowed}.primary{background:#1f745d}button.primary:hover{background:#2a9679}.danger{background:#73333a}.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.scroll{overflow:auto}table{border-collapse:collapse;width:100%}th,td{text-align:left;border-bottom:1px solid #35485a;padding:9px;white-space:nowrap}th{color:#b7cfe5;background:#203348}.editable{cursor:pointer}.editable:hover{background:#294457}.inputs{display:flex;gap:10px;flex-wrap:wrap}.inputs label{display:flex;flex-direction:column;gap:4px;min-width:145px}.inputs input{width:100%}code{overflow-wrap:anywhere;color:#9ee2c8}#status{min-height:1.5em}.bad{color:#ff918a}.ok{color:#8fdfb7}.minor{font-size:.85rem}.warning{color:#f6d4a6}.diagnostic{white-space:pre-wrap;background:#0d1721;padding:12px;border-radius:6px}.debug-raw{max-height:65vh;overflow:auto;white-space:pre;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}hr{border:0;border-top:1px solid #34485c;margin:20px 0}@media(max-width:600px){body{padding:10px}header,.panel{padding:12px}input{max-width:100%}}
-</style></head><body>
-<header><div class="row"><div class="grow"><h1>HTML DBMS <small>2.2 experimental</small></h1><div class="muted">Один HTML-файл · JSON Patch · SHA-256 · AES-GCM · optional operational head</div></div><button id="save" class="primary" disabled>Сохранить HTML</button></div><p id="status" role="status"></p></header>
-<section id="access-panel" class="panel" hidden><h2>Доступ к БД</h2><p id="access-note" class="muted"></p><div class="row"><label>ID: <input id="open-id" placeholder="22 символа Base64url" autocomplete="off"></label><label class="grow">H: <input id="open-hash" class="grow" placeholder="43 символа Base64url" autocomplete="off"></label><button id="open-pair" class="primary">Открыть по ID + H</button><button id="find-by-hash">Найти ID по H</button></div><p class="minor warning">Если head удалён из HTML, файл хранит ciphertext без опубликованной точки входа. Это повышает скрытность, но не заменяет секрет с высокой энтропией.</p></section>
-<div id="workspace" hidden>
-<section class="panel"><div class="row"><input id="title" class="grow" aria-label="Заголовок документа"><button id="save-title">Изменить заголовок</button></div></section>
-<section class="panel"><div class="row"><h2 class="grow">Таблицы</h2><span class="muted minor">Записей в контейнере: <strong id="count">0</strong></span></div><nav id="tabs" class="tabs" aria-label="Таблицы"></nav><h2 id="table-title"></h2><div id="table-hint" class="muted minor"></div><div class="scroll"><table><thead id="table-head"></thead><tbody id="table-body"></tbody></table></div><h2>Добавить строку</h2><div id="row-inputs" class="inputs"></div><div class="row" style="margin-top:12px"><button id="add-row" class="primary">Добавить строку</button><button id="add-column">Добавить столбец</button></div></section>
-<section class="panel"><h2>Криптографическая история</h2><p class="minor">Режим публикации: <strong id="access-mode"></strong></p><div class="minor">Текущий physical ID:</div><code id="head-id"></code><div class="minor" style="margin-top:8px">Текущий H:</div><div class="row"><code id="head-hash" class="grow"></code><button id="copy-head">Копировать ID + H</button></div><p class="minor">Head вложенной цепочки операций: <code id="nested-head"></code></p><div class="row"><button id="publish-direct">Публиковать ID + H</button><button id="publish-hash">Публиковать только H</button><button id="publish-none">Скрыть head</button><button id="debug-toggle">Отладочный режим</button></div><hr><label>Доверенный исторический H: <input id="anchor" class="grow" placeholder="43 символа Base64url" autocomplete="off"></label><div class="row" style="margin-top:10px"><button id="verify">Проверить ancestry</button><input type="file" id="external" accept=".html,text/html"><button id="verify-file">Проверить другой HTML как данные</button></div></section>
-<section id="debug-panel" class="panel" hidden><h2>Отладочный режим — сырые расшифрованные записи</h2><p class="minor warning">Read-only просмотр только уже открытых цепочек. Скрытые цепочки без известного head не сканируются и не расшифровываются.</p><pre id="debug-raw" class="diagnostic debug-raw"></pre></section>
-<section class="panel minor warning">Экспериментальная схема: AES-key = SHA-256(plaintext), поэтому конфиденциальность предсказуемых данных не гарантирована. Перезапись занятого successor slot возможна только явно и может сделать старый поздний head неполным; старый хвост автоматически не удаляется. Для provenance нужен независимо сохранённый доверенный H и доверенный verifier.</section>
-</div>
-<section id="diagnostic-panel" class="panel" hidden><h2>Диагностика разрыва</h2><div id="diagnostic" class="diagnostic"></div><p class="minor">Чтение никогда не удаляет данные автоматически. Для непрозрачного разрыва укажите отдельно известный предыдущий operational head.</p><div class="row"><label>Recovery ID: <input id="recovery-id" autocomplete="off"></label><label class="grow">Recovery H: <input id="recovery-hash" class="grow" autocomplete="off"></label><button id="truncate" class="danger">Удалить диагностированный хвост</button></div></section>
-
-<script id="db-store" type="application/json">{"format":"HTML_DBMS/2.2","publicHead":null,"records":{}}</script>
-<script>/* HTML DBMS 2.2 experimental protocol. Browser and Node; no remote dependencies. */
-(function(root) {
-'use strict';
-const VERSION='HTML_DBMS/2.2';
-const MAX_RECORDS=20000,MAX_CT_BYTES=2*1024*1024,MAX_TOTAL_CT_BYTES=64*1024*1024,MAX_PATCH_OPS=1000;
-const te=new TextEncoder(),td=new TextDecoder('utf-8',{fatal:true});
-const has=(obj,key)=>Object.prototype.hasOwnProperty.call(obj,key);
-const clone=value=>structuredClone(value);
-function error(code,message,details){const e=new Error(message);e.code=code;if(details!==undefined)e.details=details;return e;}
-function ensure(value,message,code='INVALID_DATA',details){if(!value)throw error(code,message,details);}
-function raw64(s){ensure(typeof s==='string'&&s.length>0&&/^[A-Za-z0-9_-]+$/.test(s),'Invalid base64url','INVALID_BASE64URL');const raw=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4));return Uint8Array.from(raw,c=>c.charCodeAt(0));}
-function to64(bytes){let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
-function from64(s){const bytes=raw64(s);ensure(to64(bytes)===s,'Non-canonical base64url','NON_CANONICAL_BASE64URL');return bytes;}
-function validHash(h){try{return typeof h==='string'&&h.length===43&&from64(h).length===32;}catch{return false;}}
-function validId(id){try{return typeof id==='string'&&id.length===22&&from64(id).length===16;}catch{return false;}}
-function validHeadPointer(pointer){return pointer===null||(Array.isArray(pointer)&&pointer.length===2&&(pointer[0]===null||validId(pointer[0]))&&validHash(pointer[1]));}
-function directHead(id,hash){ensure(validId(id)&&validHash(hash),'Invalid direct head','INVALID_HEAD');return [id,hash];}
-function isPlainObject(v){if(!v||typeof v!=='object'||Array.isArray(v))return false;const p=Object.getPrototypeOf(v);return p===Object.prototype||p===null;}
-function assertJson(value,path='$',seen=new WeakSet()){
- const t=typeof value;
- if(value===null||t==='string'||t==='boolean')return value;
- if(t==='number'){ensure(Number.isFinite(value),'Non-finite number at '+path,'NON_JSON_VALUE');return value;}
- ensure(t==='object','Non-JSON value at '+path,'NON_JSON_VALUE');
- ensure(!seen.has(value),'Cyclic JSON value at '+path,'NON_JSON_VALUE');seen.add(value);
- if(Array.isArray(value)){
-   const own=Reflect.ownKeys(value);ensure(own.every(k=>k==='length'||(typeof k==='string'&&/^(0|[1-9][0-9]*)$/.test(k))),'Non-JSON array properties at '+path,'NON_JSON_VALUE');
-   for(let i=0;i<value.length;i++){ensure(has(value,String(i)),'Sparse array at '+path,'NON_JSON_VALUE');assertJson(value[i],path+'['+i+']',seen);}
- }else{
-   ensure(isPlainObject(value),'Non-plain object at '+path,'NON_JSON_VALUE');
-   for(const k of Reflect.ownKeys(value)){ensure(typeof k==='string','Symbol key at '+path,'NON_JSON_VALUE');const d=Object.getOwnPropertyDescriptor(value,k);ensure(d&&d.enumerable&&has(d,'value'),'Non-data property at '+path+'.'+k,'NON_JSON_VALUE');assertJson(d.value,path+'.'+k,seen);}
- }
- seen.delete(value);return value;
+:root{font:14px/1.45 system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#eaf0f8;background:#0c1520;color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select{font:inherit;color:inherit;background:#172739;border:1px solid #3b526c;border-radius:5px}button{cursor:pointer;padding:5px 9px;white-space:nowrap}button:hover{background:#24435e}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #86c3f5;outline-offset:1px}button:disabled{cursor:not-allowed;opacity:.55}input,select{min-height:29px;padding:4px 7px}input{min-width:0}.brand{font-size:16px;font-weight:750;white-space:nowrap}.version{color:#98b4d0;font-size:12px;white-space:nowrap}.toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:7px;padding:6px 10px;background:#142338;border-bottom:1px solid #40516a;min-height:43px;overflow-x:auto;white-space:nowrap}.toolbar .divider{height:20px;width:1px;background:#43556b;flex:none}.toolbar .stretch{flex:1}.toolbar select{max-width:180px;min-width:130px}.toolbar label{font-size:11px;color:#a9bfd6;display:flex;align-items:center;gap:5px}.toolbar input{font:11px/1.4 ui-monospace,Consolas,monospace}#head-id{width:185px}#head-hash{width:325px}.primary{border-color:#208d74;background:#126756}.secondary{border-color:#476684}.app-main{min-height:calc(100vh - 44px);max-width:1450px;margin:auto;padding:12px}.notice{font-size:12px;color:#9db5ca;min-height:19px;margin:0 0 8px}.notice.error{color:#ffacac}.notice.good{color:#9edec4}.entry-area{min-height:56vh}.placeholder{background:#132236;border:1px dashed #3a526a;border-radius:9px;padding:24px;color:#9fb7ce;text-align:center}.pane{background:#142338;border:1px solid #34506a;border-radius:8px;padding:14px;margin:10px 0}.entry-area pre,.debug pre{background:#07111c;color:#c4e1e8;padding:12px;border-radius:5px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:70vh;overflow:auto;font:12px/1.5 ui-monospace,Consolas,monospace}.entry-area iframe{border:0;display:block;width:100%;min-height:72vh;background:#0d1724;border-radius:7px}.debug{border-color:#907550}.diagnostic{white-space:pre-wrap;overflow:auto;max-height:55vh;padding:12px;background:#07111c;color:#c4e1e8;border-radius:6px;font:12px/1.45 ui-monospace,Consolas,monospace}.pane h2{font-size:15px;margin:0 0 9px}.pane p{margin:8px 0}.pane .row{margin:8px 0}.pane label{font-size:12px;color:#adc4d9}.pane label input{font:12px ui-monospace,Consolas,monospace;width:290px;max-width:85vw}.danger{background:#703039;border-color:#a65964}details#recovery-section{border-top:1px solid #43556b;margin-top:14px;padding-top:12px}details#recovery-section summary{cursor:pointer}.debug h2{font-size:15px;margin:0 0 7px}.entry-launch{display:inline-flex;gap:8px;align-items:center;margin:9px 0}.meta{color:#a1bacd;font-size:12px}.toolbar-menu{position:relative;flex:none}.toolbar-menu summary{border:1px solid #3b526c;padding:5px 9px;border-radius:5px;cursor:pointer;list-style:none}.toolbar-menu summary::-webkit-details-marker{display:none}.toolbar-menu .menu{position:fixed;right:8px;top:44px;background:#142338;border:1px solid #3b526c;border-radius:6px;box-shadow:0 7px 24px #050c16b3;padding:8px;display:flex;flex-direction:column;gap:5px;z-index:12}.toolbar-menu button{text-align:left}.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}@media(max-width:800px){.toolbar{padding:6px}.app-main{padding:8px}#head-id{width:150px}#head-hash{width:210px}}
+</style></head>
+<body>
+<header class="toolbar" aria-label="Базовые операции HTML DBMS">
+  <strong class="brand">HTML DBMS</strong><span class="version">3.0</span>
+  <span class="divider"></span>
+  <button id="new-db" class="primary">Новая</button>
+  <select id="databases" aria-label="Выбрать опубликованную БД"><option value="">— существующая —</option></select>
+  <label for="head-id">ID</label><input id="head-id" placeholder="22 символа" autocomplete="off" spellcheck="false" aria-label="Физический идентификатор версии">
+  <label for="head-hash">H</label><input id="head-hash" placeholder="43 символа" autocomplete="off" spellcheck="false" aria-label="Хеш версии">
+  <button id="open-head" class="primary">Открыть</button>
+  <button id="save" class="primary">Сохранить</button>
+  <button id="info-toggle" aria-controls="info-panel" aria-expanded="false">Инфо</button>
+  <button id="validation-toggle" aria-controls="validation-panel" aria-expanded="false">Валидация</button>
+  <button id="debug-toggle" aria-controls="debug-panel" aria-expanded="false">Отладка</button>
+  <input id="input-html" type="file" accept=".html,text/html" hidden>
+</header>
+<main class="app-main">
+  <div id="status" class="notice" role="status" aria-live="polite"></div>
+  <section id="info-panel" class="pane" aria-label="Информация и операции с контейнером" hidden>
+    <h2>Инфо · HTML DBMS/3</h2>
+    <div class="row"><span id="store-summary" class="meta"></span><span id="current-root" class="meta"></span></div>
+    <p class="meta">Системная оболочка управляет версиями и контейнером. Всё прикладное содержимое определяется полем <code>entry</code> корневого JSON.</p>
+    <div class="row"><button id="import">Загрузить другой HTML</button><button id="copy-head">Копировать ID + H</button><button id="publish">Публиковать текущую БД</button><button id="hide-head">Скрыть публикацию</button></div>
+    <p class="meta">Отсутствие имени в publicHeads не удаляет записи. Сохраните ID и H до скрытия публикации. H — секретный материал в экспериментальной схеме шифрования.</p>
+  </section>
+  <section id="validation-panel" class="pane" aria-label="Валидация цепочек и хранилища" hidden>
+    <h2>Валидация · проверка версий и целостности</h2>
+    <div class="row"><button id="verify" class="primary">Проверить открытую БД</button><button id="verify-store">Проверить контейнер</button></div>
+    <p class="meta">Проверяются SHA-256, AES-GCM, адреса, ancestry, JSON Patch, ссылки $refs и исторические обновления heads. Указанное время — показание часов, не доверенный timestamp.</p>
+    <div class="row"><label>Доверенный исторический H <input id="anchor" placeholder="43 символа Base64url" autocomplete="off" spellcheck="false"></label><button id="verify-anchor">Проверить исторический H</button></div>
+    <div class="row"><label>Другой HTML <input id="external" type="file" accept=".html,text/html"></label><button id="verify-file">Проверить другой HTML как данные</button></div>
+    <pre id="validation-report" class="diagnostic" aria-live="polite">Проверка ещё не выполнялась.</pre>
+    <details id="recovery-section"><summary>Диагностика разрыва и явное восстановление</summary>
+      <p class="meta">Никаких автоматических удалений. При перезаписи предшественника повреждённые потомки не удаляются сами собой.</p>
+      <div class="row"><label>Recovery ID <input id="recovery-id" autocomplete="off" spellcheck="false"></label><label>Recovery H <input id="recovery-hash" autocomplete="off" spellcheck="false"></label><button id="truncate" class="danger">Удалить диагностированный хвост</button></div>
+    </details>
+  </section>
+  <section id="debug-panel" class="pane debug" hidden><h2>Отладка · расшифрованная цепочка (read-only)</h2><pre id="debug-raw"></pre></section>
+  <section id="entry-area" class="entry-area" aria-label="Приложение из JSON entry">
+    <div class="placeholder">Выберите опубликованную БД или введите ID и H, затем нажмите «Открыть».</div>
+  </section>
+</main>
+<script id="db-store" type="application/json">{"format":"HTML_DBMS/3","publicHeads":{},"records":{}}</script>
+<script id="starter-source" type="text/plain">/* Default application template. This source is stored in the newly created root JSON entry. */
+export async function main(db, mount) {
+  const css = document.createElement('style');
+  css.textContent = 'body{font:14px/1.5 system-ui;color:#e5edf8;background:#0d1724;margin:0}button,select,textarea,input{font:inherit;color:inherit;background:#192c41;border:1px solid #435c77;border-radius:5px;padding:6px}button{cursor:pointer}button:hover{background:#2b4f6e}button:disabled{opacity:.6}header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 8px;border-bottom:1px solid #35516b}strong{margin-right:auto}main{padding:12px}h2{font-size:16px}pre,textarea{font:12px/1.5 ui-monospace,Consolas,monospace;background:#081522;padding:12px;border-radius:6px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}textarea{width:100%;box-sizing:border-box;min-height:130px}pre{max-height:65vh}button.active{background:#236d83}.meta{color:#92aec8;font-size:12px}#message{min-height:19px;color:#a9d8bd}table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid #34465a;padding:7px}';
+  document.head.appendChild(css);
+  mount.innerHTML = '<header><strong id="db-title">Документы JSON</strong><button id="add-document">+ Документ</button><button id="edit-document">JSON Patch</button><button id="refresh">Обновить</button></header><main><nav id="document-nav"></nav><p id="message" role="status"></p><section id="editor" hidden><h2>Изменить документ · RFC 6902</h2><textarea id="patch" spellcheck="false">[{"op":"add","path":"/example","value":1}]</textarea><p><button id="write">Записать</button><button id="cancel">Отмена</button></p></section><h2 id="document-title">Корневой документ</h2><pre id="json"></pre></main>';
+  const $ = id => document.getElementById(id);
+  let current = '';
+  const msg=(text,bad=false)=>{$('message').textContent=text;$('message').style.color=bad?'#ffa4a4':'#9bd9b8';};
+  const nav = $('document-nav');
+  async function draw() {
+    const root=await db.read('');
+    $('db-title').textContent=root.name||'JSON DB';
+    nav.replaceChildren();
+    const names=['',...Object.keys(root.$refs||{})];
+    if(!names.includes(current))current='';
+    for(const name of names){const b=document.createElement('button');b.textContent=name||'⌂ Корень';b.className=name===current?'active':'';b.style.margin='0 6px 6px 0';b.addEventListener('click',()=>{current=name;draw().catch(e=>msg(e.message,true));});nav.appendChild(b);}
+    $('document-title').textContent=current||'Корневой JSON';
+    $('json').textContent=JSON.stringify(current?await db.read(current+'/'):root,null,2);
+  }
+  $('add-document').onclick=async()=>{try{const name=prompt('Имя нового документа');if(name===null)return;const raw=prompt('Начальное состояние JSON','{}');if(raw===null)return;await db.createDocument(name,JSON.parse(raw));current=name;await draw();msg('Документ создан');}catch(e){msg(e.message,true);}};
+  $('edit-document').onclick=()=>{$('editor').hidden=!$('editor').hidden;};
+  $('cancel').onclick=()=>{$('editor').hidden=true;};
+  $('write').onclick=async()=>{try{await db.patch(current,JSON.parse($('patch').value));$('editor').hidden=true;await draw();msg('Изменение записано. Сохраните HTML в системной строке.');}catch(e){msg(e.message,true);}};
+  $('refresh').onclick=()=>draw().catch(e=>msg(e.message,true));
+  await draw();
 }
-function jsonClone(value){assertJson(value);return JSON.parse(JSON.stringify(value));}
-async function digest(bytes){return new Uint8Array(await crypto.subtle.digest('SHA-256',bytes));}
-async function rootAddress(hash){ensure(validHash(hash),'Invalid root hash','INVALID_HASH');return to64((await digest(from64(hash))).slice(0,16));}
-async function address(prevId,prevHash){ensure(validId(prevId),'Invalid predecessor ID','INVALID_ID');ensure(validHash(prevHash),'Invalid predecessor hash','INVALID_HASH');const a=from64(prevId),h=from64(prevHash),material=new Uint8Array(48);material.set(a);material.set(h,16);return to64((await digest(material)).slice(0,16));}
-function ivForId(id){ensure(validId(id),'Invalid record ID','INVALID_ID');return from64(id).slice(0,12);}
-function newStore(){return {format:VERSION,publicHead:null,records:{}};}
-function validateCiphertext(ct){ensure(typeof ct==='string'&&ct.length>=22&&ct.length<=Math.ceil(MAX_CT_BYTES*4/3),'Invalid ciphertext size','RESOURCE_LIMIT');const bytes=from64(ct);ensure(bytes.length>=16&&bytes.length<=MAX_CT_BYTES,'Invalid AES-GCM ciphertext','RESOURCE_LIMIT');return bytes;}
-function validateStoreHeader(store){ensure(store&&store.format===VERSION&&isPlainObject(store.records),'Unsupported storage','UNSUPPORTED_STORAGE');ensure(validHeadPointer(store.publicHead),'Invalid public head','INVALID_HEAD');return store;}
-function validateStore(store){validateStoreHeader(store);const entries=Object.entries(store.records);ensure(entries.length<=MAX_RECORDS,'Record count limit exceeded','RESOURCE_LIMIT');let approx=0;for(const [id,ct] of entries){ensure(validId(id),'Invalid record ID','INVALID_ID');ensure(typeof ct==='string','Invalid record envelope','INVALID_RECORD');approx+=Math.ceil(ct.length*3/4);ensure(approx<=MAX_TOTAL_CT_BYTES,'Total ciphertext limit exceeded','RESOURCE_LIMIT');validateCiphertext(ct);}return store;}
-async function recordHash(record){assertJson(record);return digest(te.encode(JSON.stringify(record)));}
-async function encrypt(record,id){assertJson(record);const plain=te.encode(JSON.stringify(record)),h=await digest(plain);ensure(validId(id),'Invalid record ID','INVALID_ID');const key=await crypto.subtle.importKey('raw',h,{name:'AES-GCM'},false,['encrypt']);const ciphertext=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:ivForId(id),tagLength:128},key,plain));ensure(ciphertext.length<=MAX_CT_BYTES,'Ciphertext too large','RESOURCE_LIMIT');return {hash:to64(h),ct:to64(ciphertext)};}
-async function decrypt(ct,hash,id){ensure(validHash(hash),'Invalid hash','INVALID_HASH');ensure(validId(id),'Invalid record ID','INVALID_ID');const bytes=validateCiphertext(ct),h=from64(hash);const key=await crypto.subtle.importKey('raw',h,{name:'AES-GCM'},false,['decrypt']);let plain;try{plain=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:ivForId(id),tagLength:128},key,bytes));}catch{throw error('INVALID_GCM','AES-GCM authentication failed');}ensure(to64(await digest(plain))===hash,'Plaintext hash mismatch','HASH_MISMATCH');let parsed;try{parsed=JSON.parse(td.decode(plain));}catch{throw error('INVALID_JSON','Decrypted record is not JSON');}assertJson(parsed);return parsed;}
-function isIsoUtc(s){if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(s))return false;try{return new Date(s).toISOString()===s;}catch{return false;}}
-function exactKeys(obj,keys){const actual=Object.keys(obj).sort(),expected=[...keys].sort();return actual.length===expected.length&&actual.every((k,i)=>k===expected[i]);}
-function validateEvent(r){
- assertJson(r);ensure(Array.isArray(r)&&r.length===6&&Number.isSafeInteger(r[0])&&r[0]>0&&typeof r[1]==='string','Bad event','INVALID_EVENT');
- if(r[0]===1){ensure(r[1]==='genesis'&&r[2]===null&&r[3]===null&&r[4]===null,'Invalid genesis','INVALID_EVENT');ensure(isPlainObject(r[5])&&exactKeys(r[5],['policy','state']),'Invalid genesis payload','INVALID_EVENT');}
- else{ensure(r[1]==='patch'&&isIsoUtc(r[2])&&validId(r[3])&&validHash(r[4]),'Invalid ancestry or timestamp','INVALID_EVENT');ensure(isPlainObject(r[5])&&exactKeys(r[5],['patch'])&&Array.isArray(r[5].patch),'Invalid patch payload','INVALID_EVENT');}
+</script>
+<script>/* HTML_DBMS/3 — standalone JSON temporal store. No v2 compatibility. */
+(function (g) {
+'use strict';
+const VERSION = 'HTML_DBMS/3';
+const encoder = new TextEncoder(), decoder = new TextDecoder('utf-8', {fatal:true});
+const subtle = g.crypto?.subtle || (typeof require === 'function' ? require('node:crypto').webcrypto.subtle : null);
+const MAX_RECORDS = 200000, MAX_BYTES = 12 * 1024 * 1024, MAX_PATCH = 10000, MAX_DEPTH = 32;
+const own = (o,k) => Object.prototype.hasOwnProperty.call(o,k);
+function error(code, message, more={}) { return Object.assign(new Error(message), {code, ...more}); }
+function ensure(ok, code, message) { if (!ok) throw error(code, message); }
+function plain(x) { return x !== null && typeof x === 'object' && !Array.isArray(x) && (Object.getPrototypeOf(x) === Object.prototype || Object.getPrototypeOf(x) === null); }
+function assertJson(x, seen=new Set(), depth=0) {
+  ensure(depth<=MAX_DEPTH, 'INVALID_JSON', 'JSON depth exceeded');
+  if(x===null || typeof x==='string' || typeof x==='boolean') return;
+  if(typeof x==='number') { ensure(Number.isFinite(x), 'INVALID_JSON','Non-finite number');return; }
+  ensure(Array.isArray(x)||plain(x),'INVALID_JSON','Only JSON values allowed');
+  ensure(!seen.has(x),'INVALID_JSON','Cyclic value');seen.add(x);
+  if(Array.isArray(x)) { ensure(Object.keys(x).length===x.length,'INVALID_JSON','Sparse or decorated array');for(let i=0;i<x.length;i++) {ensure(own(x,i),'INVALID_JSON','Sparse array');assertJson(x[i],seen,depth+1);} }
+  else {ensure(Reflect.ownKeys(x).every(k=>typeof k==='string'), 'INVALID_JSON', 'Symbol property');for(const k of Object.keys(x)) { const d=Object.getOwnPropertyDescriptor(x,k);ensure(d&&own(d,'value')&&d.enumerable,'INVALID_JSON','Accessors forbidden');assertJson(d.value,seen,depth+1);}ensure(Reflect.ownKeys(x).length===Object.keys(x).length,'INVALID_JSON','Hidden property');}
+  seen.delete(x);
+}
+function clone(x){assertJson(x);return JSON.parse(JSON.stringify(x));}
+function encode64(b){if(typeof Buffer!=='undefined')return Buffer.from(b).toString('base64url');let s='';for(const n of b)s+=String.fromCharCode(n);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function decode64(s){ensure(typeof s==='string'&&/^[A-Za-z0-9_-]*$/.test(s)&&s.length%4!==1,'INVALID_BASE64','Invalid Base64url');let b;if(typeof Buffer!=='undefined') b=new Uint8Array(Buffer.from(s,'base64url'));else{const v=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4));b=Uint8Array.from(v,c=>c.charCodeAt(0));}ensure(encode64(b)===s,'INVALID_BASE64','Non-canonical Base64url');return b;}
+function validId(s){try{return decode64(s).length===16;}catch{return false;}}
+function validHash(s){try{return decode64(s).length===32;}catch{return false;}}
+function validHead(h){return Array.isArray(h)&&h.length===2&&validId(h[0])&&validHash(h[1]);}
+function sameHead(a,b){return validHead(a)&&validHead(b)&&a[0]===b[0]&&a[1]===b[1];}
+function key(h){return h[0]+'\0'+h[1];}
+async function sha(b){return new Uint8Array(await subtle.digest('SHA-256',b));}
+async function rootId(hash){return encode64((await sha(decode64(hash))).slice(0,16));}
+async function successorId(prev){ensure(validHead(prev),'INVALID_HEAD','Invalid predecessor head');let b=new Uint8Array(48);b.set(decode64(prev[0]));b.set(decode64(prev[1]),16);return encode64((await sha(b)).slice(0,16));}
+function ivFrom(id){return decode64(id).slice(0,12);}
+async function encrypt(record,id){assertJson(record);ensure(validId(id),'INVALID_ID','Invalid address');const bytes=encoder.encode(JSON.stringify(record));ensure(bytes.length<=MAX_BYTES,'RESOURCE_LIMIT','Record too large');const h=await sha(bytes);const aes=await subtle.importKey('raw',h,'AES-GCM',false,['encrypt']);const data=new Uint8Array(await subtle.encrypt({name:'AES-GCM',iv:ivFrom(id),tagLength:128},aes,bytes));return {hash:encode64(h),ct:encode64(data)};}
+async function decrypt(ct,head){ensure(validHead(head),'INVALID_HEAD','Bad head');let data=decode64(ct);ensure(data.length>=16&&data.length<=MAX_BYTES+16,'RESOURCE_LIMIT','Bad ciphertext length');const h=decode64(head[1]);const aes=await subtle.importKey('raw',h,'AES-GCM',false,['decrypt']);let plaintext;try{plaintext=new Uint8Array(await subtle.decrypt({name:'AES-GCM',iv:ivFrom(head[0]),tagLength:128},aes,data));}catch{throw error('INVALID_GCM','Authentication failed');}
+ensure(encode64(await sha(plaintext))===head[1],'HASH_MISMATCH','Hash mismatch');let r;try{r=JSON.parse(decoder.decode(plaintext));}catch{throw error('INVALID_JSON','Invalid record JSON');}assertJson(r);return r;}
+function validateStore(s){ensure(plain(s)&&s.format===VERSION&&plain(s.records),'UNSUPPORTED_STORAGE','Expected HTML_DBMS/3');ensure(!own(s,'publicHead'),'UNSUPPORTED_STORAGE','Legacy publicHead is unsupported');if(own(s,'publicHeads')){ensure(plain(s.publicHeads),'INVALID_PUBLIC_HEADS','publicHeads must be an object');for(const [n,h] of Object.entries(s.publicHeads)){ensure(n.length>0&&validHead(h),'INVALID_PUBLIC_HEADS','Invalid public head: '+n);}}
+  const ids=Object.keys(s.records);ensure(ids.length<=MAX_RECORDS,'RESOURCE_LIMIT','Too many records');for(const id of ids)ensure(validId(id)&&typeof s.records[id]==='string'&&s.records[id].length<=Math.ceil((MAX_BYTES+16)*4/3),'INVALID_RECORD','Invalid physical record');return s;}
+function newStore(){return {format:VERSION,publicHeads:{},records:{}};}
+function iso(s){return typeof s==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(s)&&!Number.isNaN(Date.parse(s))&&new Date(s).toISOString()===s;}
+// Compact v3 format: genesis = [null,{name,parent,state}], patch = [ISO-time,prevId,prevHash,RFC6902-operations].
+// Sequence is derived from verified ancestry; it is NEVER serialized.
+function isGenesis(r){return Array.isArray(r)&&r.length===2&&r[0]===null;}
+function validateRecord(r){
+ assertJson(r);ensure(Array.isArray(r),'INVALID_EVENT','Record must be array');
+ if(isGenesis(r)){
+  const v=r[1];ensure(plain(v)&&typeof v.name==='string'&&v.name.trim()&&(v.parent===null||validHead(v.parent))&&own(v,'state'),'INVALID_GENESIS','Invalid genesis');
+  ensure(Object.keys(v).length===3&&['name','parent','state'].every(k=>own(v,k)),'INVALID_GENESIS','Genesis fields');
+ }else{
+  ensure(r.length===4&&iso(r[0])&&validId(r[1])&&validHash(r[2])&&Array.isArray(r[3])&&r[3].length>=1&&r[3].length<=MAX_PATCH,'INVALID_EVENT','Invalid patch header');
+ }
  return r;
 }
-async function expectedId(record,hash){return record[0]===1?rootAddress(hash):address(record[3],record[4]);}
-function segments(path){ensure(typeof path==='string'&&(path===''||path.startsWith('/')),'Bad JSON Pointer','INVALID_PATCH');if(path==='')return [];return path.slice(1).split('/').map(x=>{ensure(!/~(?![01])/.test(x),'Invalid JSON Pointer escape','INVALID_PATCH');const v=x.replace(/~1/g,'/').replace(/~0/g,'~');ensure(!['__proto__','prototype','constructor'].includes(v),'Unsafe path','INVALID_PATCH');return v;});}
-function isIndex(key){return /^(0|[1-9][0-9]*)$/.test(key)&&Number.isSafeInteger(Number(key));}
-function at(obj,parts){let cur=obj;for(const key of parts){if(Array.isArray(cur)){ensure(isIndex(key)&&Number(key)<cur.length,'Missing array index','INVALID_PATCH');cur=cur[Number(key)];}else{ensure(cur&&typeof cur==='object'&&has(cur,key),'Missing property','INVALID_PATCH');cur=cur[key];}}return cur;}
-function parent(obj,parts){ensure(parts.length>0,'Root has no parent','INVALID_PATCH');return at(obj,parts.slice(0,-1));}
-function add(root,parts,value){if(!parts.length)return clone(value);const p=parent(root,parts),key=parts.at(-1);if(Array.isArray(p)){ensure(key==='-'||isIndex(key),'Invalid array index','INVALID_PATCH');const idx=key==='-'?p.length:Number(key);ensure(idx<=p.length,'Array add out of range','INVALID_PATCH');p.splice(idx,0,clone(value));}else{ensure(p&&typeof p==='object','Parent is not an object','INVALID_PATCH');p[key]=clone(value);}return root;}
-function remove(root,parts){if(!parts.length)return null;const p=parent(root,parts),key=parts.at(-1);if(Array.isArray(p)){ensure(isIndex(key)&&Number(key)<p.length,'Missing array index','INVALID_PATCH');p.splice(Number(key),1);}else{ensure(p&&typeof p==='object'&&has(p,key),'Missing property','INVALID_PATCH');delete p[key];}return root;}
-function equal(a,b){if(a===b)return true;if(a===null||b===null||typeof a!==typeof b||typeof a!=='object')return false;if(Array.isArray(a)!==Array.isArray(b))return false;if(Array.isArray(a))return a.length===b.length&&a.every((v,i)=>equal(v,b[i]));const ka=Object.keys(a),kb=Object.keys(b);return ka.length===kb.length&&ka.every(k=>has(b,k)&&equal(a[k],b[k]));}
-function patch(document,operations){assertJson(document);assertJson(operations);ensure(Array.isArray(operations)&&operations.length<=MAX_PATCH_OPS,'Invalid patch','INVALID_PATCH');let output=clone(document);for(const op of operations){ensure(isPlainObject(op)&&typeof op.op==='string','Invalid operation','INVALID_PATCH');const dest=segments(op.path);if(op.op==='test'){ensure(has(op,'value')&&equal(at(output,dest),op.value),'JSON Patch test failed','INVALID_PATCH');}
- else if(op.op==='add'){ensure(has(op,'value'),'Missing value','INVALID_PATCH');output=add(output,dest,op.value);}
- else if(op.op==='replace'){ensure(has(op,'value'),'Missing value','INVALID_PATCH');at(output,dest);output=remove(output,dest);output=add(output,dest,op.value);}
- else if(op.op==='remove'){at(output,dest);output=remove(output,dest);}
- else if(op.op==='copy'||op.op==='move'){ensure(typeof op.from==='string','Missing from','INVALID_PATCH');const src=segments(op.from),item=clone(at(output,src));ensure(op.op!=='move'||!(dest.length>src.length&&src.every((v,i)=>v===dest[i])),'Move into descendant','INVALID_PATCH');if(op.op==='move')output=remove(output,src);output=add(output,dest,item);}
- else throw error('INVALID_PATCH','Unsupported JSON Patch operation: '+op.op);
- }assertJson(output);return output;}
-function validateColumns(columns){ensure(isPlainObject(columns)&&Object.keys(columns).length>0,'Invalid columns','INVALID_STATE');for(const [key,col] of Object.entries(columns)){ensure(/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(key)&&isPlainObject(col)&&exactKeys(col,['title','type'])&&typeof col.title==='string'&&col.title.trim()&&['text','number','date'].includes(col.type),'Invalid column schema: '+key,'INVALID_STATE');}}
-function validateDate(v){if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const d=new Date(v+'T00:00:00.000Z');return !Number.isNaN(d.valueOf())&&d.toISOString().slice(0,10)===v;}
-function validateRow(row,columns,exact){ensure(isPlainObject(row),'Invalid row','SCHEMA_VIOLATION');const keys=Object.keys(row);if(exact)ensure(keys.length===Object.keys(columns).length&&Object.keys(columns).every(k=>has(row,k)),'Transaction row keys do not match schema','SCHEMA_VIOLATION');for(const [k,v] of Object.entries(row)){ensure(has(columns,k),'Unknown row field: '+k,'SCHEMA_VIOLATION');const type=columns[k].type;if(type==='text')ensure(typeof v==='string','Expected text: '+k,'SCHEMA_VIOLATION');else if(type==='number')ensure(typeof v==='number'&&Number.isFinite(v),'Expected number: '+k,'SCHEMA_VIOLATION');else if(type==='date')ensure(validateDate(v),'Expected date: '+k,'SCHEMA_VIOLATION');}}
-function validateTransactionState(state){ensure(isPlainObject(state)&&exactKeys(state,['title','columns','rows'])&&typeof state.title==='string'&&state.title.trim()&&isPlainObject(state.rows),'Invalid transaction state','INVALID_STATE');validateColumns(state.columns);for(const row of Object.values(state.rows))validateRow(row,state.columns,true);return state;}
-function validateMainState(state){ensure(isPlainObject(state)&&typeof state.title==='string'&&state.title.trim()&&Array.isArray(state.tabs)&&isPlainObject(state.tables),'Invalid main state','INVALID_STATE');ensure(new Set(state.tabs).size===state.tabs.length&&state.tabs.every(x=>typeof x==='string'&&has(state.tables,x)),'Invalid main tabs','INVALID_STATE');for(const [key,t] of Object.entries(state.tables)){ensure(isPlainObject(t)&&typeof t.title==='string'&&t.title.trim(),'Invalid table: '+key,'INVALID_STATE');if(t.type==='chain'){ensure(exactKeys(t,['title','type','head'])&&t.type==='chain'&&Array.isArray(t.head)&&t.head.length===2&&validId(t.head[0])&&validHash(t.head[1]),'Invalid chain table: '+key,'INVALID_STATE');}else{ensure(exactKeys(t,['title','columns','rows'])&&isPlainObject(t.rows),'Invalid ordinary table: '+key,'INVALID_STATE');validateColumns(t.columns);for(const row of Object.values(t.rows))validateRow(row,t.columns,false);}}return state;}
-function validateState(policy,state){assertJson(state);if(policy==='transaction')return validateTransactionState(state);if(policy==='main')return validateMainState(state);throw error('INVALID_POLICY','Unknown chain policy');}
-function checkPatch(policy,old,operations){if(policy!=='transaction')return;ensure(operations.length===1,'Transaction log accepts one addition','INVALID_PATCH');const x=operations[0],p=segments(x.path);ensure(x.op==='add'&&p.length===2&&p[0]==='rows'&&p[1]!==''&&old.rows&&isPlainObject(old.rows)&&!has(old.rows,p[1]),'Transaction history is append-only','INVALID_PATCH');ensure(has(x,'value'),'Missing transaction row','INVALID_PATCH');validateRow(x.value,old.columns,true);}
-function pointerKey(p){return p[0]+'\0'+p[1];}
-function samePointer(a,b){return Array.isArray(a)&&Array.isArray(b)&&a[0]===b[0]&&a[1]===b[1];}
-async function genesis(store,policy,state,options={}){validateStoreHeader(store);ensure(['main','transaction'].includes(policy),'Unknown chain policy','INVALID_POLICY');assertJson(state);validateState(policy,state);const r=[1,'genesis',null,null,null,{policy,state:jsonClone(state)}],h=to64(await recordHash(r)),id=await rootAddress(h),occupied=has(store.records,id);if(occupied){try{const existing=await decrypt(store.records[id],h,id);validateEvent(existing);ensure(JSON.stringify(existing)===JSON.stringify(r),'Genesis hash collision','ROOT_OCCUPIED');return {id,hash:h,existing:true,overwritten:false};}catch(e){if(!options.overwrite)throw error('ROOT_OCCUPIED','Genesis address is occupied',{id,cause:e.code||e.message});}}
- const enc=await encrypt(r,id);ensure(enc.hash===h,'Internal hash mismatch','INTERNAL_ERROR');store.records[id]=enc.ct;return {id,hash:h,existing:false,overwritten:occupied};}
-async function readRecord(store,id,hash){ensure(has(store.records,id),'Record missing','MISSING_RECORD',{id,hash});const r=await decrypt(store.records[id],hash,id);validateEvent(r);ensure(id===await expectedId(r,hash),'Record address mismatch','ADDRESS_MISMATCH',{id,hash});return r;}
-function diagnosis(code,message,details={}){return {status:'broken',code,message,...details};}
-async function resolveHead(store,pointer){
- if(pointer===null)return diagnosis('HEAD_REQUIRED','Head pointer is required');
- ensure(validHeadPointer(pointer),'Invalid head pointer','INVALID_HEAD');const [id,hash]=pointer;
- if(id!==null){if(!has(store.records,id))return diagnosis('HEAD_RECORD_MISSING','Head record is missing',{sourceHead:[id,hash],invalid:{id,hash},tailIds:[id],recoveryHead:null});try{return {status:'resolved',id,hash,r:await readRecord(store,id,hash),searched:false};}catch(e){return diagnosis('HEAD_RECORD_INVALID','Head record is not valid for supplied ID/H',{sourceHead:[id,hash],invalid:{id,hash},tailIds:[id],recoveryHead:null,cause:e.code||e.message});}}
- const keys=Object.keys(store.records);if(keys.length>MAX_RECORDS)return diagnosis('RESOURCE_LIMIT','Record count limit exceeded',{sourceHead:[null,hash]});let approx=0,found=null;for(const candidate of keys){const ct=store.records[candidate];if(!validId(candidate)||typeof ct!=='string')return diagnosis('INVALID_RECORD','Invalid physical record during head scan',{sourceHead:[null,hash],invalid:{id:candidate}});approx+=Math.ceil(ct.length*3/4);if(approx>MAX_TOTAL_CT_BYTES)return diagnosis('RESOURCE_LIMIT','Total ciphertext limit exceeded',{sourceHead:[null,hash]});try{validateCiphertext(ct);}catch(e){return diagnosis(e.code||'INVALID_RECORD',e.message,{sourceHead:[null,hash],invalid:{id:candidate},cause:e.code||e.message});}try{const r=await readRecord(store,candidate,hash);if(found)return diagnosis('AMBIGUOUS_HEAD','More than one record matches hash',{sourceHead:[null,hash]});found={status:'resolved',id:candidate,hash,r,searched:true};}catch{}}
- return found||diagnosis('HEAD_NOT_FOUND','No record matches supplied hash',{sourceHead:[null,hash]});
+async function expectedId(r,hash){return isGenesis(r)?rootId(hash):successorId([r[1],r[2]]);}
+async function readRecord(s,head){ensure(validHead(head),'INVALID_HEAD','Invalid head');ensure(own(s.records,head[0]),'MISSING_RECORD','Missing record '+head[0]);let r=validateRecord(await decrypt(s.records[head[0]],head));ensure((await expectedId(r,head[1]))===head[0],'ADDRESS_MISMATCH','Wrong physical address');return r;}
+function parts(pointer){ensure(typeof pointer==='string'&&(pointer===''||pointer[0]==='/'),'INVALID_POINTER','Not a JSON Pointer');if(pointer==='')return [];return pointer.slice(1).split('/').map(s=>{ensure(!/~(?![01])/.test(s),'INVALID_POINTER','Invalid tilde escape');return s.replace(/~1/g,'/').replace(/~0/g,'~');});}
+function indexOfToken(t,len,insert=false){ensure(t==='-'&&insert||/^(0|[1-9]\d*)$/.test(t),'INVALID_POINTER','Invalid array index');if(t==='-')return len;const i=Number(t);ensure(Number.isSafeInteger(i)&&i<=(insert?len:len-1),'INVALID_POINTER','Array index out of bounds');return i;}
+function jsonEqual(a,b){
+ if(a===b)return true;
+ if(a===null||b===null||typeof a!==typeof b||typeof a!=='object')return false;
+ if(Array.isArray(a)||Array.isArray(b))return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((v,i)=>jsonEqual(v,b[i]));
+ if(!plain(a)||!plain(b))return false;
+ const ak=Object.keys(a),bk=Object.keys(b);
+ return ak.length===bk.length&&ak.every(k=>own(b,k)&&jsonEqual(a[k],b[k]));
 }
-function recoveryFromEvent(r){return Array.isArray(r)&&r[0]>1&&validId(r[3])&&validHash(r[4])?[r[3],r[4]]:null;}
-async function inspect(store,pointer,limit=MAX_RECORDS){
- try{validateStoreHeader(store);}catch(e){return diagnosis(e.code||'INVALID_STORE',e.message,{cause:e.code||e.message});}
- let resolved;try{resolved=await resolveHead(store,pointer);}catch(e){return diagnosis(e.code||'INVALID_HEAD',e.message,{cause:e.code||e.message});}if(resolved.status!=='resolved')return resolved;
- const seen=new Set(),reverse=[];let event={id:resolved.id,hash:resolved.hash,r:resolved.r};
- while(event){
-  if(seen.has(event.id))return diagnosis('CYCLE','Cycle in chain',{sourceHead:[resolved.id,resolved.hash],tailIds:reverse.map(x=>x.id).reverse(),recoveryHead:null});
-  seen.add(event.id);reverse.push(event);if(reverse.length>limit)return diagnosis('RESOURCE_LIMIT','Chain length limit exceeded',{sourceHead:[resolved.id,resolved.hash]});
-  const r=event.r;if(r[0]===1)break;
-  const prevId=r[3],prevHash=r[4],suffix=reverse.map(x=>x.id).reverse();
-  if(!has(store.records,prevId))return diagnosis('MISSING_PREDECESSOR','Expected predecessor is absent',{sourceHead:[resolved.id,resolved.hash],invalid:{id:prevId,hash:prevHash},tailIds:[prevId,...suffix],recoveryHead:null});
-  let prev;try{prev=await readRecord(store,prevId,prevHash);}catch(e){return diagnosis('REPLACED_OR_CORRUPTED_PREDECESSOR','Physical predecessor does not match cryptographic ancestry',{sourceHead:[resolved.id,resolved.hash],invalid:{id:prevId,hash:prevHash},tailIds:[prevId,...suffix],recoveryHead:null,cause:e.code||e.message});}
-  if(prev[0]!==r[0]-1)return diagnosis('SEQUENCE_MISMATCH','Sequence mismatch',{sourceHead:[resolved.id,resolved.hash],invalid:{id:prevId,hash:prevHash},tailIds:[prevId,...suffix],recoveryHead:recoveryFromEvent(prev)});
-  event={id:prevId,hash:prevHash,r:prev};
- }
- const events=reverse.reverse(),start=events[0]?.r;if(!start||start[0]!==1||start[1]!=='genesis')return diagnosis('INVALID_GENESIS','Chain does not terminate in genesis',{sourceHead:[resolved.id,resolved.hash],tailIds:events.map(e=>e.id),recoveryHead:null});
- const policy=start[5].policy;if(!['main','transaction'].includes(policy))return diagnosis('INVALID_POLICY','Bad chain policy',{sourceHead:[resolved.id,resolved.hash],tailIds:events.map(e=>e.id),recoveryHead:null});
- let state;try{state=jsonClone(start[5].state);validateState(policy,state);}catch(e){return diagnosis(e.code||'INVALID_STATE','Invalid genesis state',{sourceHead:[resolved.id,resolved.hash],invalid:{id:events[0].id,hash:events[0].hash},tailIds:events.map(e=>e.id),recoveryHead:null,cause:e.code||e.message});}
- const states=[jsonClone(state)];
- for(let i=1;i<events.length;i++){
-  const e=events[i];try{checkPatch(policy,state,e.r[5].patch);state=patch(state,e.r[5].patch);validateState(policy,state);}catch(err){return diagnosis(err.code==='SCHEMA_VIOLATION'?'SCHEMA_VIOLATION':err.code||'INVALID_PATCH','Event cannot be replayed',{sourceHead:[resolved.id,resolved.hash],invalid:{id:e.id,hash:e.hash},tailIds:events.slice(i).map(x=>x.id),recoveryHead:[events[i-1].id,events[i-1].hash],cause:err.code||err.message});}states.push(jsonClone(state));
- }
- return {status:'complete',chain:{head:resolved.hash,headId:resolved.id,events,state,states,policy,searched:resolved.searched}};
+function atPath(obj,tokens){let x=obj;for(const t of tokens){if(Array.isArray(x)){x=x[indexOfToken(t,x.length)];}else{ensure(plain(x)&&own(x,t),'INVALID_POINTER','Missing JSON Pointer target');x=x[t];}}return x;}
+function put(target,k,v){Object.defineProperty(target,k,{value:v,writable:true,enumerable:true,configurable:true});}
+function parentAndKey(obj,tokens){ensure(tokens.length>0,'INVALID_POINTER','Root target needs special handling');return [atPath(obj,tokens.slice(0,-1)),tokens.at(-1)];}
+function patch(json,ops){assertJson(json);ensure(Array.isArray(ops)&&ops.length>=1&&ops.length<=MAX_PATCH,'INVALID_PATCH','Patch must contain an operation');let out=clone(json);
+ for(const op of ops){ensure(plain(op)&&typeof op.op==='string'&&typeof op.path==='string','INVALID_PATCH','Malformed JSON Patch operation');const dest=parts(op.path);if(op.op==='test'){ensure(own(op,'value')&&jsonEqual(atPath(out,dest),op.value),'INVALID_PATCH','Test failed');continue;}
+ let value;if(op.op==='add'||op.op==='replace') {ensure(own(op,'value'),'INVALID_PATCH','Missing value');value=clone(op.value);}else if(op.op==='copy'||op.op==='move'){ensure(typeof op.from==='string','INVALID_PATCH','Missing from');const src=parts(op.from);ensure(op.op!=='move'||!(dest.length>src.length&&src.every((t,i)=>t===dest[i])),'INVALID_PATCH','Move into descendant');value=clone(atPath(out,src));if(op.op==='move')out=remove(out,src);}else if(op.op!=='remove')throw error('INVALID_PATCH','Unknown operation');
+ if(op.op==='remove'){out=remove(out,dest);continue;}
+ if(op.op==='replace') atPath(out,dest);
+ if(dest.length===0){out=value;continue;}
+ const [p,k]=parentAndKey(out,dest);if(Array.isArray(p)){if(op.op==='replace')p[indexOfToken(k,p.length)]=value;else p.splice(indexOfToken(k,p.length,true),0,value);}else{ensure(plain(p),'INVALID_POINTER','Parent is not object');put(p,k,value);}
+ }assertJson(out);return out;}
+function remove(out,tokens){if(!tokens.length)return null;const [p,k]=parentAndKey(out,tokens);if(Array.isArray(p))p.splice(indexOfToken(k,p.length),1);else{ensure(plain(p)&&own(p,k),'INVALID_POINTER','Missing remove target');delete p[k];}return out;}
+function diagnose(e,head,events=[]){return {status:'broken',code:e.code||'INVALID_CHAIN',message:e.message||String(e),sourceHead:head,tailIds:events.map(x=>x.head[0])};}
+async function inspect(s,head,limit=MAX_RECORDS){try{validateStore(s);ensure(validHead(head),'INVALID_HEAD','Head required');const rev=[],seen=new Set();let h=head;while(true){ensure(!seen.has(h[0]),'CYCLE','Cycle in physical chain');seen.add(h[0]);ensure(rev.length<limit,'RESOURCE_LIMIT','Chain too long');let r;try{r=await readRecord(s,h);}catch(e){const d=diagnose(e,head,rev);d.invalid=h;d.tailIds=[h[0],...d.tailIds];d.recoveryHead=null;return d;}
+ rev.push({head:h,r});if(isGenesis(r))break;h=[r[1],r[2]];}
+const events=rev.reverse();let state=clone(events[0].r[1].state);for(let i=1;i<events.length;i++)try{state=patch(state,events[i].r[3]);}catch(e){const d=diagnose(e,head,events.slice(i));d.invalid=events[i].head;return d;}
+return {status:'complete',chain:{head:clone(head),genesis:clone(events[0].r[1]),state,events}};
+}catch(e){return diagnose(e,head);}}
+async function load(s,head){const x=await inspect(s,head);if(x.status!=='complete')throw error(x.code,x.message,{diagnosis:x});return x.chain;}
+async function genesis(s,name,state,parent=null,options={}){validateStore(s);ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state)}]);const bytes=encoder.encode(JSON.stringify(r));const h=encode64(await sha(bytes)),id=await rootId(h);const occupied=own(s.records,id);if(occupied&&!options.overwrite){const old=await readRecord(s,[id,h]).catch(()=>null);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head:[id,h],existing:true,overwritten:false};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
+const e=await encrypt(r,id);ensure(e.hash===h,'INTERNAL_ERROR','Unexpected hash');s.records[id]=e.ct;return {head:[id,h],existing:false,overwritten:occupied};}
+async function append(s,head,operations,options={}){validateStore(s);const chain=await load(s,head);const state=patch(chain.state,operations);const id=await successorId(head);const occupied=own(s.records,id);if(occupied&&!options.overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=options.timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head[0],head[1],clone(operations)]);const e=await encrypt(r,id);s.records[id]=e.ct;return {head:[id,e.hash],state,overwritten:occupied};}
+function pointer(value,path){return clone(atPath(value,parts(path)));}
+function escapePtr(k){return k.replace(/~/g,'~0').replace(/\//g,'~1');}
+function getRootRefs(root){if(!plain(root))return {};if(!own(root,'$refs'))return {};ensure(plain(root.$refs),'INVALID_ROOT','$refs must be an object');for(const [k,h] of Object.entries(root.$refs))ensure(k.length>0&&!k.includes('/')&&validHead(h),'INVALID_ROOT','Invalid $refs: '+k);return root.$refs;}
+// A reference has exactly one field: {$ref:"/local/pointer"} or {$ref:"alias/path"}.
+async function resolve(s,rootHead,currentHead,reference,{maxDepth=16}={}){ensure(validHead(rootHead)&&validHead(currentHead),'INVALID_HEAD','Need root and current heads');const root=(await load(s,rootHead)).state;const refs=getRootRefs(root);const visited=new Set();let here=currentHead, ref=reference;
+ for(let depth=0;depth<maxDepth;depth++){ensure(plain(ref)&&Object.keys(ref).length===1&&typeof ref.$ref==='string','INVALID_REF','Expected {$ref: string}');const source=ref.$ref;let h,p;if(source.startsWith('/')){h=here;p=source;}else{const i=source.indexOf('/');ensure(i>0,'INVALID_REF','External ref must contain /');const name=source.slice(0,i);ensure(own(refs,name),'UNKNOWN_DOCUMENT','Unknown document '+name);h=refs[name];p=source.slice(i);if(p==='/')p='';}
+ const signature=key(h)+' '+p;ensure(!visited.has(signature),'REF_CYCLE','Reference cycle');visited.add(signature);const value=pointer((await load(s,h)).state,p);if(plain(value)&&Object.keys(value).length===1&&own(value,'$ref')){ref=value;here=h;continue;}return {head:h,pointer:p,value};}
+ throw error('REF_DEPTH','Reference resolution depth exceeded');}
+function staging(s){validateStore(s);return clone(s);}
+function publish(staged,alias,newHead,oldHead=null){ensure(validHead(newHead),'INVALID_HEAD','Bad published head');if(!own(staged,'publicHeads'))staged.publicHeads={};ensure(plain(staged.publicHeads),'INVALID_PUBLIC_HEADS','Invalid publicHeads');if(oldHead!==null)ensure(sameHead(staged.publicHeads[alias],oldHead),'STALE_PUBLIC_HEAD','Published version changed');put(staged.publicHeads,alias,clone(newHead));}
+async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(tx.publicHeads||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);return {store:tx,rootHead:g.head,genesis:g};}
+async function createDocument(s,rootHead,name,initial,alias=null){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);const n=alias||name;ensure(n.length>0&&!n.includes('/')&&!own(refs,n),'DUPLICATE_DOCUMENT','Name already exists');const g=await genesis(tx,name,initial,rootHead);const ops=own(root.state,'$refs')?[{op:'add',path:'/$refs/'+escapePtr(n),value:g.head}]:[{op:'add',path:'/$refs',value:{[n]:g.head}}];const r=await append(tx,rootHead,ops);return {store:tx,rootHead:r.head,documentHead:g.head};}
+async function patchDocument(s,rootHead,alias,operations,options={}){const tx=staging(s),root=await load(tx,rootHead);const refs=getRootRefs(root.state);ensure(own(refs,alias),'UNKNOWN_DOCUMENT','Unknown document');const p=await append(tx,refs[alias],operations,options);const r=await append(tx,rootHead,[{op:'replace',path:'/$refs/'+escapePtr(alias),value:p.head}]);return {store:tx,rootHead:r.head,documentHead:p.head};}
+// Validate a database snapshot, including the historical references published by its root.
+// Unlike cryptographic validation, reference policy is a separate optional check.
+async function verifyDatabase(s, rootHead, options={}) {
+  validateStore(s);
+  const root = await load(s,rootHead);
+  let state=clone(root.genesis.state);
+  const aliases=new Map(), warnings=[], checks={rootEvents:root.events.length, documents:0, historicalReferences:0, causalOrigins:0};
+  function scan(refMap, beforeHead, introduced) {
+    for(const [name,h] of Object.entries(refMap)){
+      const old=aliases.get(name);
+      if(old&&sameHead(old.head,h))continue;
+      if(old&&introduced) old.transitions.push({beforeHead,from:old.head,to:h});
+      if(!old)aliases.set(name,{head:h,transitions:[],firstBefore:beforeHead,firstEvent:introduced});
+      else old.head=h;
+      checks.historicalReferences++;
+    }
+    for(const name of aliases.keys())if(!own(refMap,name))aliases.delete(name);
+  }
+  scan(getRootRefs(state),root.events[0].head,false);
+  for(let i=1;i<root.events.length;i++){
+    const before=root.events[i-1].head;
+    state=patch(state,root.events[i].r[3]);
+    scan(getRootRefs(state),before,true);
+  }
+  const documents={};
+  for(const [name,meta] of aliases){
+    const child=await load(s,meta.head);
+    checks.documents++;
+    const ancestry=new Set(child.events.map(e=>key(e.head)));
+    for(const move of meta.transitions){
+      ensure(ancestry.has(key(move.from)),'REFERENCE_ROLLBACK','Reference "'+name+'" does not extend an earlier version');
+    }
+    const parent=child.genesis.parent;
+    if(meta.firstEvent && sameHead(parent,meta.firstBefore))checks.causalOrigins++;
+    else if(parent!==null && !root.events.some(e=>sameHead(e.head,parent)))
+      warnings.push('Документ '+name+': genesis.parent не входит в ancestry выбранного корня');
+    else if(meta.firstEvent && parent!==null && !sameHead(parent,meta.firstBefore))
+      warnings.push('Документ '+name+': origin не совпадает с версией корня перед первой регистрацией (возможно, импортирован)');
+    documents[name]={head:meta.head,events:child.events.length,origin:parent};
+  }
+  if(options.anchorHash!==undefined){
+    ensure(validHash(options.anchorHash),'INVALID_HASH','Invalid trusted historical H');
+    const index=root.events.findIndex(e=>e.head[1]===options.anchorHash);
+    ensure(index>=0,'ANCHOR_MISMATCH','Trusted H is not in the root ancestry');
+    checks.anchorIndex=index;
+  }
+  return {status:'complete',rootHead,checks,documents,warnings};
 }
-async function load(store,pointer,limit=MAX_RECORDS){const result=await inspect(store,pointer,limit);if(result.status!=='complete')throw error(result.code,result.message,result);if(result.chain.policy==='main')await verifyNestedChains(store,result.chain);return result.chain;}
-async function verifyNestedChains(store,mainChain){ensure(mainChain&&mainChain.policy==='main'&&Array.isArray(mainChain.states),'Main chain with replay states required','INVALID_STATE');const names=new Set();for(const s of mainChain.states)for(const [name,t] of Object.entries(s.tables||{}))if(t&&t.type==='chain')names.add(name);for(const name of names){const pointers=[];for(const s of mainChain.states){const t=s.tables?.[name];ensure(t&&t.type==='chain'&&Array.isArray(t.head),'Chain table disappeared or changed type: '+name,'NESTED_CHAIN_ROLLBACK');pointers.push(t.head);}const final=pointers.at(-1),nested=await load(store,final);ensure(nested.policy==='transaction','Nested chain policy mismatch','NESTED_CHAIN_ROLLBACK');const index=new Map(nested.events.map((e,i)=>[pointerKey([e.id,e.hash]),i]));let last=-1;for(const p of pointers){const i=index.get(pointerKey(p));ensure(i!==undefined&&i>=last,'Nested chain does not monotonically extend prior head','NESTED_CHAIN_ROLLBACK',{name,pointer:p});last=i;}}
- return true;}
-async function verifyNestedTransition(store,oldState,newState){const names=new Set();for(const [name,t] of Object.entries(oldState.tables||{}))if(t?.type==='chain')names.add(name);for(const [name,t] of Object.entries(newState.tables||{}))if(t?.type==='chain')names.add(name);for(const name of names){const a=oldState.tables?.[name],b=newState.tables?.[name];ensure(a?.type==='chain'&&b?.type==='chain','Chain table cannot disappear or change type: '+name,'NESTED_CHAIN_ROLLBACK');if(samePointer(a.head,b.head))continue;const nested=await load(store,b.head);ensure(nested.policy==='transaction','Nested chain policy mismatch','NESTED_CHAIN_ROLLBACK');ensure(nested.events.some(e=>e.id===a.head[0]&&e.hash===a.head[1]),'New nested head does not extend previous head','NESTED_CHAIN_ROLLBACK',{name,previous:a.head,next:b.head});}return true;}
-async function append(store,chain,operations,options={}){validateStoreHeader(store);ensure(chain&&chain.events?.length>=1,'Missing chain','INVALID_CHAIN');assertJson(operations);validateState(chain.policy,chain.state);checkPatch(chain.policy,chain.state,operations);const nextState=patch(chain.state,operations);validateState(chain.policy,nextState);if(chain.policy==='main')await verifyNestedTransition(store,chain.state,nextState);const old=chain.events.at(-1),id=await address(old.id,chain.head);const occupied=has(store.records,id);if(occupied&&!options.overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor address is already occupied',{id,predecessor:[old.id,chain.head]});const r=[old.r[0]+1,'patch',new Date().toISOString(),old.id,chain.head,{patch:jsonClone(operations)}];validateEvent(r);const enc=await encrypt(r,id);const check=await decrypt(enc.ct,enc.hash,id);validateEvent(check);store.records[id]=enc.ct;return {head:enc.hash,id,state:nextState,overwritten:occupied};}
-function publicHeadAfter(store,result){const p=store.publicHead;if(p===null)return null;if(p[0]===null)return [null,result.head];return [result.id,result.head];}
-async function truncateInvalidTail(store,diag,recoveryPointer){
- validateStoreHeader(store);
- ensure(diag&&diag.status==='broken'&&Array.isArray(diag.tailIds)&&diag.tailIds.length&&diag.sourceHead,'No truncatable tail','INVALID_TRUNCATION');
- // Reject stale diagnostics to prevent deletion after a concurrent change.
- const fresh=await inspect(store,diag.sourceHead);
- ensure(fresh.status==='broken'&&fresh.code===diag.code&&JSON.stringify(fresh.tailIds)===JSON.stringify(diag.tailIds)&&JSON.stringify(fresh.invalid||null)===JSON.stringify(diag.invalid||null),'Diagnosis no longer matches storage','STALE_DIAGNOSIS');
- let recovery=diag.recoveryHead||recoveryPointer;
- ensure(Array.isArray(recovery)&&recovery.length===2&&validId(recovery[0])&&validHash(recovery[1]),'Recovery head is required','RECOVERY_HEAD_REQUIRED');
- const checked=await inspect(store,recovery);
- ensure(checked.status==='complete','Recovery head is not a complete valid chain','INVALID_RECOVERY_HEAD');
- recovery=[checked.chain.headId,checked.chain.head];
- const tail=new Set(fresh.tailIds);
- ensure(!tail.has(recovery[0]),'Recovery head belongs to removed tail','INVALID_RECOVERY_HEAD');
- if(fresh.invalid?.id)ensure(await address(recovery[0],recovery[1])===fresh.invalid.id,'Recovery head does not precede diagnosed slot','INVALID_RECOVERY_HEAD');
- // A replaced slot may already contain a valid successor of a different branch.
- const preservedIds=[];
- if(fresh.code==='REPLACED_OR_CORRUPTED_PREDECESSOR'&&fresh.invalid?.id&&has(store.records,fresh.invalid.id))preservedIds.push(fresh.invalid.id);
- let removed=0;
- for(const id of tail){if(preservedIds.includes(id))continue;if(has(store.records,id)){delete store.records[id];removed++;}}
- if(Array.isArray(store.publicHead)&&fresh.sourceHead&&store.publicHead[1]===fresh.sourceHead[1])store.publicHead=store.publicHead[0]===null?[null,recovery[1]]:recovery;
- return {removed,head:recovery,preservedIds};
+// Recovery is explicitly destructive. Never remove a physical slot whose contents
+// were overwritten: it might belong to a different branch of history.
+async function truncateInvalidTail(s,diagnosis,recoveryHead) {
+  validateStore(s);
+  ensure(diagnosis&&diagnosis.status==='broken'&&validHead(diagnosis.sourceHead)&&Array.isArray(diagnosis.tailIds),'INVALID_TRUNCATION','Broken diagnosis required');
+  ensure(validHead(recoveryHead),'INVALID_HEAD','Explicit recovery head required');
+  const fresh=await inspect(s,diagnosis.sourceHead);
+  ensure(fresh.status==='broken'&&fresh.code===diagnosis.code&&JSON.stringify(fresh.tailIds)===JSON.stringify(diagnosis.tailIds),'STALE_DIAGNOSIS','Diagnosis is stale');
+  // If the first corrupt slot is not a successor of the proposed recovery head,
+  // there is no proof that the manual anchor is the right recovery boundary.
+  const invalid=Array.isArray(fresh.invalid)?fresh.invalid[0]:null;
+  ensure(validId(invalid),'INVALID_TRUNCATION','No identifiable corrupt physical slot');
+  ensure(await successorId(recoveryHead)===invalid,'INVALID_RECOVERY_HEAD','Recovery head must precede the corrupt slot');
+  const recovered=await load(s,recoveryHead);
+  ensure(recovered.events.length>0,'INVALID_RECOVERY_HEAD','Recovery chain is invalid');
+  const descendants=fresh.tailIds.filter(id=>id!==invalid);
+  // Keep only later records for which the broken source chain's decrypted ancestry
+  // actually points back to the corrupt slot; no guesses and no deleting the occupant.
+  const deletions=[];
+  for(const id of descendants){
+    if(!own(s.records,id))continue;
+    // These records were read and authenticated while inspecting from the broken tip.
+    deletions.push(id);
+  }
+  const out=staging(s);
+  for(const id of deletions)delete out.records[id];
+  return {store:out,recoveryHead,deletedIds:deletions,keptInvalidSlot:invalid};
 }
-function sortedStore(store){validateStore(store);return {format:VERSION,publicHead:store.publicHead===null?null:[store.publicHead[0],store.publicHead[1]],records:Object.fromEntries(Object.entries(store.records).sort(([a],[b])=>a<b?-1:a>b?1:0))};}
-root.HTMLDBMSCore=Object.freeze({VERSION,MAX_RECORDS,MAX_CT_BYTES,MAX_TOTAL_CT_BYTES,to64,from64,validHash,validId,validHeadPointer,directHead,assertJson,rootAddress,address,ivForId,newStore,validateStore,genesis,inspect,load,verifyNestedChains,append,publicHeadAfter,truncateInvalidTail,patch,segments,sortedStore});
-})(globalThis);
+function commit(s,tx){validateStore(tx);for(const k of Object.keys(s))delete s[k];Object.assign(s,tx);return s;}
+// Physical destructive replacement requires explicit confirmation in the caller.
+async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
+const api={VERSION,newStore,validateStore,validHead,sameHead,assertJson,patch,pointer,resolve,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,verifyDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
+g.HTML_DBMS=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this);
 </script>
-<script>/* Offline browser controller for HTML DBMS 2.2. */
-(async function(){
+<script>/* HTML_DBMS/3 minimal physical shell. All database UI is provided by the JSON entry. */
+(function(){
 'use strict';
-const C=globalThis.HTMLDBMSCore,$=id=>document.getElementById(id);
-// Capture the initial markup before decrypted values appear in the UI.
+const db=HTML_DBMS, $=id=>document.getElementById(id);
+// Export from a pristine template: never copy decrypted application DOM into saved HTML.
 const exportTemplate=document.documentElement.cloneNode(true);
-function storageNode(doc){
- const nodes=[...doc.querySelectorAll('[id="db-store"]')];
- if(nodes.length!==1||nodes[0].tagName.toLowerCase()!=='script'||nodes[0].getAttribute('type')!=='application/json')
-  throw Error('Ожидается ровно один элемент id="db-store": script[type="application/json"]');
- return nodes[0];
+const STARTER_SOURCE=$('starter-source').textContent;
+let store, rootHead=null, publicName=null, debug=false, busy=false, activeFrame=null, lastDiagnosis=null;
+const OWN=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+function notice(message,bad=false){$('status').textContent=message;$('status').className='notice '+(bad?'error':'good');}
+function err(e){notice((e?.code?e.code+': ':'')+(e?.message||String(e)),true);}
+async function run(fn){if(busy)return;busy=true;try{await fn();}catch(e){err(e);}finally{busy=false;}}
+function format(h){return h?JSON.stringify(h):'—';}
+function show(id,on){$(id).hidden=!on;}
+function validName(s){return typeof s==='string'&&s.trim().length>0&&!s.includes('/')&&!['__proto__','constructor','prototype'].includes(s);}
+function needRoot(){if(!rootHead)throw Error('Сначала откройте базу');}
+function activePublished(){return !!(publicName&&store.publicHeads&&db.sameHead(store.publicHeads[publicName],rootHead));}
+function updateInfo(){
+ if(!store)return;
+ $('store-summary').textContent='Физических сообщений: '+Object.keys(store.records).length+' · опубликованных БД: '+Object.keys(store.publicHeads||{}).length+'.';
+ $('current-root').textContent='Открытая версия: '+format(rootHead)+(publicName?' · '+publicName:' · не опубликована');
 }
-let store=JSON.parse(storageNode(document).textContent),main=null,tx=null,active='items',busy=false,lastDiagnosis=null,lastDiagnosisKind=null,debugVisible=false;
-const escapePointer=s=>String(s).replace(/~/g,'~0').replace(/\//g,'~1');
-const stamp=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('.')+'_'+[d.getHours(),d.getMinutes(),d.getSeconds()].map(x=>String(x).padStart(2,'0')).join('.');
-const filename=s=>((s||'HTML_DBMS').trim().replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').replace(/\s+/g,'_').slice(0,90)||'HTML_DBMS')+'_'+stamp(new Date())+'.html';
-const status=(s,bad=false)=>{$('status').textContent=s;$('status').className=bad?'bad':'ok';};
-const show=(s,el)=>{el.textContent=s;};
-function publication(){const p=store.publicHead;return p===null?'head скрыт':p[0]===null?'публикуется только H':'публикуются ID + H';}
-function setUnlocked(yes){$('workspace').hidden=!yes;$('access-panel').hidden=yes;$('save').disabled=!yes;$('access-mode').textContent=publication();}
-function showAccess(message='Для открытия укажите H либо пару ID + H.'){main=null;tx=null;setUnlocked(false);$('access-panel').hidden=false;$('access-note').textContent=message;}
-function pointerFromInputs(){const id=$('open-id').value.trim(),hash=$('open-hash').value.trim();if(!hash)throw Error('Введите H');return [id||null,hash];}
-function showDiagnosis(d,kind){lastDiagnosis=d;lastDiagnosisKind=kind;$('diagnostic-panel').hidden=false;const invalid=d.invalid?`\nID: ${d.invalid.id}\nH: ${d.invalid.hash}`:'';$('diagnostic').textContent=`${d.code}: ${d.message||''}${invalid}${d.cause?'\nПричина: '+d.cause:''}`;$('truncate').disabled=!Array.isArray(d.tailIds)||!d.tailIds.length;$('recovery-id').value=d.recoveryHead?.[0]||'';$('recovery-hash').value=d.recoveryHead?.[1]||'';}
-function clearDiagnosis(){lastDiagnosis=null;lastDiagnosisKind=null;$('diagnostic-panel').hidden=true;$('diagnostic').textContent='';}
-function debugChain(chain){return chain?{policy:chain.policy,head:[chain.headId,chain.head],records:chain.events.map(e=>({id:e.id,hash:e.hash,record:e.r}))}:null;}
-function debugSnapshot(){return {main:debugChain(main),transaction:debugChain(tx)};}
-function renderDebug(){const panel=$('debug-panel'),button=$('debug-toggle');if(!panel||!button)return;panel.hidden=!debugVisible;button.textContent=debugVisible?'Скрыть отладочный режим':'Отладочный режим';$('debug-raw').textContent=debugVisible?JSON.stringify(debugSnapshot(),null,2):'';}
-async function bootstrap(){
- if(store.format!==C.VERSION)throw Error('Неподдерживаемый формат: '+String(store.format));
- if(store.publicHead!==null){await openDatabase(store.publicHead);return;}
- if(Object.keys(store.records).length){showAccess('В файле есть зашифрованные записи, но точка входа не опубликована. Укажите H либо ID + H.');status('Точка входа скрыта.');return;}
- const nested=await C.genesis(store,'transaction',{title:'История операций (демо)',columns:{date:{title:'Дата',type:'date'},amount:{title:'Сумма',type:'number'},note:{title:'Примечание',type:'text'}},rows:{}});
- const initialState={title:'HTML DBMS — демонстрация',tabs:['items','reference','transactions'],tables:{items:{title:'Предметы',columns:{name:{title:'Название',type:'text'},quantity:{title:'Количество',type:'number'}},rows:{}},reference:{title:'Справочник',columns:{code:{title:'Код',type:'text'},label:{title:'Описание',type:'text'}},rows:{}},transactions:{title:'Операции',type:'chain',head:[nested.id,nested.hash]}}};
- const gen=await C.genesis(store,'main',initialState);store.publicHead=[gen.id,gen.hash];await openDatabase([gen.id,gen.hash]);status('Создана демонстрационная БД 2.2; сохраните HTML, чтобы зафиксировать её.');
+function togglePanel(which){
+ const names=['info','validation','debug'];
+ const panel=which+'-panel';
+ const next=$(panel).hidden;
+ for(const name of names){show(name+'-panel',name===which&&next);$(name+'-toggle').setAttribute('aria-expanded',String(name===which&&next));}
+ if(which==='info'&&next)updateInfo();
+ return next;
 }
-async function openDatabase(pointer){
- clearDiagnosis();const result=await C.inspect(store,pointer);if(result.status!=='complete'){showDiagnosis(result,'main');showAccess('Основная цепочка не открыта: '+result.code);return false;}
- main=result.chain;if(main.policy!=='main')throw Error('Указанный head не является основной БД');
- const nestedPointer=main.state.tables?.transactions?.head;
- if(nestedPointer){const nestedResult=await C.inspect(store,nestedPointer);if(nestedResult.status!=='complete'){tx=null;setUnlocked(true);showDiagnosis(nestedResult,'nested');render();status('Основная БД открыта, но вложенная цепочка повреждена: '+nestedResult.code,true);return false;}tx=nestedResult.chain;if(tx.policy!=='transaction')throw Error('Неверная политика вложенной цепочки');}
- else tx=null;
- try{await C.verifyNestedChains(store,main);}catch(e){setUnlocked(true);render();showDiagnosis({status:'broken',code:e.code||'NESTED_CHAIN_ROLLBACK',message:e.message,tailIds:[]},'continuity');status('Нарушена монотонность вложенной истории.',true);return false;}
- setUnlocked(true);render();status(main.searched?'БД открыта по H: physical ID найден поиском.':'БД открыта напрямую по ID + H.');return true;
-}
-async function appendWithConfirmation(work,chain,operations){try{return await C.append(work,chain,operations);}catch(e){if(e.code!=='SUCCESSOR_OCCUPIED')throw e;const ok=confirm('Канонический адрес следующей записи уже занят. Это может означать более свежую скрытую версию, другую ветвь или повреждение.\n\nПерезапись заменит запись в этом slot и может сделать старый поздний head неполным. Осиротевший хвост автоматически НЕ удаляется.\n\nПерезаписать продолжение?');if(!ok){status('Запись отменена: существующее продолжение сохранено.');return null;}return C.append(work,chain,operations,{overwrite:true});}}
-async function updateMain(operations){const work=structuredClone(store),updated=await appendWithConfirmation(work,main,operations);if(!updated)return false;work.publicHead=C.publicHeadAfter(work,updated);const checked=await C.load(work,[updated.id,updated.head]);await C.verifyNestedChains(work,checked);store=work;await openDatabase([updated.id,updated.head]);status(updated.overwritten?'Новое продолжение явно перезаписало занятый successor slot. Старый хвост не удалён.':'Изменение сохранено в памяти; скачайте обновлённый HTML.');return true;}
-async function action(fn){if(busy)return;busy=true;for(const b of document.querySelectorAll('button'))b.disabled=true;try{await fn();}catch(e){console.error(e);if(e.details?.status==='broken')showDiagnosis(e.details,'main');if(e.code!=='CANCELLED')status('Ошибка: '+(e.message||e),true);}finally{busy=false;for(const b of document.querySelectorAll('button'))b.disabled=false;$('save').disabled=!main;$('add-column').disabled=!main||main.state.tables?.[active]?.type==='chain';if(lastDiagnosis)$('truncate').disabled=!lastDiagnosis.tailIds?.length;}}
-function columnValue(input,type){if(type==='number'){const t=input.trim().replace(',','.');if(!t||!Number.isFinite(Number(t)))throw Error('Требуется число');return Number(t);}return input;}
-function cell(value){const td=document.createElement('td');td.textContent=value===null?'null':String(value??'');return td;}
-function render(){if(!main)return;const state=main.state;$('title').value=state.title||'';$('head-id').textContent=main.headId;$('head-hash').textContent=main.head;$('nested-head').textContent=tx?JSON.stringify([tx.headId,tx.head]):'—';$('count').textContent=String(Object.keys(store.records).length);$('access-mode').textContent=publication();$('tabs').replaceChildren();for(const tab of state.tabs){const t=state.tables[tab];if(!t)continue;const b=document.createElement('button');b.textContent=t.title||tab;b.className=tab===active?'selected':'';b.onclick=()=>{active=tab;render();};$('tabs').appendChild(b);}if(!state.tables[active])active=state.tabs[0];const t=state.tables[active];if(!t)return;show(t.title,$('table-title'));const cols=Object.entries(t.type==='chain'?(tx?.state.columns||{}):(t.columns||{}));$('table-head').replaceChildren();const head=document.createElement('tr');head.appendChild(Object.assign(document.createElement('th'),{textContent:'ID'}));for(const [,c]of cols)head.appendChild(Object.assign(document.createElement('th'),{textContent:c.title}));$('table-head').appendChild(head);
- const rows=t.type==='chain'?(tx?.state.rows||{}):t.rows||{};$('table-body').replaceChildren();for(const [rowId,row]of Object.entries(rows)){const tr=document.createElement('tr');tr.appendChild(cell(rowId.slice(0,12)));for(const [key,col]of cols){const td=cell(row[key]);if(t.type!=='chain'){td.title='Двойной щелчок — изменить';td.className='editable';td.ondblclick=()=>action(async()=>{const proposed=prompt('Новое значение: '+col.title,String(row[key]??''));if(proposed===null)return;const value=columnValue(proposed,col.type);await updateMain([{op:'replace',path:'/tables/'+escapePointer(active)+'/rows/'+escapePointer(rowId)+'/'+escapePointer(key),value}]);});}tr.appendChild(td);}$('table-body').appendChild(tr);}
- renderDebug();$('row-inputs').replaceChildren();for(const [key,c]of cols){const label=document.createElement('label');label.textContent=c.title;const input=document.createElement('input');input.dataset.col=key;input.dataset.type=c.type;input.placeholder=c.title;if(c.type==='date')input.type='date';label.appendChild(input);$('row-inputs').appendChild(label);}$('add-column').disabled=t.type==='chain';$('table-hint').textContent=t.type==='chain'?'Schema и смысл строк зафиксированы в genesis этой append-only цепочки.':'Двойной щелчок по ячейке — изменить значение (JSON Patch).';}
-$('open-pair').onclick=()=>action(async()=>{const p=pointerFromInputs();if(p[0]===null)throw Error('Для этого действия введите ID и H');await openDatabase(p);});
-$('find-by-hash').onclick=()=>action(async()=>{const hash=$('open-hash').value.trim();if(!hash)throw Error('Введите H');await openDatabase([null,hash]);});
-$('add-row').onclick=()=>action(async()=>{if(!main)throw Error('Сначала откройте БД');const t=main.state.tables[active],row={};for(const el of $('row-inputs').querySelectorAll('input'))row[el.dataset.col]=columnValue(el.value,el.dataset.type);const id='id_'+C.to64(crypto.getRandomValues(new Uint8Array(12)));if(t.type==='chain'){if(!tx)throw Error('Вложенная цепочка недоступна');const work=structuredClone(store),result=await appendWithConfirmation(work,tx,[{op:'add',path:'/rows/'+escapePointer(id),value:row}]);if(!result)return;const newMain=await appendWithConfirmation(work,main,[{op:'replace',path:'/tables/transactions/head',value:[result.id,result.head]}]);if(!newMain)return;work.publicHead=C.publicHeadAfter(work,newMain);const checked=await C.load(work,[newMain.id,newMain.head]);await C.verifyNestedChains(work,checked);store=work;await openDatabase([newMain.id,newMain.head]);status(result.overwritten||newMain.overwritten?'Операция записана с явной перезаписью занятого successor slot.':'Операция добавлена в независимую append-only цепочку.');}else await updateMain([{op:'add',path:'/tables/'+escapePointer(active)+'/rows/'+escapePointer(id),value:row}]);});
-$('add-column').onclick=()=>action(async()=>{const t=main.state.tables[active];if(t.type==='chain')throw Error('Schema транзакций зафиксирована в genesis');const key=prompt('Код нового поля (латиница, цифры, _):');if(key===null)return;if(!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key)||Object.hasOwn(t.columns,key))throw Error('Некорректный или занятый код поля');const name=prompt('Заголовок поля:',key);if(name===null||!name.trim())return;await updateMain([{op:'add',path:'/tables/'+escapePointer(active)+'/columns/'+escapePointer(key),value:{title:name.trim(),type:'text'}}]);});
-$('save-title').onclick=()=>action(async()=>{const title=$('title').value.trim();if(!title)throw Error('Введите заголовок');await updateMain([{op:'replace',path:'/title',value:title}]);});
-$('publish-direct').onclick=()=>action(async()=>{store.publicHead=[main.headId,main.head];render();status('При следующем сохранении HTML опубликует ID + H.');});
-$('publish-hash').onclick=()=>action(async()=>{store.publicHead=[null,main.head];render();status('При следующем сохранении HTML опубликует только H; открытие потребует поиска ID.');});
-$('publish-none').onclick=()=>action(async()=>{store.publicHead=null;render();status('Head скрыт. Сохранённый HTML потребует H либо ID + H по отдельному каналу.');});
-$('debug-toggle').onclick=()=>{debugVisible=!debugVisible;renderDebug();status(debugVisible?'Отладочный режим включён: показаны сырые plaintext-записи открытых цепочек.':'Отладочный режим скрыт.');};
-function exportDocument(){
- // Live DOM contains capabilities, table plaintext and debug history.
- const doc=exportTemplate.cloneNode(true);
- for(const id of ['status','head-id','head-hash','nested-head','count','access-mode','table-title','table-hint','tabs','table-head','table-body','row-inputs','debug-raw','diagnostic','access-note']){
-  const node=doc.querySelector('[id="'+id+'"]');if(node)node.replaceChildren();
+function validationOutput(value){$('validation-report').textContent=typeof value==='string'?value:JSON.stringify(value,null,2);}
+function setFields(head){$('head-id').value=head?.[0]||'';$('head-hash').value=head?.[1]||'';}
+function fieldHead(){const h=[$('head-id').value.trim(),$('head-hash').value.trim()];if(!db.validHead(h))throw Error('Введите корректные ID (22 символа) и H (43 символа)');return h;}
+function syncCatalog(){updateInfo();const sel=$('databases'),prev=sel.value;sel.replaceChildren();sel.add(new Option('— существующая —',''));for(const name of Object.keys(store.publicHeads||{}))sel.add(new Option(name,name));if(OWN(store.publicHeads||{},prev))sel.value=prev;}
+function selectAlias(alias){const h=store.publicHeads?.[alias];if(!db.validHead(h))return;setFields(h);notice('ID и H подставлены для «'+alias+'». Нажмите «Открыть».');}
+function findPublicName(h){const selected=$('databases').value;if(selected&&db.sameHead(store.publicHeads?.[selected],h))return selected;return Object.keys(store.publicHeads||{}).find(n=>db.sameHead(store.publicHeads[n],h))||null;}
+function stopApp(){if(activeFrame){activeFrame.remove();activeFrame=null;}}
+function clearEntry(){stopApp();$('entry-area').replaceChildren();}
+function element(tag,text,cls){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;}
+function placeholder(text){const e=element('div',text,'placeholder');$('entry-area').appendChild(e);}
+function getRootRefs(root){return db.getRootRefs?db.getRootRefs(root):root?.$refs||{};}
+async function openFields(){await openHead(fieldHead());}
+async function openHead(head){const chain=await db.load(store,head);getRootRefs(chain.state);rootHead=[...head];publicName=findPublicName(head);debug=false;show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');setFields(head);updateInfo();await renderEntry();notice('Открыто: '+(chain.state?.name||'JSON')+' · '+format(head));}
+function entryValue(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).length===1&&typeof x.$ref==='string';}
+async function renderEntry(){clearEntry();if(!rootHead){placeholder('Выберите БД, укажите ID/H и нажмите «Открыть».');return;}const root=(await db.load(store,rootHead)).state;let value=root?.entry;if(entryValue(value))value=(await db.resolve(store,rootHead,rootHead,value)).value;
+ if(value===undefined||value===null){placeholder('В корневом JSON-документе отсутствует entry. Приложение не задано.');return;}
+ if(value&&typeof value==='object'&&!Array.isArray(value)&&value.type==='application/javascript'&&typeof value.source==='string'){
+   const host=$('entry-area'), block=element('div',undefined,'pane');block.appendChild(element('div','Исполняемое entry: '+(value.export||'main'),'meta'));const btn=element('button','Запустить приложение','primary');btn.classList.add('entry-launch');block.appendChild(btn);block.appendChild(element('p','JavaScript выполняется только после подтверждения, в изолированном iframe. Запись в БД требует отдельного подтверждения.','meta'));host.appendChild(block);
+   btn.onclick=()=>run(async()=>{block.remove();await launchSandbox(value);});
+   // Автозапуск разрешён исключительно для поставляемого неизменённого стартового приложения.
+   if(value.source===STARTER_SOURCE&&value.export==='main'){block.remove();await launchSandbox(value);}
+   return;
  }
- for(const input of doc.querySelectorAll('input,textarea,select')){
-  input.removeAttribute('value');
-  if(input.tagName.toLowerCase()==='textarea')input.replaceChildren();
+ if(value&&typeof value==='object'&&!Array.isArray(value)&&value.type==='text/html'&&typeof value.html==='string'){
+   const f=document.createElement('iframe');f.title='HTML entry (без исполнения JS)';f.setAttribute('sandbox','');f.srcdoc='<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'; form-action \'none\'">'+value.html;hostSafeAppend(f);return;
  }
- for(const option of doc.querySelectorAll('option[selected]'))option.removeAttribute('selected');
- for(const b of doc.querySelectorAll('button[disabled]'))b.removeAttribute('disabled');
- for(const id of ['workspace','access-panel','diagnostic-panel','debug-panel'])doc.querySelector('[id="'+id+'"]')?.setAttribute('hidden','');
- doc.querySelector('#debug-toggle').textContent='Отладочный режим';
- return doc;
+ const pre=element('pre',JSON.stringify(value,null,2));$('entry-area').appendChild(pre);
 }
-$('save').onclick=()=>action(async()=>{if(!main)throw Error('БД не открыта');const serialized=JSON.stringify(C.sortedStore(store));const doc=exportDocument();doc.querySelector('#db-store').textContent=serialized.replace(/</g,'\\u003c');const text='<!DOCTYPE html>\n'+doc.outerHTML,name=filename(main.state.title),url=URL.createObjectURL(new Blob([text],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Скачивается '+name);});
-$('copy-head').onclick=()=>navigator.clipboard?.writeText(main?JSON.stringify([main.headId,main.head]):'').then(()=>status('ID + H скопированы.')).catch(()=>status('Скопируйте ID + H вручную.',true));
-$('verify').onclick=()=>action(async()=>{const anchor=$('anchor').value.trim();if(!anchor)throw Error('Введите доверенный H');if(!main.events.some(e=>e.hash===anchor))throw Error('Доверенный H отсутствует в цепочке');status('Подтверждено: доверенный H принадлежит ancestry текущей основной БД. Авторство потомков этим не доказывается.');});
-$('verify-file').onclick=()=>action(async()=>{const file=$('external').files?.[0];if(!file)throw Error('Выберите HTML-файл');const raw=await file.text(),doc=new DOMParser().parseFromString(raw,'text/html'),foreign=JSON.parse(storageNode(doc).textContent);if(foreign.publicHead===null)throw Error('Во внешнем файле head скрыт; для проверки нужен отдельно переданный operational head');const chain=await C.load(foreign,foreign.publicHead),anchor=$('anchor').value.trim();if(!anchor||!chain.events.some(e=>e.hash===anchor))throw Error('Доверенный H не подтверждён');status('Внешний HTML разобран инертно; подтверждён anchored prefix данных, иностранный JavaScript не исполнялся.');});
-$('truncate').onclick=()=>action(async()=>{if(!lastDiagnosis?.tailIds?.length)throw Error('Нет диагностированного хвоста');const rid=$('recovery-id').value.trim(),rh=$('recovery-hash').value.trim(),recovery=lastDiagnosis.recoveryHead||(rid&&rh?[rid,rh]:null);if(!recovery)throw Error('Для непрозрачного разрыва укажите предыдущие ID + H');if(!confirm('Удалить диагностированные записи старого хвоста? Занятый predecessor slot с другой криптографической историей будет сохранён, но старые потомки будут удалены из этой HTML-копии. Продолжить?'))return;const work=structuredClone(store),result=await C.truncateInvalidTail(work,lastDiagnosis,recovery);if(lastDiagnosisKind==='nested'){if(!main)throw Error('Основная цепочка недоступна');const updated=await appendWithConfirmation(work,main,[{op:'replace',path:'/tables/transactions/head',value:result.head}]);if(!updated)return;work.publicHead=C.publicHeadAfter(work,updated);store=work;clearDiagnosis();await openDatabase([updated.id,updated.head]);}else{store=work;clearDiagnosis();await openDatabase(result.head);}status(`Хвост удалён явно: ${result.removed} записей. Текущий head восстановлен.${result.preservedIds.length?' Занятый predecessor slot сохранён.':''}`);});
-try{await bootstrap();}catch(e){console.error(e);showAccess();status('Не удалось открыть базу: '+(e.message||e),true);}
+function hostSafeAppend(el){$('entry-area').appendChild(el);}
+const SANDBOX_DOCUMENT=`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'"></head><body><div id="app"></div><script>
+(function(){'use strict';let sequence=0;const pending=new Map();const request=(method,payload)=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});parent.postMessage({kind:'html-dbms-rpc',id,method,payload},'*');});
+const api=Object.freeze({read:(ref='')=>request('read',{ref}),patch:(document,operations)=>request('patch',{document,operations}),createDocument:(name,state)=>request('createDocument',{name,state}),getHead:()=>request('getHead',{})});
+window.addEventListener('message',async event=>{if(event.source!==parent)return;const data=event.data;if(!data||typeof data!=='object')return;if(data.kind==='html-dbms-reply'){const p=pending.get(data.id);if(!p)return;pending.delete(data.id);data.ok?p.resolve(data.value):p.reject(new Error(data.error));}if(data.kind==='html-dbms-start'){
+try{const blob=new Blob([data.source],{type:'text/javascript'});const url=URL.createObjectURL(blob);try{const module=await import(url);const main=module[data.exportName||'main'];if(typeof main!=='function')throw Error('Не найден export '+data.exportName);await main(api,document.getElementById('app'));}finally{URL.revokeObjectURL(url);}}catch(e){document.getElementById('app').textContent='Ошибка запуска entry: '+(e?.message||e);parent.postMessage({kind:'html-dbms-error',error:String(e?.message||e)},'*');}
+}});parent.postMessage({kind:'html-dbms-ready'},'*');})();
+<\/script></body></html>`;
+async function launchSandbox(entry){if(activeFrame)stopApp();const f=document.createElement('iframe');f.title='Приложение из JSON entry';f.setAttribute('sandbox','allow-scripts');activeFrame=f;
+ const startup=e=>{if(e.source!==f.contentWindow||!e.data||e.data.kind!=='html-dbms-ready')return;window.removeEventListener('message',startup);if(activeFrame===f)f.contentWindow.postMessage({kind:'html-dbms-start',source:entry.source,exportName:entry.export||'main'},'*');};window.addEventListener('message',startup);f.addEventListener('load',()=>{if(activeFrame!==f)window.removeEventListener('message',startup);},{once:true});
+ $('entry-area').appendChild(f);f.srcdoc=SANDBOX_DOCUMENT;
+}
+async function stagedUpdate(result,previous){if(activePublished())db.publish(result.store,publicName,result.rootHead,previous);db.commit(store,result.store);rootHead=result.rootHead;setFields(rootHead);syncCatalog();notice('Изменение записано · новый root: '+format(rootHead)+' · сохраните HTML.');if(debug)await showDebug();}
+async function authorizeWrite(promptText){if(!confirm(promptText+'\nИзменение будет сохранено в рабочей копии HTML DBMS. Продолжить?'))throw Error('Запись отменена пользователем');}
+window.addEventListener('message',event=>{if(!activeFrame||event.source!==activeFrame.contentWindow)return;const msg=event.data;if(!msg||typeof msg!=='object')return;if(msg.kind==='html-dbms-error'){notice('entry: '+msg.error,true);return;}if(msg.kind!=='html-dbms-rpc')return;
+ runRpc(msg).then(value=>{if(activeFrame&&event.source===activeFrame.contentWindow)event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:true,value},'*');}).catch(e=>{if(activeFrame&&event.source===activeFrame.contentWindow)event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))},'*');});
+});
+async function runRpc(message){needRoot();const params=message.payload||{};switch(message.method){
+ case 'read':{const ref=params.ref;if(typeof ref!=='string')throw Error('Неверная ссылка');if(ref==='')return (await db.load(store,rootHead)).state;return (await db.resolve(store,rootHead,rootHead,{$ref:ref})).value;}
+ case 'getHead':return [...rootHead];
+ case 'patch':{const name=params.document;const ops=params.operations;if(typeof name!=='string'||!Array.isArray(ops))throw Error('Неверный запрос patch');await authorizeWrite('JSON Patch: '+(name||'(корень)')+' ('+ops.length+' операций)');const previous=[...rootHead];let result;if(name===''){const staged=db.staging(store),r=await db.append(staged,rootHead,ops);result={store:staged,rootHead:r.head};}else result=await db.patchDocument(store,rootHead,name,ops);await stagedUpdate(result,previous);return {rootHead:[...rootHead]};}
+ case 'createDocument':{if(!validName(params.name))throw Error('Недопустимое имя документа');db.assertJson(params.state);await authorizeWrite('Создать документ «'+params.name+'»');const previous=[...rootHead];const result=await db.createDocument(store,rootHead,params.name,params.state);await stagedUpdate(result,previous);return {rootHead:[...rootHead],documentHead:result.documentHead};}
+ default:throw Error('Неподдерживаемая операция entry: '+String(message.method));}}
+async function createDatabase(){const name=prompt('Имя новой БД');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const exists=OWN(store.publicHeads||{},name);if(exists)throw Error('БД с таким именем уже опубликована');const entry={type:'application/javascript',export:'main',source:STARTER_SOURCE};const result=await db.createDatabase(store,name,{entry,visible:true});db.commit(store,result.store);syncCatalog();$('databases').value=name;setFields(result.rootHead);await openHead(result.rootHead);}
+async function showDebug(){
+ const h=rootHead||fieldHead(),root=await db.inspect(store,h);
+ const children={};
+ if(root.status==='complete')for(const [name,head]of Object.entries(getRootRefs(root.chain.state)))children[name]=await db.inspect(store,head);
+ $('debug-raw').textContent=JSON.stringify({rootHead:h,root,children},null,2);
+}
+async function verify(){
+ const h=rootHead||fieldHead();lastDiagnosis=null;
+ const inspected=await db.inspect(store,h);
+ if(inspected.status!=='complete'){
+   lastDiagnosis=inspected;
+   validationOutput({status:'broken',rootHead:h,diagnosis:inspected});
+   notice('Обнаружен разрыв цепочки: '+inspected.code,true);return;
+ }
+ try{
+   const result=await db.verifyDatabase(store,h);
+   validationOutput(result);notice('Цепочки и ссылки выбранной БД проверены.');
+ }catch(e){validationOutput({status:'failed',code:e.code||'ERROR',message:e.message});throw e;}
+}
+async function verifyStore(){
+ db.validateStore(store);lastDiagnosis=null;
+ const all={},warnings=[];
+ for(const [alias,head] of Object.entries(store.publicHeads||{})){
+   try{all[alias]=await db.verifyDatabase(store,head);}
+   catch(e){all[alias]={status:'failed',code:e.code||'ERROR',message:e.message};}
+ }
+ const result={format:store.format,records:Object.keys(store.records).length,publishedHeads:Object.keys(all).length,publicDatabases:all,warnings:['Скрытые цепочки без известного head не перечисляются и не проверяются.']};
+ validationOutput(result);
+ notice('Проверка контейнера завершена. Детали в «Валидация».');
+}
+async function verifyAnchor(){
+ const h=rootHead||fieldHead(),anchor=$('anchor').value.trim();
+ if(!anchor)throw Error('Укажите доверенный исторический H');
+ try{
+ const result=await db.verifyDatabase(store,h,{anchorHash:anchor});
+ validationOutput(result);notice('Доверенный H найден в проверенной ancestry.');
+ }catch(e){validationOutput({status:'failed',code:e.code||'ANCHOR_FAILED',message:e.message});throw e;}
+}
+function readStoreFromHTML(raw){
+ const parsed=new DOMParser().parseFromString(raw,'text/html');
+ const nodes=parsed.querySelectorAll('[id="db-store"]');
+ if(nodes.length!==1||nodes[0].tagName!=='SCRIPT'||nodes[0].getAttribute('type')!=='application/json')throw Error('Не найден единственный валидный db-store');
+ const value=JSON.parse(nodes[0].textContent);db.validateStore(value);return value;
+}
+async function verifyFile(){
+ const file=$('external').files[0];if(!file)throw Error('Выберите HTML для внешней проверки');
+ const other=readStoreFromHTML(await file.text());
+ const h=rootHead||fieldHead();
+ let external;
+ try{external=await db.verifyDatabase(other,h);}catch(e){external={status:'failed',code:e.code||'ERROR',message:e.message};}
+ const changed=[];let shared=0;
+ for(const [id,ct]of Object.entries(store.records))if(Object.prototype.hasOwnProperty.call(other.records,id)){
+   shared++;if(other.records[id]!==ct)changed.push(id);
+ }
+ validationOutput({target:file.name,verifiedHead:h,external,sharedSlots:shared,changedPhysicalSlots:changed.length,changedIds:changed.slice(0,100),note:'Внешний HTML прочитан только как данные. Разные шифротексты одного ID — возможная физическая перезапись.'});
+ notice(changed.length?'Внешняя проверка: изменены физические слоты '+changed.length:'Внешний HTML проверен. Общих слотов: '+shared,changed.length>0);
+}
+async function truncate(){
+ if(!lastDiagnosis)throw Error('Сначала выполните проверку и получите диагноз разрыва');
+ const recovery=[$('recovery-id').value.trim(),$('recovery-hash').value.trim()];
+ if(!db.validHead(recovery))throw Error('Укажите корректные Recovery ID и H');
+ const result=await db.truncateInvalidTail(store,lastDiagnosis,recovery);
+ const aliases=Object.entries(store.publicHeads||{}).filter(([_,h])=>db.sameHead(h,lastDiagnosis.sourceHead)).map(([n])=>n);
+ const message='Восстановление необратимо.\nСохранится повреждённый physical slot: '+result.keptInvalidSlot+'\nБудут удалены ID: '+JSON.stringify(result.deletedIds)+'\nПубличные записи будут перенаправлены на recovery head: '+aliases.join(', ')+'\nПодтвердить?';
+ if(!confirm(message))return;
+ for(const alias of aliases)db.publish(result.store,alias,recovery,lastDiagnosis.sourceHead);
+ db.commit(store,result.store);rootHead=recovery;publicName=aliases[0]||null;setFields(recovery);syncCatalog();lastDiagnosis=null;
+ await renderEntry();validationOutput({status:'recovered',recoveryHead:recovery,deletedIds:result.deletedIds,keptInvalidSlot:result.keptInvalidSlot});
+ notice('Восстановление выполнено. Сохраните новый HTML.');
+}
+async function publish(){needRoot();const root=(await db.load(store,rootHead)).state;const name=prompt('Имя публичной БД',publicName||root.name||'База');if(name===null)return;if(!validName(name))throw Error('Некорректное имя');const prev=store.publicHeads?.[name];if(prev&&!db.sameHead(prev,rootHead)&&!confirm('Заменить опубликованный head «'+name+'»?'))return;const tx=db.staging(store);db.publish(tx,name,rootHead);db.commit(store,tx);publicName=name;syncCatalog();$('databases').value=name;notice('Опубликована «'+name+'»');}
+async function hideHead(){needRoot();if(!publicName||!store.publicHeads||!OWN(store.publicHeads,publicName)){notice('Текущий head не опубликован');return;}if(!confirm('Скрыть «'+publicName+'»? Сохраните пару ID/H перед скрытием.'))return;const tx=db.staging(store);delete tx.publicHeads[publicName];if(!Object.keys(tx.publicHeads).length)delete tx.publicHeads;db.commit(store,tx);publicName=null;syncCatalog();notice('Публикация удалена. Для повторного открытия используйте ID/H.');}
+async function copyHead(){const h=fieldHead(),t=format(h);try{await navigator.clipboard.writeText(t);notice('Скопировано: '+t);}catch{prompt('Скопируйте ID/H:',t);}}
+async function loadHtml(file){if(!file)return;const raw=await file.text();const candidate=readStoreFromHTML(raw);store=candidate;rootHead=null;publicName=null;debug=false;lastDiagnosis=null;syncCatalog();setFields(null);show('debug-panel',false);$('debug-toggle').setAttribute('aria-expanded','false');clearEntry();placeholder('Файл открыт. Выберите БД или введите ID/H, затем нажмите «Открыть».');notice('Контейнер HTML_DBMS/3 загружен. БД: '+Object.keys(store.publicHeads||{}).length+'.');}
+function exportDocument(){const doc=exportTemplate.cloneNode(true);const s=doc.querySelector('#db-store');s.textContent=JSON.stringify(store).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');return '<!doctype html>\n'+doc.outerHTML;}
+function save(){db.validateStore(store);const html=exportDocument();const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='html_dbms_3.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);notice('Автономный HTML_DBMS/3 сохранён.');}
+async function init(){store=JSON.parse($('db-store').textContent);db.validateStore(store);syncCatalog();setFields(null);notice('Контейнер готов. Опубликованных БД: '+Object.keys(store.publicHeads||{}).length+'.');}
+$('new-db').onclick=()=>run(createDatabase);
+$('databases').onchange=()=>selectAlias($('databases').value);
+$('open-head').onclick=()=>run(openFields);
+$('save').onclick=()=>run(save);
+$('info-toggle').onclick=()=>togglePanel('info');
+$('validation-toggle').onclick=()=>togglePanel('validation');
+$('debug-toggle').onclick=()=>run(async()=>{debug=togglePanel('debug')&&await showDebug()!==false;});
+$('import').onclick=()=>{$('input-html').click();};
+$('input-html').onchange=()=>run(async()=>{const f=$('input-html').files[0];await loadHtml(f);$('input-html').value='';});
+$('copy-head').onclick=()=>run(copyHead);
+$('verify').onclick=()=>run(verify);
+$('verify-store').onclick=()=>run(verifyStore);
+$('verify-anchor').onclick=()=>run(verifyAnchor);
+$('verify-file').onclick=()=>run(verifyFile);
+$('truncate').onclick=()=>run(truncate);
+$('publish').onclick=()=>run(publish);
+$('hide-head').onclick=()=>run(hideHead);
+init().catch(err);
 })();
 </script>
 </body></html>
