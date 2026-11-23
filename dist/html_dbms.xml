@@ -157,22 +157,19 @@ function guardedMap(m,kind){
  const has=k=>{fresh(m);return records&&m.delta?.has(k)?m.delta.get(k)!==REMOVED:own(backing(),k);};
  const get=k=>{fresh(m);return records&&m.delta?.has(k)?(m.delta.get(k)===REMOVED?undefined:m.delta.get(k)):backing()[k];};
  const keys=()=>{fresh(m);if(!records||!m.delta)return Object.keys(backing());const result=new Set(Object.keys(backing()));for(const [k,v] of m.delta)v===REMOVED?result.delete(k):result.add(k);return [...result];};
- const set=(k,v)=>{fresh(m);if(records){validCipher(k,v);if(!has(k)){ensure(m.count<MAX_RECORDS,'RESOURCE_LIMIT','Too many records');m.count++;}if(m.delta)m.delta.set(k,v);else put(m.raw,k,v);m.proof=null;}else{validPublication(k,v);put(m.catalog,k,v);}m.rev++;return true;};
+ const set=(k,v)=>{fresh(m);if(records){validCipher(k,v);const prior=get(k);if(prior===undefined){ensure(m.count<MAX_RECORDS,'RESOURCE_LIMIT','Too many records');m.count++;m.bytes+=27+v.length;}else m.bytes+=v.length-prior.length;if(m.delta)m.delta.set(k,v);else put(m.raw,k,v);m.proof=null;}else{validPublication(k,v);put(m.catalog,k,v);}m.rev++;return true;};
  return new Proxy(target,{
   get:(_,k)=>get(k),has:(_,k)=>has(k),ownKeys:keys,
   getOwnPropertyDescriptor:(_,k)=>has(k)?{value:get(k),enumerable:true,writable:true,configurable:true}:undefined,
   set:(_,k,v)=>set(k,v),
   defineProperty:(_,k,d)=>{ensure(own(d,'value')&&d.enumerable===true&&d.configurable===true&&d.writable===true,'INVALID_JSON','Only writable data properties');return set(k,d.value);},
-  deleteProperty:(_,k)=>{fresh(m);if(has(k)){if(records){m.count--;if(m.delta)m.delta.set(k,REMOVED);else delete m.raw[k];m.proof=null;}else delete m.catalog[k];m.rev++;}return true;},
+  deleteProperty:(_,k)=>{fresh(m);if(has(k)){if(records){m.count--;m.bytes-=27+get(k).length;if(m.delta)m.delta.set(k,REMOVED);else delete m.raw[k];m.proof=null;}else delete m.catalog[k];m.rev++;}return true;},
   setPrototypeOf:()=>false,preventExtensions:()=>false
  });
 }
 function catalogFrom(value){const out=Object.create(null);for(const k of dataKeys(value)){validPublication(k,value[k]);put(out,k,value[k]);}return out;}
 function makeStore(m){
- const target={format:VERSION,records:guardedMap(m,'records')};m.target=target;
- if(m.catalog)target.publicHeads=guardedMap(m,'catalog');
- // Retain canonical property order for newly created stores and generated artifacts.
- const ordered={format:VERSION};if(m.catalog)ordered.publicHeads=target.publicHeads;ordered.records=target.records;m.target=ordered;
+ const ordered={format:VERSION};if(m.catalog)ordered.publicHeads=guardedMap(m,'catalog');ordered.records=guardedMap(m,'records');m.target=ordered;
  const proxy=new Proxy(ordered,{
   get:(t,k)=>{fresh(m);return Reflect.get(t,k);},
   ownKeys:t=>{fresh(m);return Reflect.ownKeys(t);},
@@ -185,9 +182,10 @@ function makeStore(m){
 function adoptStore(s){
  validateStore(s);
  const raw=Object.assign(Object.create(null),s.records);
- return makeStore({raw,count:Object.keys(raw).length,catalog:own(s,'publicHeads')?catalogFrom(s.publicHeads):null,rev:0});
+ const values=Object.values(raw);return makeStore({raw,count:values.length,bytes:values.reduce((n,ct)=>n+27+ct.length,0),catalog:own(s,'publicHeads')?catalogFrom(s.publicHeads):null,rev:0});
 }
-function newStore(){return makeStore({raw:Object.create(null),count:0,catalog:Object.create(null),rev:0});}
+function storeInfo(s){const m=meta(s),header={format:VERSION};if(m.catalog)header.publicHeads=m.catalog;header.records={};return {count:m.count,published:m.catalog?Object.keys(m.catalog).length:0,bytes:encoder.encode(JSON.stringify(header)).length+m.bytes+Math.max(0,m.count-1)};}
+function newStore(){return makeStore({raw:Object.create(null),count:0,bytes:0,catalog:Object.create(null),rev:0});}
 function iso(s){return typeof s==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(s)&&!Number.isNaN(Date.parse(s))&&new Date(s).toISOString()===s;}
 // Compact v4 format: genesis = [null,{name,parent,state}], patch = [ISO-time,previousHEAD,RFC6902-operations].
 // Sequence is derived from verified ancestry; it is NEVER serialized.
@@ -283,7 +281,7 @@ async function checkChange(tx,proof,root,known,overwritten){
  }
  unchanged(tx,rev);meta(tx).proof={head:root.head,state:root.state,children};
 }
-function staging(s){const base=meta(s);ensure(!base.base,'INVALID_TRANSACTION','Nested staging is not supported');return makeStore({base,baseRev:base.rev,delta:new Map(),count:base.count,catalog:base.catalog?catalogFrom(base.catalog):null,rev:0,proof:base.proof});}
+function staging(s){const base=meta(s);ensure(!base.base,'INVALID_TRANSACTION','Nested staging is not supported');return makeStore({base,baseRev:base.rev,delta:new Map(),count:base.count,bytes:base.bytes,catalog:base.catalog?catalogFrom(base.catalog):null,rev:0,proof:base.proof});}
 function publish(staged,alias,newHead,oldHead=null){ensure(validHead(newHead),'INVALID_HEAD','Bad published head');if(!own(staged,'publicHeads'))staged.publicHeads={};ensure(plain(staged.publicHeads),'INVALID_PUBLIC_HEADS','Invalid publicHeads');if(oldHead!==null)ensure(sameHead(staged.publicHeads[alias],oldHead),'STALE_PUBLIC_HEAD','Published version changed');put(staged.publicHeads,alias,clone(newHead));}
 async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(tx.publicHeads||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);meta(tx).proof={head:g.head,state:root,children:new Map()};return {store:tx,rootHead:g.head,genesis:g};}
 async function createDocument(s,rootHead,name,initial,alias=null,options={}){
@@ -394,13 +392,13 @@ function commit(s,tx){
  // Prepare catalog before touching base. All physical changes were validated when staged.
  const catalog=stage.catalog?catalogFrom(stage.catalog):null;
  for(const [id,ct] of stage.delta)ct===REMOVED?delete base.raw[id]:put(base.raw,id,ct);
- base.count=stage.count;base.catalog=catalog;
+ base.count=stage.count;base.bytes=stage.bytes;base.catalog=catalog;
  if(catalog)base.target.publicHeads=guardedMap(base,'catalog');else delete base.target.publicHeads;
  base.proof=stage.proof;base.rev++;stage.closed=true;return s;
 }
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
-const api={VERSION,newStore,validateStore,adoptStore,revision,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
+const api={VERSION,newStore,validateStore,adoptStore,revision,storeInfo,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
 g.HTML_DBMS=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
 ]]></script>
@@ -415,14 +413,15 @@ function makeOption(label,value){const e=makeElement('option');e.textContent=lab
 // Export from a pristine template: never copy decrypted application DOM into saved HTML.
 const exportTemplate=document.documentElement.cloneNode(true);
 const STARTER_SOURCE=$('starter-source').textContent;
-let store, rootHead=null, publicName=null, debug=false, busy=false, activeFrame=null, lastDiagnosis=null, openEpoch=0, rpcBusy=false, startupListener=null;
+let store, rootHead=null, publicName=null, debug=false, busy=null, activeFrame=null, lastDiagnosis=null, openEpoch=0, rpcBusy=null, session=null, startupListener=null;
 const OWN=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function notice(message,bad=false){$('status').textContent=message;$('status').className='notice '+(bad?'error':'good');}
 function err(e){notice((e?.code?e.code+': ':'')+(e?.message||String(e)),true);}
 function context(){return {epoch:openEpoch,store,revision:store?db.revision(store):null,hash:location.hash,head:rootHead,field:$('head').value};}
 function current(c){return c.epoch===openEpoch&&c.store===store&&c.hash===location.hash&&c.head===rootHead&&c.field===$('head').value&&(!store||c.revision===db.revision(store));}
 function requireCurrent(c){if(!current(c))throw Error('Контекст операции изменился');}
-async function run(fn){if(busy||rpcBusy)return;busy=true;const c=context();try{await fn();}catch(e){if(current(c))err(e);}finally{busy=false;}}
+const locked=()=>busy?.epoch===openEpoch||rpcBusy?.epoch===openEpoch;
+async function run(fn){if(locked())return;const c=context();busy=c;try{await fn();}catch(e){if(current(c))err(e);}finally{if(busy===c)busy=null;}}
 function format(h){return h||'—';}
 function show(id,on){const el=$(id);on?el.removeAttribute('hidden'):el.setAttribute('hidden','hidden');}
 function validName(s){return typeof s==='string'&&s.trim().length>0&&!s.includes('/')&&!['__proto__','constructor','prototype'].includes(s);}
@@ -430,8 +429,8 @@ function needRoot(){if(!rootHead)throw Error('Сначала откройте б
 function activePublished(){return !!(publicName&&store.publicHeads&&db.sameHead(store.publicHeads[publicName],rootHead));}
 function updateInfo(){
  if(!store)return;
- if(!$('info-panel').hasAttribute('hidden')){const bytes=new TextEncoder().encode(JSON.stringify(store)).length;
- $('store-summary').textContent='Физических сообщений: '+Object.keys(store.records).length+' · размер хранилища: '+bytes+' байт · опубликованных БД: '+Object.keys(store.publicHeads||{}).length+'.';}
+ if(!$('info-panel').hasAttribute('hidden')){const {bytes,count,published}=db.storeInfo(store);
+ $('store-summary').textContent='Физических сообщений: '+count+' · размер хранилища: '+bytes+' байт · опубликованных БД: '+published+'.';}
  $('current-root').textContent='Открытая версия: '+format(rootHead)+(publicName?' · '+publicName:' · не опубликована');
 }
 function togglePanel(which){
@@ -464,7 +463,7 @@ function selectAlias(alias){
  notice('HEAD подставлены для «'+alias+'». Нажмите «Открыть»; активная БД пока не изменена.');
 }
 function findPublicName(h){return Object.keys(store.publicHeads||{}).find(n=>db.sameHead(store.publicHeads[n],h))||null;}
-function stopApp(){if(startupListener){window.removeEventListener('message',startupListener);startupListener=null;}if(activeFrame){activeFrame.remove();activeFrame=null;}}
+function stopApp(){if(startupListener){window.removeEventListener('message',startupListener);startupListener=null;}if(session){session.port.close();session=null;}if(activeFrame){activeFrame.remove();activeFrame=null;}}
 function clearEntry(){stopApp();$('entry-area').replaceChildren();}
 function element(tag,text,cls){const el=makeElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;}
 function placeholder(text){const e=element('div',text,'placeholder');$('entry-area').appendChild(e);}
@@ -492,7 +491,8 @@ async function openInitial(useFragment=true){
  clearEntry();placeholder(names.length?'Выберите опубликованную БД, затем нажмите «Открыть».':'Для открытия требуется HEAD или ссылка доступа.');notice(names.length?'Выберите БД · опубликовано '+names.length:'Контейнер пуст: опубликованных БД нет.');
 }
 function entryValue(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).length===1&&typeof x.$ref==='string';}
-async function renderEntry(epoch=openEpoch,checkedRoot){if(epoch!==openEpoch)return;const c=context();clearEntry();if(!rootHead){placeholder('Выберите БД, укажите HEAD и нажмите «Открыть».');return;}const root=checkedRoot??await db.readState(c.store,c.head);let value=root?.entry;if(entryValue(value))value=(await db.resolve(c.store,c.head,c.head,value)).value;
+async function resolvedEntry(s,h,root){let value=(root??await db.readState(s,h))?.entry;return entryValue(value)?(await db.resolve(s,h,h,value)).value:value;}
+async function renderEntry(epoch=openEpoch,checkedRoot){if(epoch!==openEpoch)return;const c=context();clearEntry();if(!rootHead){placeholder('Выберите БД, укажите HEAD и нажмите «Открыть».');return;}const value=await resolvedEntry(c.store,c.head,checkedRoot);
  if(!current(c))return;
  if(value===undefined||value===null){placeholder('В корневом JSON-документе отсутствует entry. Приложение не задано.');return;}
  if(value&&typeof value==='object'&&!Array.isArray(value)&&value.type==='application/javascript'&&typeof value.source==='string'){
@@ -508,15 +508,35 @@ async function renderEntry(epoch=openEpoch,checkedRoot){if(epoch!==openEpoch)ret
  const pre=element('pre',JSON.stringify(value,null,2));$('entry-area').appendChild(pre);
 }
 const SANDBOX_DOCUMENT=`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'"></head><body><div id="app"></div><script>
-(function(){'use strict';let sequence=0;const pending=new Map();const request=(method,payload)=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});parent.postMessage({kind:'html-dbms-rpc',id,method,payload},'*');});
+(function(){'use strict';let sequence=0;const pending=new Map(),channel=new MessageChannel(),port=channel.port1;
+const request=(method,payload)=>new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});port.postMessage({kind:'html-dbms-rpc',id,method,payload});});
 const api=Object.freeze({read:(ref='')=>request('read',{ref}),patch:(document,operations)=>request('patch',{document,operations}),createDocument:(name,state)=>request('createDocument',{name,state}),getHead:()=>request('getHead',{})});
-window.addEventListener('message',async event=>{if(event.source!==parent)return;const data=event.data;if(!data||typeof data!=='object')return;if(data.kind==='html-dbms-reply'){const p=pending.get(data.id);if(!p)return;pending.delete(data.id);data.ok?p.resolve(data.value):p.reject(new Error(data.error));}if(data.kind==='html-dbms-start'){
-try{const blob=new Blob([data.source],{type:'text/javascript'});const url=URL.createObjectURL(blob);try{const module=await import(url);const main=module[data.exportName||'main'];if(typeof main!=='function')throw Error('Не найден export '+data.exportName);await main(api,document.getElementById('app'));}finally{URL.revokeObjectURL(url);}}catch(e){document.getElementById('app').textContent='Ошибка запуска entry: '+(e?.message||e);parent.postMessage({kind:'html-dbms-error',error:String(e?.message||e)},'*');}
-}});parent.postMessage({kind:'html-dbms-ready'},'*');})();
+let started=false;
+port.onmessage=async event=>{const data=event.data;if(!data||typeof data!=='object')return;if(data.kind==='html-dbms-reply'){const p=pending.get(data.id);if(!p)return;pending.delete(data.id);data.ok?p.resolve(data.value):p.reject(new Error(data.error));}
+if(data.kind==='html-dbms-start'&&!started){started=true;try{const blob=new Blob([data.source],{type:'text/javascript'});const url=URL.createObjectURL(blob);try{const module=await import(url);const main=module[data.exportName||'main'];if(typeof main!=='function')throw Error('Не найден export '+data.exportName);await main(api,document.getElementById('app'));}finally{URL.revokeObjectURL(url);}}catch(e){document.getElementById('app').textContent='Ошибка запуска entry: '+(e?.message||e);port.postMessage({kind:'html-dbms-error',error:String(e?.message||e)});}}};
+window.addEventListener('pagehide',()=>{port.postMessage({kind:'html-dbms-revoke'});port.close();},{once:true});
+parent.postMessage({kind:'html-dbms-ready'},'*',[channel.port2]);})();
 <\/script></body></html>`;
-async function launchSandbox(entry){if(activeFrame)stopApp();const f=makeElement('iframe');f.title='Приложение из JSON entry';f.setAttribute('sandbox','allow-scripts');activeFrame=f;
- const startup=e=>{if(e.source!==f.contentWindow||!e.data||e.data.kind!=='html-dbms-ready')return;window.removeEventListener('message',startup);if(startupListener===startup)startupListener=null;if(activeFrame===f)f.contentWindow.postMessage({kind:'html-dbms-start',source:entry.source,exportName:entry.export||'main'},'*');};startupListener=startup;window.addEventListener('message',startup);
- $('entry-area').appendChild(f);f.srcdoc=SANDBOX_DOCUMENT;
+async function launchSandbox(entry){
+ stopApp();const f=makeElement('iframe');f.title='Приложение из JSON entry';f.setAttribute('sandbox','allow-scripts');activeFrame=f;
+ let loads=0;
+ const revoke=()=>{if(activeFrame===f){clearEntry();placeholder('Сессия entry завершена. Откройте HEAD повторно.');}};
+ f.addEventListener('load',()=>{if(++loads>1)revoke();});
+ const startup=e=>{
+  if(activeFrame!==f||e.source!==f.contentWindow||e.data?.kind!=='html-dbms-ready'||e.ports.length!==1)return;
+  window.removeEventListener('message',startup);startupListener=null;
+  const port=e.ports[0],s={port,entry};session=s;
+  port.onmessage=event=>{
+   if(session!==s)return;const msg=event.data;if(!msg||typeof msg!=='object')return;
+   if(msg.kind==='html-dbms-revoke'){revoke();return;}
+   if(msg.kind==='html-dbms-error'){notice('entry: '+msg.error,true);return;}
+   if(msg.kind!=='html-dbms-rpc')return;
+   const reply=data=>{if(session===s)port.postMessage({kind:'html-dbms-reply',id:msg.id,...data});};
+   runRpc(msg,s).then(value=>reply({ok:true,value}),e=>reply({ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))}));
+  };
+  port.postMessage({kind:'html-dbms-start',source:entry.source,exportName:entry.export||'main'});
+ };
+ startupListener=startup;window.addEventListener('message',startup);f.srcdoc=SANDBOX_DOCUMENT;$('entry-area').appendChild(f);
 }
 async function confirmOccupied(operation,error){
   const slot=error.id||'неизвестен';
@@ -546,31 +566,35 @@ function stagedUpdate(result,previous){
  if(debug){const c=context();showDebug().catch(e=>{if(current(c))notice('Изменение записано; ошибка отладки: '+e.message,true);});}
 }
 async function authorizeWrite(promptText){if(!confirm(promptText+'\nИзменение будет сохранено только в рабочей копии HTML DBMS, не на сервере. Продолжить?'))throw Error('Запись отменена пользователем');}
-window.addEventListener('message',event=>{if(!activeFrame||event.source!==activeFrame.contentWindow)return;const msg=event.data;if(!msg||typeof msg!=='object')return;if(msg.kind==='html-dbms-error'){notice('entry: '+msg.error,true);return;}if(msg.kind!=='html-dbms-rpc')return;
- const epoch=openEpoch,requestedHash=location.hash;runRpc(msg,epoch,requestedHash).then(value=>{if(epoch===openEpoch&&activeFrame&&event.source===activeFrame.contentWindow&&(!location.hash||location.hash==='#head='+rootHead))event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:true,value},'*');}).catch(e=>{if(epoch===openEpoch&&activeFrame&&event.source===activeFrame.contentWindow&&(!location.hash||location.hash==='#head='+rootHead))event.source.postMessage({kind:'html-dbms-reply',id:msg.id,ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))},'*');});
-});
-async function runRpc(message,epoch,requestedHash){
- needRoot();const c=context();if(epoch!==c.epoch||requestedHash!==c.hash||c.hash&&fragmentHead(c.hash)!==c.head)throw Error('Контекст URL изменился');
+async function runRpc(message,s){
+ needRoot();const c=context();
+ const guard=()=>{requireCurrent(c);if(session!==s)throw Error('Сессия entry завершена');};
+ guard();if(c.hash&&fragmentHead(c.hash)!==c.head)throw Error('Контекст URL изменился');
  const params=message.payload||{};
  switch(message.method){
- case 'read':{const ref=params.ref;if(typeof ref!=='string')throw Error('Неверная ссылка');const value=ref===''?await db.readState(c.store,c.head):(await db.resolve(c.store,c.head,c.head,{$ref:ref})).value;requireCurrent(c);return value;}
+ case 'read':{const ref=params.ref;if(typeof ref!=='string')throw Error('Неверная ссылка');const value=ref===''?await db.readState(c.store,c.head):(await db.resolve(c.store,c.head,c.head,{$ref:ref})).value;guard();return value;}
  case 'getHead':return c.head;
  case 'patch':case 'createDocument':{
-  assertWriteTarget();if(busy||rpcBusy)throw Error('Запись уже выполняется');rpcBusy=true;
+  assertWriteTarget();if(locked())throw Error('Запись уже выполняется');rpcBusy=c;
   try{
    const create=message.method==='createDocument',name=create?params.name:params.document,ops=params.operations;
    if(create){if(!validName(name))throw Error('Недопустимое имя документа');db.assertJson(params.state);}
    else if(typeof name!=='string'||!Array.isArray(ops))throw Error('Неверный запрос patch');
    await authorizeWrite(create?'Создать документ «'+name+'»':'JSON Patch: '+(name||'(корень)')+' ('+ops.length+' операций)');
-   requireCurrent(c);
+   guard();
    const result=await retryOccupied(create?'Создание документа '+name:'JSON Patch '+(name||'(корень)'),opts=>{
-    requireCurrent(c);
+    guard();
     if(create)return db.createDocument(c.store,c.head,name,params.state,null,opts);
     return name===''?db.patchRoot(c.store,c.head,ops,{overwrite:opts.overwriteRoot}):db.patchDocument(c.store,c.head,name,ops,opts);
    });
-   requireCurrent(c);assertWriteTarget();stagedUpdate(result,c.head);
-   return create?{rootHead,documentHead:result.documentHead}:{rootHead};
-  }finally{rpcBusy=false;}
+   guard();let next;try{next=await resolvedEntry(result.store,result.rootHead);}catch{}
+   guard();assertWriteTarget();
+   const changed=next?.type!==s.entry.type||next?.source!==s.entry.source||(next?.export||'main')!==(s.entry.export||'main');
+   stagedUpdate(result,c.head);
+   const response=create?{rootHead,documentHead:result.documentHead}:{rootHead};
+   if(changed){clearEntry();const opened=context();renderEntry(opened.epoch).catch(e=>{if(current(opened)){placeholder('Ошибка entry: '+e.message);notice('БД открыта; ошибка entry: '+e.message,true);}});}
+   return response;
+  }finally{if(rpcBusy===c)rpcBusy=null;}
  }
  default:throw Error('Неподдерживаемая операция entry: '+String(message.method));}
 }
@@ -610,6 +634,8 @@ async function verifyAnchor(){
  try{const result=await db.verifyDatabase(c.store,h,{anchorHead:anchor});if(!current(c))return;validationOutput(result);notice('Доверенный HEAD найден в проверенной ancestry.');}
  catch(e){if(current(c)){validationOutput({status:'failed',code:e.code||'ANCHOR_FAILED',message:e.message});err(e);}}
 }
+const MAX_CONTAINER_BYTES=256*1024*1024;
+async function containerText(file){if(file.size>MAX_CONTAINER_BYTES)throw Error('Превышен размер контейнера (256 МиБ)');return file.text();}
 function readStoreFromDocument(raw){
  // XML declarations/entities/processing instructions may have external effects.
  // Reject them before parsing, ignoring literal source text in CDATA/comments.
@@ -629,15 +655,14 @@ function readStoreFromDocument(raw){
   const inert=document.implementation.createHTMLDocument(''),template=inert.createElement('template');
   template.innerHTML=raw;scope=template.content;
  }
- const nodes=[];
- function collect(tree){nodes.push(...tree.querySelectorAll('[id="db-store"]'));for(const t of tree.querySelectorAll('template'))if(t.content)collect(t.content);}
- collect(scope);
+ const nodes=[],pending=[scope];let templates=0;
+ while(pending.length){const tree=pending.pop();for(const node of tree.querySelectorAll('[id="db-store"]')){nodes.push(node);if(nodes.length>1)throw Error('Не найден единственный валидный db-store');}for(const t of tree.querySelectorAll('template'))if(t.content){if(++templates>10000)throw Error('Слишком много вложенных template');pending.push(t.content);}}
  if(nodes.length!==1||nodes[0].localName!=='script'||nodes[0].namespaceURI!==XHTML_NS||nodes[0].getAttribute('type')!=='application/json'||nodes[0].hasAttribute('src')||nodes[0].children.length)throw Error('Не найден единственный валидный db-store');
  return db.adoptStore(JSON.parse(nodes[0].textContent));
 }
 async function verifyFile(){
  const file=$('external').files[0];if(!file)throw Error('Выберите HTML или XML для внешней проверки');
- const c=context(),h=c.head||fieldHead(),raw=await file.text();if(!current(c))return;const other=readStoreFromDocument(raw);
+ const c=context(),h=c.head||fieldHead(),raw=await containerText(file);if(!current(c))return;const other=readStoreFromDocument(raw);
  let external;
  try{external=await db.verifyDatabase(other,h);}catch(e){external={status:'failed',code:e.code||'ERROR',message:e.message};}
  if(!current(c))return;
@@ -667,7 +692,7 @@ async function hideHead(){needRoot();if(!publicName||!store.publicHeads||!OWN(st
 async function copyText(t,label){const c=context();try{await navigator.clipboard.writeText(t);if(current(c))notice('Скопировано: '+label);}catch{if(current(c))prompt(label,t);}}
 async function copyHead(){needRoot();await copyText(rootHead,'HEAD открытой версии');}
 async function copyLink(){needRoot();await copyText(accessUrl(rootHead),'Ссылка доступа');}
-async function loadHtml(file){if(!file)return;const c=context(),raw=await file.text();if(!current(c))return;const candidate=readStoreFromDocument(raw);clearOpened();store=candidate;syncUrl(null);await openInitial(false);if(store===candidate&&!location.hash&&!$('status').classList.contains('error'))notice('Контейнер загружен. '+(rootHead?'БД открыта.':'Опубликованных БД: '+Object.keys(store.publicHeads||{}).length));}
+async function loadHtml(file){if(!file)return;const c=context(),raw=await containerText(file);if(!current(c))return;const candidate=readStoreFromDocument(raw);clearOpened();store=candidate;syncUrl(null);await openInitial(false);if(store===candidate&&!location.hash&&!$('status').classList.contains('error'))notice('Контейнер загружен. '+(rootHead?'БД открыта.':'Опубликованных БД: '+Object.keys(store.publicHeads||{}).length));}
 // Convert the pristine XHTML template to HTML, never the live application DOM.
 function htmlSerialize(node){if(node.nodeType===3||node.nodeType===4)return node.textContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');if(node.nodeType===8)return '<!--'+node.data+'-->';if(node.nodeType!==1)return '';const tag=node.localName;const attrs=Array.from(node.attributes).filter(a=>a.name!=='xmlns').map(a=>' '+a.name+'="'+a.value.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')+'"').join('');const start='<'+tag+attrs+'>';if(/^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/.test(tag))return start;const content=tag==='script'?node.textContent.replace(/<\/script/gi,'<\\/script'):tag==='style'?node.textContent:Array.from(node.childNodes).map(htmlSerialize).join('');return start+content+'</'+tag+'>';}
 function exportDocument(data=store,asXML=XML_CONTAINER){

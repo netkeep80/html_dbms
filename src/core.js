@@ -67,22 +67,19 @@ function guardedMap(m,kind){
  const has=k=>{fresh(m);return records&&m.delta?.has(k)?m.delta.get(k)!==REMOVED:own(backing(),k);};
  const get=k=>{fresh(m);return records&&m.delta?.has(k)?(m.delta.get(k)===REMOVED?undefined:m.delta.get(k)):backing()[k];};
  const keys=()=>{fresh(m);if(!records||!m.delta)return Object.keys(backing());const result=new Set(Object.keys(backing()));for(const [k,v] of m.delta)v===REMOVED?result.delete(k):result.add(k);return [...result];};
- const set=(k,v)=>{fresh(m);if(records){validCipher(k,v);if(!has(k)){ensure(m.count<MAX_RECORDS,'RESOURCE_LIMIT','Too many records');m.count++;}if(m.delta)m.delta.set(k,v);else put(m.raw,k,v);m.proof=null;}else{validPublication(k,v);put(m.catalog,k,v);}m.rev++;return true;};
+ const set=(k,v)=>{fresh(m);if(records){validCipher(k,v);const prior=get(k);if(prior===undefined){ensure(m.count<MAX_RECORDS,'RESOURCE_LIMIT','Too many records');m.count++;m.bytes+=27+v.length;}else m.bytes+=v.length-prior.length;if(m.delta)m.delta.set(k,v);else put(m.raw,k,v);m.proof=null;}else{validPublication(k,v);put(m.catalog,k,v);}m.rev++;return true;};
  return new Proxy(target,{
   get:(_,k)=>get(k),has:(_,k)=>has(k),ownKeys:keys,
   getOwnPropertyDescriptor:(_,k)=>has(k)?{value:get(k),enumerable:true,writable:true,configurable:true}:undefined,
   set:(_,k,v)=>set(k,v),
   defineProperty:(_,k,d)=>{ensure(own(d,'value')&&d.enumerable===true&&d.configurable===true&&d.writable===true,'INVALID_JSON','Only writable data properties');return set(k,d.value);},
-  deleteProperty:(_,k)=>{fresh(m);if(has(k)){if(records){m.count--;if(m.delta)m.delta.set(k,REMOVED);else delete m.raw[k];m.proof=null;}else delete m.catalog[k];m.rev++;}return true;},
+  deleteProperty:(_,k)=>{fresh(m);if(has(k)){if(records){m.count--;m.bytes-=27+get(k).length;if(m.delta)m.delta.set(k,REMOVED);else delete m.raw[k];m.proof=null;}else delete m.catalog[k];m.rev++;}return true;},
   setPrototypeOf:()=>false,preventExtensions:()=>false
  });
 }
 function catalogFrom(value){const out=Object.create(null);for(const k of dataKeys(value)){validPublication(k,value[k]);put(out,k,value[k]);}return out;}
 function makeStore(m){
- const target={format:VERSION,records:guardedMap(m,'records')};m.target=target;
- if(m.catalog)target.publicHeads=guardedMap(m,'catalog');
- // Retain canonical property order for newly created stores and generated artifacts.
- const ordered={format:VERSION};if(m.catalog)ordered.publicHeads=target.publicHeads;ordered.records=target.records;m.target=ordered;
+ const ordered={format:VERSION};if(m.catalog)ordered.publicHeads=guardedMap(m,'catalog');ordered.records=guardedMap(m,'records');m.target=ordered;
  const proxy=new Proxy(ordered,{
   get:(t,k)=>{fresh(m);return Reflect.get(t,k);},
   ownKeys:t=>{fresh(m);return Reflect.ownKeys(t);},
@@ -95,9 +92,10 @@ function makeStore(m){
 function adoptStore(s){
  validateStore(s);
  const raw=Object.assign(Object.create(null),s.records);
- return makeStore({raw,count:Object.keys(raw).length,catalog:own(s,'publicHeads')?catalogFrom(s.publicHeads):null,rev:0});
+ const values=Object.values(raw);return makeStore({raw,count:values.length,bytes:values.reduce((n,ct)=>n+27+ct.length,0),catalog:own(s,'publicHeads')?catalogFrom(s.publicHeads):null,rev:0});
 }
-function newStore(){return makeStore({raw:Object.create(null),count:0,catalog:Object.create(null),rev:0});}
+function storeInfo(s){const m=meta(s),header={format:VERSION};if(m.catalog)header.publicHeads=m.catalog;header.records={};return {count:m.count,published:m.catalog?Object.keys(m.catalog).length:0,bytes:encoder.encode(JSON.stringify(header)).length+m.bytes+Math.max(0,m.count-1)};}
+function newStore(){return makeStore({raw:Object.create(null),count:0,bytes:0,catalog:Object.create(null),rev:0});}
 function iso(s){return typeof s==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(s)&&!Number.isNaN(Date.parse(s))&&new Date(s).toISOString()===s;}
 // Compact v4 format: genesis = [null,{name,parent,state}], patch = [ISO-time,previousHEAD,RFC6902-operations].
 // Sequence is derived from verified ancestry; it is NEVER serialized.
@@ -193,7 +191,7 @@ async function checkChange(tx,proof,root,known,overwritten){
  }
  unchanged(tx,rev);meta(tx).proof={head:root.head,state:root.state,children};
 }
-function staging(s){const base=meta(s);ensure(!base.base,'INVALID_TRANSACTION','Nested staging is not supported');return makeStore({base,baseRev:base.rev,delta:new Map(),count:base.count,catalog:base.catalog?catalogFrom(base.catalog):null,rev:0,proof:base.proof});}
+function staging(s){const base=meta(s);ensure(!base.base,'INVALID_TRANSACTION','Nested staging is not supported');return makeStore({base,baseRev:base.rev,delta:new Map(),count:base.count,bytes:base.bytes,catalog:base.catalog?catalogFrom(base.catalog):null,rev:0,proof:base.proof});}
 function publish(staged,alias,newHead,oldHead=null){ensure(validHead(newHead),'INVALID_HEAD','Bad published head');if(!own(staged,'publicHeads'))staged.publicHeads={};ensure(plain(staged.publicHeads),'INVALID_PUBLIC_HEADS','Invalid publicHeads');if(oldHead!==null)ensure(sameHead(staged.publicHeads[alias],oldHead),'STALE_PUBLIC_HEAD','Published version changed');put(staged.publicHeads,alias,clone(newHead));}
 async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(tx.publicHeads||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);meta(tx).proof={head:g.head,state:root,children:new Map()};return {store:tx,rootHead:g.head,genesis:g};}
 async function createDocument(s,rootHead,name,initial,alias=null,options={}){
@@ -304,12 +302,12 @@ function commit(s,tx){
  // Prepare catalog before touching base. All physical changes were validated when staged.
  const catalog=stage.catalog?catalogFrom(stage.catalog):null;
  for(const [id,ct] of stage.delta)ct===REMOVED?delete base.raw[id]:put(base.raw,id,ct);
- base.count=stage.count;base.catalog=catalog;
+ base.count=stage.count;base.bytes=stage.bytes;base.catalog=catalog;
  if(catalog)base.target.publicHeads=guardedMap(base,'catalog');else delete base.target.publicHeads;
  base.proof=stage.proof;base.rev++;stage.closed=true;return s;
 }
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
-const api={VERSION,newStore,validateStore,adoptStore,revision,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
+const api={VERSION,newStore,validateStore,adoptStore,revision,storeInfo,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
 g.HTML_DBMS=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

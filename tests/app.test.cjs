@@ -34,7 +34,7 @@ assert.doesNotMatch(starter,/JSON\.stringify\(current\?await db\.read\(current\+
 assert.match(app,/srcdoc=SANDBOX_DOCUMENT/);
 assert.match(app,/setAttribute\('sandbox','allow-scripts'\)/);
 assert.doesNotMatch(app,/allow-same-origin/);
-assert.match(app,/event\.source!==activeFrame\.contentWindow/);
+assert.match(app,/new MessageChannel\(\)/);assert.match(app,/e\.source!==f\.contentWindow/);
 assert.match(app,/async function authorizeWrite\(promptText\)/);assert.match(app,/async function verifyStore\(\)/);assert.match(app,/async function verifyAnchor\(\)/);assert.match(app,/async function verifyFile\(\)/);assert.match(app,/async function truncate\(\)/);
 assert.match(app,/const exportTemplate=document\.documentElement\.cloneNode\(true\)/);
 assert.match(app,/const doc=exportTemplate\.cloneNode\(true\)/);
