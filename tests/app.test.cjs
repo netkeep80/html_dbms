@@ -9,4 +9,7 @@ assert.match(app,/SUCCESSOR_OCCUPIED/);
 assert.match(app,/truncateInvalidTail/);
 assert.match(index,/"format":"HTML_DBMS\/2\.2"/);
 assert.match(index,/id="open-id"/);assert.match(index,/id="open-hash"/);
+assert.match(index,/id="debug-toggle"/);assert.match(index,/id="debug-panel"/);assert.match(index,/id="debug-raw"/);
+assert.match(app,/function debugSnapshot\(\)/);assert.match(app,/record:e\.r/);assert.match(app,/JSON\.stringify\(debugSnapshot\(\),null,2\)/);
+assert.doesNotMatch(app,/debug-raw'\)\.innerHTML/);
 console.log('UI / verifier regression checks: PASS');
