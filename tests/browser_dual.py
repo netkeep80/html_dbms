@@ -51,7 +51,7 @@ def setup(page, kind):
 
 
 def current_pair(page):
-    return [page.locator('#head-id').input_value(),page.locator('#head-hash').input_value()]
+    return [page.locator('#head-id').evaluate('(e)=>e.value'),page.locator('#head-hash').evaluate('(e)=>e.value')]
 
 
 def frame(page):
