@@ -20,19 +20,28 @@ with sync_playwright() as pl:
  page.on('pageerror',lambda e: errors.append(str(e)))
  page.on('console',lambda e: errors.append(e.text) if e.type=='error' else None)
  page.evaluate(shim)
- page.on('dialog',lambda d: d.accept('Касса') if d.type=='prompt' else d.accept())
+ names=iter(('Касса','Склад'))
+ page.on('dialog',lambda d: d.accept(next(names) if d.type=='prompt' else None))
  page.set_content(p.read_text(),wait_until='domcontentloaded')
  assert page.locator('#databases').locator('option').count()==1
+ assert page.locator('#databases').is_disabled()
+ assert 'БД отсутствуют' in page.locator('#databases option').first.inner_text()
+ assert 'контейнер пуст' in page.locator('#status').inner_text().lower()
  page.locator('#new-db').click()
  page.wait_for_timeout(1300)
  assert page.locator('#head-id').input_value()
  assert page.locator('#head-hash').input_value()
  iframe=page.frame_locator('iframe[title="Приложение из JSON entry"]')
  assert 'Касса' in iframe.locator('#db-title').inner_text(timeout=5000),iframe.locator('body').inner_text()
+ assert 'Приложение запущено' in iframe.locator('#entry-state').inner_text()
+ assert 'export async function main' not in iframe.locator('#json').inner_text()
+ assert 'JS-код скрыт' in iframe.locator('#json').inner_text()
  root_id=page.locator('#head-id').input_value()
  page.locator('#head-id').fill('not-current')
  page.locator('#databases').select_option('Касса')
  assert page.locator('#head-id').input_value()==root_id
+ # Selector only fills fields, it never opens automatically.
+ assert iframe.locator('#db-title').inner_text()=='Касса'
  # Selection does not open automatically. Explicit "Открыть" does.
  page.locator('#open-head').click()
  page.wait_for_timeout(500)
@@ -66,6 +75,23 @@ with sync_playwright() as pl:
  page.locator('#verify-store').click()
  page.wait_for_timeout(350)
  assert json.loads(page.locator('#validation-report').inner_text())['publishedHeads']==1
+ # Two independent DBs: choosing a name only fills ID/H, then Open switches the app.
+ kasa=[page.locator('#head-id').input_value(),page.locator('#head-hash').input_value()]
+ page.locator('#new-db').click()
+ page.wait_for_timeout(850)
+ iframe=page.frame_locator('iframe[title="Приложение из JSON entry"]')
+ assert iframe.locator('#db-title').inner_text(timeout=5000)=='Склад'
+ sklad=[page.locator('#head-id').input_value(),page.locator('#head-hash').input_value()]
+ assert kasa!=sklad
+ page.locator('#databases').select_option('Касса')
+ assert [page.locator('#head-id').input_value(),page.locator('#head-hash').input_value()]==kasa
+ assert iframe.locator('#db-title').inner_text()=='Склад', 'Selecting is not opening'
+ page.locator('#open-head').click()
+ assert iframe.locator('#db-title').inner_text(timeout=5000)=='Касса'
+ page.locator('#databases').select_option('Склад')
+ assert [page.locator('#head-id').input_value(),page.locator('#head-hash').input_value()]==sklad
+ page.locator('#open-head').click()
+ assert iframe.locator('#db-title').inner_text(timeout=5000)=='Склад'
  with page.expect_download(timeout=8000) as d:page.locator('#save').click()
  f=d.value
  output=p.parent/'saved_test.html'
@@ -80,11 +106,13 @@ with sync_playwright() as pl:
  assert json.loads(page.locator('#validation-report').inner_text())['changedPhysicalSlots']==0
  # Reload via HTML content to confirm exported store opens.
  page.set_content(exported,wait_until='domcontentloaded')
- page.locator('#databases').select_option('Касса')
+ assert page.locator('#databases').input_value()=='Касса'
+ assert [page.locator('#head-id').input_value(),page.locator('#head-hash').input_value()]==kasa
+ assert 'нажмите «Открыть»' in page.locator('#status').inner_text()
  page.locator('#open-head').click()
  page.wait_for_timeout(650)
  iframe=page.frame_locator('iframe[title="Приложение из JSON entry"]')
  assert 'example' in iframe.locator('#json').inner_text(timeout=4000)
  assert not errors, errors
- print('UI SMOKE PASS · Create/Open/Selection/Patch/Info/Validation/Anchor/External/Debug/Save/Reload ·',len(exported),'bytes')
+ print('UI SMOKE PASS · Empty startup/Two DB selection/Explicit Open/Starter app/Patch/Validation/Save/Auto-prefill/Reload ·',len(exported),'bytes')
  b.close()
