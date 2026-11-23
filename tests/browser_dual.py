@@ -135,6 +135,16 @@ def main():
             fixture=Path(tmp)/('input.html' if src is html_store else 'input.xml')
             source_text=html_file.read_text(encoding='utf8') if src is html_store else xml_file.read_text(encoding='utf8')
             fixture.write_text(source_text,encoding='utf8')
+            if kind=='xml' and os.environ.get('GITHUB_ACTIONS')=='true':
+                print('XML_FILE_INPUT_DIAGNOSTIC',repr(page.evaluate('''() => {
+                    const x=document.querySelector('#input-html');
+                    const ns='http://www.w3.org/1999/xhtml';
+                    const dyn=document.createElementNS(ns,'input');
+                    const hd=document.implementation.createHTMLDocument('');
+                    const adopted=document.adoptNode(hd.createElement('input'));
+                    const describe=e=>({local:e.localName,ctor:e.constructor.name,ns:e.namespaceURI,instance:e instanceof HTMLInputElement,type:e.type,files:e.files?.length,filesType:typeof e.files});
+                    return {original:describe(x),dynamic:describe(dyn),adopted:describe(adopted),currentMime:document.contentType};
+                }''')),flush=True)
             page.locator('#input-html').set_input_files(str(fixture))
             expect(page.locator('#status')).to_contain_text('Контейнер загружен')
             assert current_pair(page)==next(iter(src['publicHeads'].values()))
