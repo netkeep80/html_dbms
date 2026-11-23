@@ -12,4 +12,5 @@ assert.match(index,/id="open-id"/);assert.match(index,/id="open-hash"/);
 assert.match(index,/id="debug-toggle"/);assert.match(index,/id="debug-panel"/);assert.match(index,/id="debug-raw"/);
 assert.match(app,/function debugSnapshot\(\)/);assert.match(app,/record:e\.r/);assert.match(app,/JSON\.stringify\(debugSnapshot\(\),null,2\)/);
 assert.doesNotMatch(app,/debug-raw'\)\.innerHTML/);
+assert.match(app,/function exportDocument\(\)/);assert.match(app,/querySelectorAll\('button\[disabled\]'\)/);assert.match(app,/removeAttribute\('disabled'\)/);assert.match(app,/const doc=exportDocument\(\)/);
 console.log('UI / verifier regression checks: PASS');
