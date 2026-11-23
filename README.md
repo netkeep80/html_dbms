@@ -75,3 +75,17 @@ python3 tests/browser_smoke.py
 - Тесты: `node tests/core.test.cjs`, `node tests/app.test.cjs`, `node tests/docs-language.test.cjs`, `python3 tests/browser_smoke.py` (Chromium + тестовый **небезопасный** crypto shim только для UI). Никакой security guarantee browser smoke не даёт; криптография проверяется Node Web Crypto.
 
 Стабилизация не меняет протокол сообщений `HTML_DBMS/3`. Legacy v2 по-прежнему не поддерживается.
+
+## Демо «Касса» (HTML_DBMS/3)
+
+Автономный пример: [dist/html_dbms_cash_demo.html](dist/html_dbms_cash_demo.html). Исходная обезличенная Excel-книга находится в [tests/fixtures/cash_input.xlsx](tests/fixtures/cash_input.xlsx); генератор и приложение в [examples/cash](examples/cash).
+
+Демо содержит **11 независимых JSON-документов**, **1 641 непустую транзакцию**, ссылки на справочники исключительно по ID и шесть **вычисляемых JS views**, не сохраняющих результаты в базе. Исходный регистр нормализуется при импорте; исходный Excel-номер/строка сохраняются для аудита. При создании операции допустимые сущности выбираются из связанных выпадающих списков.
+
+```bash
+python3 build.py
+node examples/cash/build-demo.cjs
+python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cash_demo.html
+```
+
+Контрольный тест независимо расшифровывает HTML через ядро HTML DBMS и сравнивает справочники, операции и расчётные ячейки всех шести отчётов с исходной XLSX. Дополнительный UI-тест: `python3 tests/browser_cash_ui.py` (Chromium/Playwright, mock RPC; без подмены расчётов). Полный браузерный Web Crypto E2E на `file://` остаётся непроверенным в ограниченной среде; см. #31, #32.

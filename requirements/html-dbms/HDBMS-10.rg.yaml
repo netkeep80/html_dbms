@@ -1,0 +1,36 @@
+format: repo-guard/requirement-v1
+id: HDBMS-10
+normative: |
+  ### HDBMS-10 — Демо-касса: первичные JSON-цепочки, ID-ссылки и вычисляемые представления
+  **Обязательно:** демонстрационный автономный HTML содержит ровно одну опубликованную БД «Касса», 11 независимых криптографических цепочек (журнал непустых транзакций и 10 справочников исходного Excel). Исходная обезличенная XLSX хранится как fixture с фиксированной SHA-256. Импорт игнорирует пустые Excel-строки транзакций, сохраняет provenance транзакций и исходную XLSX-fixture; номера строк Excel не хранятся в JSON-справочниках и не показываются в их таблицах; текстовые ссылки канонизируются без учёта регистра. Каждая строка хранит ID из справочников: toTypeId, toId, typeId, fromTypeId, fromId. UI отображает подписи, предоставляет только связанные выпадающие списки для выбора этих ID и отклоняет несопоставленные ссылки. Шесть аналитических листов воспроизводятся вычисляемыми JavaScript views, а не сохраняются как JSON-документы; для сравнения с исходной книгой сохранено её историческое исключение 32-й категории из итогов пяти SUMIFS-отчётов. Строгие тесты по расшифрованной криптографической версии сверяют 1641 операций, первичные справочники, шесть отчётов и XLSX-контрольный хеш. Демо показывает полный журнал без пагинации; поле «План/Факт» удалено из runtime JSON и UI (3 исторических флага План сохранены в XLSX fixture, соответствующие категории транзакций остаются). Каждый из шести view включает горизонтальную гистограмму остатков, аналогичную Excel диаграмме листа «Участники(Фонд)». Справочники имеют действия создания отдельного JSON-документа, добавления записи и изменения записи через JSON Patch, при неизменных ID; действия работают при sandbox iframe без allow-forms (через обработчики click, не submit), записывают реальные цепочки после разрешения пользователя, отображают ошибку в форме, поддерживают отмену без изменения root и экспорт/повторное открытие; собственные имена справочников подключаются через root $refs. Приложение разворачивается на доступную область окна браузера под системной панелью. Browser smoke проверяет интерфейс отдельно от проверок криптографии; интеграционный Node Web Crypto тест проверяет CRUD и восстановление истории. Никаких кассовых правил в src/core.js или в обязательной системной панели.
+relations:
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/import-model.cjs'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/build-demo.cjs'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/cash-entry.js'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'dist/html_dbms_cash_demo.html'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/dump-demo.cjs'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/compare_excel.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/cash_crud.test.cjs'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_cash_acceptance.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/build_ui_integration_fixture.cjs'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_cash_ui.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_cash.py'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/fixtures/cash_input.xlsx'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/fixtures/cash_excel_extracted.json'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'examples/cash/README.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'README.md'}
