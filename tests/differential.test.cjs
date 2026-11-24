@@ -55,6 +55,38 @@ function measure(s){
    finally{subtle.encrypt=encrypt;}
   }
  }
+ // Bidirectional decision test: construct a candidate by the low-level append
+ // route on a detached snapshot, then invoke the full history verifier.
+ // This does not reuse the incremental proof or checkChange implementation.
+ const oracleStore=db.newStore(),base=await db.createDatabase(oracleStore,'Oracle');db.commit(oracleStore,base.store);
+ let oh=base.rootHead,oracleAccepted=0,oracleRejected=0;
+ const child=await db.createDocument(oracleStore,oh,'child',{n:0});db.commit(oracleStore,child.store);oh=child.rootHead;
+ const advanced=await db.patchDocument(oracleStore,oh,'child',[{op:'replace',path:'/n',value:1}]);db.commit(oracleStore,advanced.store);oh=advanced.rootHead;
+ const oldChild=child.documentHead,newChild=advanced.documentHead,stamp='2026-01-01T00:00:00.000Z';
+ async function compareRoot(ops,expected){
+  const before=serial(oracleStore),detached=db.adoptStore(JSON.parse(before));
+  let reference=null,actual=null,referenceError=null,actualError=null;
+  try{const event=await db.append(detached,oh,ops,{timestamp:stamp});await db.verifyDatabase(JSON.parse(serial(detached)),event.head);reference=event.head;}catch(e){referenceError=e.code;if(!referenceError)throw e;}
+  try{actual=await db.patchRoot(oracleStore,oh,ops,{timestamp:stamp});}catch(e){actualError=e.code;if(!actualError)throw e;}
+  assert.equal(serial(oracleStore),before);
+  assert.equal(actualError,referenceError,'oracle decision/code differs');
+  assert.equal(actualError,expected);
+  if(actual){assert.equal(actual.rootHead,reference);assert.equal(serial(actual.store),serial(detached));db.commit(oracleStore,actual.store);oh=actual.rootHead;oracleAccepted++;}
+  else{assert.equal(reference,null);oracleRejected++;}
+ }
+ await compareRoot([{op:'add',path:'/$refs/shared',value:newChild}],null);
+ await compareRoot([{op:'remove',path:'/$refs/child'}],null);
+ await compareRoot([{op:'add',path:'/$refs/child',value:oldChild}],'REFERENCE_ROLLBACK');
+ await compareRoot([{op:'add',path:'/$refs/child',value:newChild}],null);
+ await compareRoot([{op:'replace',path:'/$refs/shared',value:oldChild}],'REFERENCE_ROLLBACK');
+ await compareRoot([{op:'replace',path:'/$refs',value:[]}],'INVALID_ROOT');
+ await compareRoot([{op:'replace',path:'/$refs/child',value:'A'.repeat(64)}],"MISSING_RECORD");
+ await compareRoot([{op:'remove',path:'/missing'}],'INVALID_POINTER');
+ await compareRoot([{op:'replace',path:'',value:0}],null);
+ await compareRoot([{op:'replace',path:'',value:{$refs:{child:oldChild}}}],'REFERENCE_ROLLBACK');
+ await compareRoot([{op:'replace',path:'',value:{$refs:{child:newChild}}}],null);
+ assert.equal(oracleAccepted,5);assert.equal(oracleRejected,6);
+ console.log('BIDIRECTIONAL ROOT ORACLE PASS',JSON.stringify({accepted:oracleAccepted,rejected:oracleRejected}));
  // Explicit overwrite invalidates the previous proof and leaves old ciphertext descendants untouched.
  const s=db.newStore(),g=await db.createDatabase(s,'Overwrite');db.commit(s,g.store);
  const a=await db.patchRoot(s,g.rootHead,[{op:'add',path:'/n',value:1}]);db.commit(s,a.store);

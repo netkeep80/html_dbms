@@ -10,6 +10,7 @@ normative: |
   Production compilation: фиксированные версии esbuild и html-minifier-terser, один ESM core для Node и браузера, явный браузерный API, tree-shaking, minify+mangle JS/CSS/markup и sandbox bootstrap. HTML/XML получают одинаковый скомпилированный код; Node-only функции и комментарии не поставляются. Сборщик кассы не модифицирует JS; доверенный исходник хранится JSON-строкой.
   HEAD при обходе цепи декодируется единожды на событие, декодированный предшественник одновременно используется для проверки physical address и следующего чтения. AES использует байты ID без обратного decode; SHA-256 plaintext сравнивается побайтно. Каноничность Base64url проверяется по алфавиту и остаточным битам без повторного кодирования. Измеряются фактические decode на границе atob. Bootstrap фиксирует методы MessagePort до запуска пользовательского entry.
   Native file://, HEAD/URL и HTTPS приёмки контролируют сеть во всём browser context, включая сохранённые копии и iframe; разрешён только основной HTTPS документ в Pages acceptance. Перехваченные forged WindowProxy ответы проверяются через listener дочернего документа.
+  Заключительная приёмка: внешняя блокировка Service Worker учитывает SecurityError непрозрачного origin, сохраняет мониторинг запросов, pageerror и serviceworker. Двусторонний root oracle сравнивает решение инкрементального метода с физическим append и полной проверкой отдельного snapshot, включая rollback, отсутствие записи и ошибочный Patch.
   Дополнительная native приёмка: cross-origin forged RPC через локально перехваченный HTTPS document без сетевого обращения, отзыв отложенного read и write, direct/referenced entry replacement, HTML meta-refresh без RPC; превышение размера проверяется до Blob.text, лимит template проверяется на 10001 элементах.
 relations:
   - predicates: [implemented_by]
@@ -85,3 +86,6 @@ relations:
 
   - predicates: [verified_by]
     target: {kind: artifact, path: 'tests/browser_head_url.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_network.py'}
