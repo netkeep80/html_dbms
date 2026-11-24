@@ -117,7 +117,7 @@ function measure(s){
    try{actual=kind==='create'?await db.createDocument(store,at,name,value,alias,options):await db.patchDocument(store,at,alias,value,options);}catch(e){actualError=e.code;if(!actualError)throw e;}
    assert.equal(serial(store),before);
    assert.equal(actualError,referenceError,'child oracle decision/code differs');
-   if(expected==='reject')assert.ok(actualError);
+   if(expected==='reject'){assert.ok(actualError);console.log('CHILD ORACLE OVERWRITE REJECT',actualError);}
    else assert.equal(actualError,expected);
    if(actual){
     assert.deepEqual({rootHead:actual.rootHead,documentHead:actual.documentHead},ref);
@@ -145,7 +145,7 @@ function measure(s){
   // Root replacement with a detached genesis and no dependency on its old
   // successor is explicitly allowed, with full revalidation.
   await compareChild('create','alternate',{},null,{overwriteRoot:true},oldRoot);
-  assert.equal(childAccepted,5);assert.equal(childRejected,7);
+  assert.equal(childAccepted,5);assert.equal(childRejected,8);
  }finally{globalThis.Date=RealDate;}
  console.log('BIDIRECTIONAL CHILD ORACLE PASS',JSON.stringify({accepted:childAccepted,rejected:childRejected}));
  // Explicit overwrite invalidates the previous proof and leaves old ciphertext descendants untouched.
