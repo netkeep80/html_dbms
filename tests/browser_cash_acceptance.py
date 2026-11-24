@@ -132,12 +132,14 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         app2.locator('.dict-nav button',has_text='Проекты').click()
         expect(app2.locator('.gridbox tbody tr').filter(has_text=project_id)).to_contain_text('Проект Б')
         # Inspect recovered JSON, not just visual cells.
-        data=second.evaluate('''async()=>{
-          const db=HTML_DBMS,raw=JSON.parse(document.getElementById('db-store').textContent),s=db.adoptStore(raw),h=raw.publicHeads['Касса'];
+        assert second.locator('#db-store').text_content()==''
+        from browser_dual import store_from_output
+        data=second.evaluate('''async raw=>{
+          const db=HTML_DBMS,s=db.adoptStore(raw),h=raw.publicHeads['Касса'];
           const root=await db.readState(s,h),docs={};
           for(const name of Object.keys(root.$refs))docs[name]=await db.readState(s,root.$refs[name]);
           return {count:docs.transactions.rows.length,keys:Object.keys(root.$refs),types:docs.transactionTypes,projects:docs.projects,history:(await db.verifyDatabase(s,h)).status,withoutExcelRows:Object.values(docs).filter(v=>v.entries).every(d=>d.order.every(id=>!('excelRow' in d.entries[id])))};
-        }''')
+        }''',store_from_output('html',saved))
         assert data['count']==21
         assert len(data['keys'])==12
         assert data['types']['entries'][first_id]['name']=='Тестовая категория 2'

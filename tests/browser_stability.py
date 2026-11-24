@@ -73,7 +73,9 @@ def scenario(browser, kind, tmp):
     expect(page.locator('#status')).to_contain_text('Контейнер загружен')
     expect(frame(page).locator('#db-title')).to_have_text('Alpha')
     assert page.evaluate('typeof window.evil')=='undefined'
+    assert page.locator('#db-store').text_content()==''
     assert save(page,kind,tmp/f'imported.{kind}')==data
+    assert save(page,kind,tmp/f'imported-again.{kind}')==data
     # Check size BEFORE reading the blob without allocating a huge fixture.
     page.evaluate('''()=>{const p=Blob.prototype;window.sizeGate={descriptor:Object.getOwnPropertyDescriptor(p,'size'),text:p.text,read:false};
       Object.defineProperty(p,'size',{configurable:true,get:()=>256*1024*1024+1});
@@ -128,6 +130,46 @@ def scenario(browser, kind, tmp):
     page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
     assert save(page,kind,tmp/f'after-race.{kind}')==data
     assert current_pair(page)==heads['Alpha']
+    # The hidden debug panel must not start another history traversal on commit.
+    page.evaluate('''()=>{const original=HTML_DBMS.inspect;window.inspectCount=0;
+      HTML_DBMS.inspect=(...a)=>{window.inspectCount++;return original(...a);};}''')
+    page.locator('#debug-toggle').click()
+    expect(page.locator('#debug-raw')).to_contain_text('"rootHead"')
+    observed=page.evaluate('window.inspectCount')
+    assert observed>0
+    page.locator('#info-toggle').click()
+    expect(page.locator('#debug-panel')).to_be_hidden()
+    assert page.locator('#debug-raw').text_content()==''
+    page.locator('#info-toggle').click()
+    # Use a fresh wrapper after the earlier intentionally delayed write.
+    page.reload(wait_until='domcontentloaded')
+    expect(frame(page).locator('#db-title')).to_have_text('Alpha')
+    page.evaluate('''()=>{const original=HTML_DBMS.inspect;window.inspectCount=0;
+      HTML_DBMS.inspect=(...a)=>{window.inspectCount++;return original(...a);};}''')
+    page.locator('#debug-toggle').click()
+    expect(page.locator('#debug-raw')).to_contain_text('"rootHead"')
+    observed=page.evaluate('window.inspectCount')
+    page.locator('#info-toggle').click();page.locator('#info-toggle').click()
+    frame(page).locator('#add-document').click()
+    frame(page).locator('#new-document-name').fill('NO_DEBUG_REPLAY')
+    frame(page).locator('#new-document-json').fill('{}')
+    frame(page).locator('#create-document').click()
+    expect(frame(page).locator('#message')).to_contain_text('Документ создан')
+    assert page.evaluate('window.inspectCount')==observed
+    before_limit=save(page,kind,tmp/f'before-limit.{kind}')
+    before_head=current_pair(page)
+    # Emulate the exact incremental counter crossing the cap, without allocating 256 MiB.
+    page.evaluate('''()=>{const db=HTML_DBMS,original=db.storeInfo;
+      window.restoreInfo=()=>{db.storeInfo=original;};
+      db.storeInfo=(...a)=>({...original(...a),bytes:256*1024*1024});}''')
+    frame(page).locator('#add-document').click()
+    frame(page).locator('#new-document-name').fill('OVER_LIMIT')
+    frame(page).locator('#new-document-json').fill('{}')
+    frame(page).locator('#create-document').click()
+    expect(frame(page).locator('#message')).to_contain_text('Превышен размер контейнера')
+    page.evaluate('window.restoreInfo()')
+    assert current_pair(page)==before_head
+    assert save(page,kind,tmp/f'after-limit.{kind}')==before_limit
     assert not external,external
     assert not errors,errors
     context.close()
