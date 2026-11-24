@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const db = require('../src/core.js');
+const db = require('../src/core-node.cjs');
 const id=head=>db.unpackHead(head).id;
 const fixedTime = '2026-11-23T18:00:00.000Z';
 
@@ -16,10 +16,10 @@ const fixedTime = '2026-11-23T18:00:00.000Z';
  assert.throws(()=>db.validateStore({format:'HTML_DBMS/3',records:{}}),{code:'UNSUPPORTED_STORAGE'});
  assert.throws(()=>db.validateStore({format:db.VERSION,records:{},publicHeads:{x:[decoded.id,decoded.hash]}}),{code:'INVALID_PUBLIC_HEADS'});
 
- const s=db.newStore();assert.equal(s.format,'HTML_DBMS/4');
+ const s=db.newStore();assert.equal(db.snapshot(s).format,'HTML_DBMS/4');
  const created=await db.createDatabase(s,'Касса');db.commit(s,created.store);
  const r0=created.rootHead;
- assert.deepEqual(s.publicHeads['Касса'],r0);
+ assert.deepEqual(db.catalog(s)['Касса'],r0);
  assert.deepEqual((await db.load(s,r0)).state,{name:'Касса',entry:null,$refs:{}});
  let rg=await db.readRecord(s,r0);assert.equal(rg.length,2);assert.equal(rg[0],null);
  assert.deepEqual(rg[1].parent,null);
@@ -51,27 +51,27 @@ const fixedTime = '2026-11-23T18:00:00.000Z';
  assert.equal(verified.documents.funds.events,2);
  await assert.rejects(db.verifyDatabase(s,r2,{anchorHead:'A'.repeat(64)}),{code:'ANCHOR_MISMATCH'});
  // Publishing is not implicit in the low-level core.
- assert.deepEqual(s.publicHeads['Касса'],r0);
+ assert.deepEqual(db.catalog(s)['Касса'],r0);
  let staged=db.staging(s);db.publish(staged,'Касса',r2,r0);db.commit(s,staged);
- assert.deepEqual(s.publicHeads['Касса'],r2);
+ assert.deepEqual(db.catalog(s)['Касса'],r2);
  // Multiple independent databases in one physical file.
  const warehouse=await db.createDatabase(s,'Склад');db.commit(s,warehouse.store);
- assert.equal(Object.keys(s.publicHeads).length,2);
+ assert.equal(Object.keys(db.catalog(s)).length,2);
  assert.notDeepEqual(warehouse.rootHead,r2);
  // Hidden database and optional publication catalog.
  const hidden=await db.createDatabase(s,'Бухгалтерия',{visible:false});db.commit(s,hidden.store);
- assert.equal(s.publicHeads['Бухгалтерия'],undefined);
+ assert.equal(db.catalog(s)['Бухгалтерия'],undefined);
  assert.equal((await db.load(s,hidden.rootHead)).state.name,'Бухгалтерия');
- let hiddenStore=db.staging(s);delete hiddenStore.publicHeads;db.validateStore(hiddenStore);
+ let hiddenStore=db.staging(s);for(const alias of Object.keys(db.catalog(hiddenStore)))db.unpublish(hiddenStore,alias);assert.ok(!('publicHeads' in db.snapshot(hiddenStore)));db.validateStore(db.snapshot(hiddenStore));
  assert.equal((await db.load(hiddenStore,r2)).state.name,'Касса');
- assert.throws(()=>db.validateStore({...s,format:'HTML_DBMS/2.2'}),{code:'UNSUPPORTED_STORAGE'});
- assert.throws(()=>db.validateStore({...s,publicHead:r2}),{code:'UNSUPPORTED_STORAGE'});
+ assert.throws(()=>db.validateStore({...db.snapshot(s),format:'HTML_DBMS/2.2'}),{code:'UNSUPPORTED_STORAGE'});
+ assert.throws(()=>db.validateStore({...db.snapshot(s),publicHead:r2}),{code:'UNSUPPORTED_STORAGE'});
  // Attempting second write on an occupied successor never silently replaces it.
  await assert.rejects(db.append(s,r1,[{op:'add',path:'/name2',value:'collision'}]),{code:'SUCCESSOR_OCCUPIED'});
  // Invalid JSON Patch should fail before any mutation.
- const before=JSON.stringify(s.records);
+ const before=JSON.stringify(db.snapshot(s).records);
  await assert.rejects(db.append(s,r2,[]),{code:'INVALID_PATCH'});
- assert.equal(JSON.stringify(s.records),before);
+ assert.equal(JSON.stringify(db.snapshot(s).records),before);
  // Timestamp is preserved; it is metadata from the local clock, not trusted time.
  const testStore=db.newStore();const g=await db.genesis(testStore,'Test',{});
  const e=await db.append(testStore,g.head,[{op:'add',path:'/x',value:1}],{timestamp:fixedTime});
@@ -81,7 +81,7 @@ const fixedTime = '2026-11-23T18:00:00.000Z';
    const cipher=crypto.createCipheriv('aes-256-gcm',digest,physical.subarray(0,12));
    const ct=Buffer.concat([cipher.update(bytes),cipher.final(),cipher.getAuthTag()]).toString('base64url');
    assert.equal(expectedHead,Buffer.concat([physical,digest]).toString('base64url'));
-   assert.equal(testStore.records[physical.toString('base64url')],ct);
+   assert.equal(db.readCipher(testStore,physical.toString('base64url')),ct);
  }
  const gRecord=[null,{name:'Test',parent:null,state:{}}],gDigest=crypto.createHash('sha256').update(JSON.stringify(gRecord)).digest();
  assertCipher(gRecord,crypto.createHash('sha256').update(gDigest).digest().subarray(0,16),g.head);
@@ -100,9 +100,9 @@ const fixedTime = '2026-11-23T18:00:00.000Z';
  const cycStore=db.newStore();const cyc=await db.genesis(cycStore,'C',{a:{$ref:'/b'},b:{$ref:'/a'}});
  await assert.rejects(db.resolve(cycStore,cyc.head,cyc.head,{$ref:'/a'}),{code:'REF_CYCLE'});
  // Corruption is detected, history is not automatically truncated.
- const brokenStore=db.staging(testStore);brokenStore.records[id(g.head)]=brokenStore.records[id(e.head)];
+ const brokenStore=db.staging(testStore);db.writePhysical(brokenStore,id(g.head),db.readCipher(brokenStore,id(e.head)));
  const broken=await db.inspect(brokenStore,e.head);
- assert.equal(broken.status,'broken');assert.equal(broken.code,'INVALID_GCM');assert.ok(brokenStore.records[id(e.head)]);
+ assert.equal(broken.status,'broken');assert.equal(broken.code,'INVALID_GCM');assert.ok(db.readCipher(brokenStore,id(e.head)));
  assert.equal((await db.inspect(testStore,e.head)).status,'complete');
  // Destructive overwrite of an intermediate slot: preserve occupant, remove only
  // authenticated descendants after explicit diagnosis and a verified recovery head.
@@ -118,8 +118,8 @@ const fixedTime = '2026-11-23T18:00:00.000Z';
  const recovered=await db.truncateInvalidTail(branch,damage,bg.head);
  assert.deepEqual(recovered.deletedIds,[id(b2.head)]);
  assert.equal(recovered.keptInvalidSlot,id(b1.head));
- assert.ok(recovered.store.records[id(b1.head)]);
- assert.equal(recovered.store.records[id(b2.head)],undefined);
+ assert.ok(db.readCipher(recovered.store,id(b1.head)));
+ assert.equal(db.readCipher(recovered.store,id(b2.head)),undefined);
  assert.equal((await db.load(recovered.store,bg.head)).state.x,0);
  await assert.rejects(db.truncateInvalidTail(branch,damage,overwrite.head),{code:'INVALID_RECOVERY_HEAD'});
  // Distinct append messages from same predecessor always target the same address.
@@ -139,7 +139,7 @@ const fixedTime = '2026-11-23T18:00:00.000Z';
  const rollback=await db.append(historical,removed.head,[{op:'add',path:'/$refs/funds',value:hd.documentHead}]);
  await assert.rejects(db.verifyDatabase(historical,rollback.head),{code:'REFERENCE_ROLLBACK'},'remove then re-add older child is rollback');
  const damaged=db.staging(historical);
- damaged.records[id(hd.documentHead)]=damaged.records[id(hp.rootHead)];
+ db.writePhysical(damaged,id(hd.documentHead),db.readCipher(damaged,id(hp.rootHead)));
  await assert.rejects(db.verifyDatabase(damaged,removed.head),{code:'INVALID_GCM'},'corrupt removed historical ciphertext must fail verification');
  const returnNew=await db.append(historical,rollback.head,[{op:'replace',path:'/$refs/funds',value:hp.documentHead}]);
  await assert.rejects(db.verifyDatabase(historical,returnNew.head),{code:'REFERENCE_ROLLBACK'},'rollback cannot be laundered by a later forward update');

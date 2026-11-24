@@ -1,0 +1,101 @@
+format: repo-guard/requirement-v1
+id: HDBMS-14
+normative: |
+  ### HDBMS-14 — Стабилизация, этап 1 (#41)
+  Genesis использует одни сериализованные байты и один SHA-256 plaintext. Формат /4 не меняется. Структурная проверка всех ciphertext: алфавит, канонические остаточные биты, минимальный GCM tag и лимит. readRecord использует прямой lookup без перебора. Обычная запись корня и дочерних документов проверяется до commit, включая исторический rollback; отказ не изменяет рабочую копию. Повторное чтение корневой цепочки при открытии не требуется. Сохранены независимый verifier, явная перезапись и отсутствие legacy.
+  Этап 2: внешний store принимается через adoptStore; контролируемые словари поддерживают структурные инварианты, overlay хранит только дельту физических слотов, commit проверяет базовую ревизию, конкурентные физические операции отклоняют устаревшую запись. Replay root совмещён со сбором исторических refs. Ошибка entry не отзывает криптографически проверенный root. Внутреннее проверенное состояние хранит последние HEAD всех исторических alias, в том числе удалённых; обычный свободный append использует проверенное состояние, изменения refs проверяют наследование последнего HEAD, overwrite запускает полную независимую проверку. Любая физическая мутация инвалидирует proof; новый проверенный proof устанавливается при commit. Внешние readState не возвращают изменяемые ссылки на proof. Контекст оболочки включает epoch, store, revision, URL, HEAD и ввод; устаревший RPC, диагностика и импорт не публикуют результат. Импорт HTML через inert template в отдельном HTML-документе; XML без DTD/ENTITY и внешних processing instructions. Startup listener снимается при отзыве iframe. Входные JSON Patch и initial state фиксируются до await, внешние read operations принимают единый управляемый snapshot, JSON array accessors отклоняются. Полная приёмка этапа отдельно.
+  Этап 3: RPC использует выделенный MessagePort документа; window message только одноразовый handshake, отзыв при pagehide/load и смене entry. Блокировки привязаны к epoch. Размер records поддерживается инкрементально; импорт ограничен 256 МиБ и 10000 template, обход template итеративный.
+  Браузерное ядро не содержит Node Buffer/require/CommonJS; внешний src/core-node.cjs подключает то же ядро для инструментов. Сборщик кассы добавляет только data script с доверенным исходником и CSS, не переписывает JS оболочки. Неиспользуемые CSS старого меню и таблиц starter удалены.
+  Этап 3b: непрозрачный store handle, физические records/catalog полностью приватны; управляемая мутация через явные методы ядра, без Proxy. Snapshot создаётся только для экспорта и явной диагностики; каталог — копия строковых HEAD. Commit передаёт приватный каталог stage без повторной копии. Неизменяемая ревизия и proof сохранены.
+  Production compilation: фиксированные версии esbuild и html-minifier-terser, один ESM core для Node и браузера, явный браузерный API, tree-shaking, minify+mangle JS/CSS/markup и sandbox bootstrap. HTML/XML получают одинаковый скомпилированный код; Node-only функции и комментарии не поставляются. Сборщик кассы не модифицирует JS; доверенный исходник хранится JSON-строкой.
+  HEAD при обходе цепи декодируется единожды на событие, декодированный предшественник одновременно используется для проверки physical address и следующего чтения. AES использует байты ID без обратного decode; SHA-256 plaintext сравнивается побайтно. Каноничность Base64url проверяется по алфавиту и остаточным битам без повторного кодирования. Измеряются фактические decode на границе atob. Bootstrap фиксирует методы MessagePort до запуска пользовательского entry.
+  Native file://, HEAD/URL и HTTPS приёмки контролируют сеть во всём browser context, включая сохранённые копии и iframe; разрешён только основной HTTPS документ в Pages acceptance. Перехваченные forged WindowProxy ответы проверяются через listener дочернего документа.
+  Заключительная приёмка: внешняя блокировка Service Worker учитывает SecurityError непрозрачного origin, сохраняет мониторинг запросов, pageerror и serviceworker. Двусторонний root oracle сравнивает решение инкрементального метода с физическим append и полной проверкой отдельного snapshot, включая rollback, отсутствие записи и ошибочный Patch.
+  Заключительная оболочка: видимость debug — единственный источник состояния; скрытие очищает вывод, скрытая панель не выполняет inspect. Принятый db-store очищается перед созданием чистого шаблона экспорта. Shell commit и принятие импорта проверяют размер store с консервативным учётом escaping и шаблона, Blob экспорта ограничен теми же 256 МиБ. Тестирование имитирует переполнение инкрементального счётчика и проверяет неизменность HEAD/store; проверяется повторное сохранение и отсутствие скрытого inspect.
+  Дополнительная native приёмка: cross-origin forged RPC/handshake через локально перехваченный HTTPS document без реального сетевого обращения; проверка Frame именно активного iframe при навигации с отложенными read и write, direct/referenced entry replacement, HTML meta-refresh без RPC; превышение размера проверяется до Blob.text, лимит template проверяется на 10001 элементах. Синтаксический аудит production использует HTML/XML parser, Acorn с onComment для JS и CSS-нормализацию, включает вложенные sandbox и starter; положительный и отрицательный контроль комментариев.
+  Внешнее покрытие: исходный core V8 report дополнен списком непокрытых UTF-16 диапазонов; CDP собирает фактические production scripts по точному source identity из renderer основного документа и изолированного iframe, без изменения sandbox/CSP и site isolation. Диагностика покрытия отдельно от штатной native приёмки; измеряются наблюдаемые функции и эффективные диапазоны, не заявляется эквивалентность AST branch coverage. Инструментация и websocket-client остаются исключительно в тестах.
+  Native gates выполняются отдельными CI steps без fail-fast внутри browser job: отказ одного сценария не отменяет последующие; итоговый job остаётся failed при любом отказе. Для активного iframe в XHTML берётся единственный живой browser Frame (ElementHandle.content_frame возвращает None), навигация location.replace инициируется из него; идентичность request.frame и route.request.frame обязательна. Дополнительный child oracle сравнивает физические снимки и коды ошибок при фиксированном тестовом timestamp: создание, patch, конфликт, разрушительная перезапись и сохранение исторической зависимости. Граничные тесты включают аутентифицированные malformed JSON и patch, отсутствующий каталог, ref depth и транзакционное удаление.
+  Диагностическое покрытие дополнительно включает реальный RPC session test, отказ/подтверждение физического восстановления через UI и проверку getHead/недопустимых аргументов авторизованного entry. Имена критических функций оболочки восстанавливаются только внешним source map при доказанной побайтной идентичности с production; карта не включается в контейнер. Все перечисленные критические функции должны наблюдаться V8 как выполненные.
+relations:
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/core.js'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/app.js'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/app.test.cjs'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'dist/html_dbms.html'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'dist/html_dbms.xml'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/stability.test.cjs'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: '.github/workflows/quality.yml'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'README.md'}
+  - predicates: [documents]
+    target: {kind: artifact, path: 'docs/SRS.md'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/cash_crud.test.cjs'}
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'examples/cash/build-pages.cjs'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/metrics.test.cjs'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_stability.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/differential.test.cjs'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_rpc_session.py'}
+
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/core-node.cjs'}
+
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'package.json'}
+
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'tools/compile.cjs'}
+
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/browser-core.js'}
+
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/sandbox.js'}
+
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/sandbox.html'}
+
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'src/starter.css'}
+
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: 'package-lock.json'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/boundaries.test.cjs'}
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/benchmark.cjs'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_pages.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_native_crypto.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_head_url.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_network.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/coverage_report.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_coverage.py'}

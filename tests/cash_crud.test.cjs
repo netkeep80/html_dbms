@@ -3,13 +3,13 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const db=require(path.resolve(__dirname,'../src/core.js'));
+const db=require(path.resolve(__dirname,'../src/core-node.cjs'));
 async function main(){
  const html=fs.readFileSync(path.resolve(__dirname,'../dist/html_dbms_cash_demo.html'),'utf8');
  const match=html.match(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/);
  assert.ok(match,'encrypted store is embedded');
- const store=db.validateStore(JSON.parse(match[1]));
- const original=store.publicHeads['Касса'];
+ const store=db.adoptStore(JSON.parse(match[1]));
+ const original=db.catalog(store)['Касса'];
  const originalRoot=await db.load(store,original);
  assert.equal(Object.keys(originalRoot.state.$refs).length,11);
  const earlier=(await db.load(store,originalRoot.state.$refs.participants)).state;

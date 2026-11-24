@@ -2,7 +2,7 @@
 /** Build the Cash example using only the generic v4 DBMS core and physical JSON store. */
 const fs=require('node:fs'),path=require('node:path');
 const project=path.resolve(__dirname,'../..');
-const db=require(path.join(project,'src/core.js'));
+const db=require(path.join(project,'src/core-node.cjs'));
 const {createModel,SHEETS}=require('./import-model.cjs');
 const fixturePath=process.argv[2]||path.join(project,'tests/fixtures/cash_excel_extracted.json');
 const output=process.argv[3]||path.join(project,'dist/html_dbms_cash_demo.html');
@@ -20,15 +20,10 @@ async function main(){
  let html=fs.readFileSync(path.join(project,'dist/html_dbms.html'),'utf8');
  const marker=/<script id="db-store" type="application\/json">[\s\S]*?<\/script>/;
  if(!marker.test(html))throw Error('Missing embedded db-store');
- html=html.replace(marker,'<script id="db-store" type="application/json">'+JSON.stringify(store).replace(/</g,'\\u003c')+'</script>');
- const sourceTag='<script id="cash-demo-source" type="text/plain">'+appSource.replace(/<\/script/gi,'<\\/script')+'</script>';
- html=html.replace('<script id="starter-source"',sourceTag+'\n<script id="starter-source"');
- const srcMarker="const STARTER_SOURCE=$('starter-source').textContent;";
- if(!html.includes(srcMarker))throw Error('Missing shell starter marker');
- html=html.replace(srcMarker,srcMarker+"\nconst DEMO_CASH_SOURCE=$('cash-demo-source').textContent;");
- const allow="if(value.source===STARTER_SOURCE&&value.export==='main')";
- if(!html.includes(allow))throw Error('Missing shell entry launch gate');
- html=html.replace(allow,"if((value.source===STARTER_SOURCE||value.source===DEMO_CASH_SOURCE)&&value.export==='main')");
+ html=html.replace(marker,()=>'<script id="db-store" type="application/json">'+JSON.stringify(db.snapshot(store)).replace(/</g,'\\u003c')+'</script>');
+ const sourceTag='<script id="cash-demo-source" type="application/json">'+JSON.stringify(appSource).replace(/</g,'\\u003c')+'</script>';
+ if(!html.includes('<script id="starter-source"'))throw Error('Missing trusted entry data anchor');
+ html=html.replace('<script id="starter-source"',()=>sourceTag+'\n<script id="starter-source"');
  const fullscreenCss='<style id="cash-fullscreen-css">.app-main{max-width:none;width:100%;height:calc(100vh - 44px);min-height:0;margin:0;padding:5px 8px;display:flex;flex-direction:column}.app-main>.notice{flex:0 0 auto;margin-bottom:3px}.entry-area{flex:1;min-height:0;overflow:hidden}.entry-area iframe{height:100%;min-height:0;width:100%;border-radius:0}</style>';
  html=html.replace('</head>',fullscreenCss+'</head>');
  html=html.replace('<title>HTML DBMS 4.0.0</title>','<title>HTML DBMS · Касса 2026 (демо)</title>');

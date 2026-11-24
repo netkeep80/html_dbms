@@ -44,6 +44,7 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '24'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Build fresh public demo and verify all history
         run: |
           python3 build.py

@@ -18,7 +18,7 @@ assert.match(app,/\$\('databases'\)\.onchange=\(\)=>selectAlias/);
 assert.match(app,/\$\('open-head'\)\.onclick=\(\)=>run\(openFields\)/);
 assert.match(app,/async function openFields\(\)/);
 assert.match(app,/function selectAlias\(alias\)/);assert.match(app,/setFields\(h\)/);
-assert.match(app,/function syncCatalog\(preselect=false\)/);
+assert.match(app,/function syncCatalog\(\)/);
 assert.match(app,/sel\.value='';/);
 assert.match(app,/function clearOpened\(/);
 assert.match(app,/async function retryOccupied\(/);
@@ -34,9 +34,10 @@ assert.doesNotMatch(starter,/JSON\.stringify\(current\?await db\.read\(current\+
 assert.match(app,/srcdoc=SANDBOX_DOCUMENT/);
 assert.match(app,/setAttribute\('sandbox','allow-scripts'\)/);
 assert.doesNotMatch(app,/allow-same-origin/);
-assert.match(app,/event\.source!==activeFrame\.contentWindow/);
+assert.match(fs.readFileSync(path.join(__dirname,'../src/sandbox.js'),'utf8'),/new MessageChannel\(\)/);assert.match(app,/e\.source!==f\.contentWindow/);
 assert.match(app,/async function authorizeWrite\(promptText\)/);assert.match(app,/async function verifyStore\(\)/);assert.match(app,/async function verifyAnchor\(\)/);assert.match(app,/async function verifyFile\(\)/);assert.match(app,/async function truncate\(\)/);
-assert.match(app,/const exportTemplate=document\.documentElement\.cloneNode\(true\)/);
+assert.match(app,/node\.textContent='';exportTemplate=document\.documentElement\.cloneNode\(true\)/);
+assert.match(app,/function commitStage\(tx\)\{assertFits\(tx\);db\.commit\(store,tx\);\}/);
 assert.match(app,/const doc=exportTemplate\.cloneNode\(true\)/);
 assert.match(app,/querySelectorAll\('\[id="db-store"\]'\)/);
 assert.match(app,/textContent=JSON\.stringify\(data\)/);
@@ -45,6 +46,8 @@ assert.match(starter,/export async function main\(db, mount\)/);
 assert.match(app,/source:STARTER_SOURCE/);
 assert.match(html,/"format":"HTML_DBMS\/4","publicHeads":\{\},"records":\{\}/);
 assert.doesNotMatch(dist,/\/\* (?:CORE|APP|STARTER)_JS \*\//);
-assert.ok(dist.includes('Sequence is derived from verified ancestry'));
-assert.ok(dist.includes('export async function main(db, mount)'));
+// Serialized patch shape is verified by core.test.cjs, not source comments.
+assert.ok(dist.includes('id="starter-source"'));
 console.log('HTML_DBMS/4 strict shell/entry UI checks PASS');
+
+assert.doesNotMatch(dist,/require\(['"]node:crypto|\bBuffer\.from|module\.exports/);

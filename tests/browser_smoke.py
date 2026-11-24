@@ -1,6 +1,6 @@
-"""Browser UI regression with intentionally INSECURE WebCrypto shim.
+"""Browser UI regression with native file:// WebCrypto in CI.
 
-For browser behavior only: real AES-GCM/SHA-256 are covered in core.test.cjs.
+The local set_content fallback alone uses an intentionally INSECURE WebCrypto shim.
 Must test real DOM interaction, both modal decisions, file import/export and
 failure states. Local navigation is prohibited by this test environment.
 """
@@ -50,8 +50,8 @@ with sync_playwright() as pl:
     if os.environ.get('GITHUB_ACTIONS') == 'true':
         # GitHub-hosted runner permits direct file:// navigation. The local
         # evaluation environment does not; it tests the same code via set_content.
-        page.add_init_script(SHIM)
         page.goto(HTML.resolve().as_uri(),wait_until='domcontentloaded')
+        assert page.evaluate('isSecureContext && !!crypto.subtle')
     else:
         page.evaluate(SHIM)
         page.set_content(HTML.read_text(encoding='utf8'),wait_until='domcontentloaded')
