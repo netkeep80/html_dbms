@@ -238,7 +238,9 @@ def extra(browser,kind,tmp):
     expect(page.locator('#validation-report')).to_contain_text('"status": "broken"')
     page.locator('#recovery-section summary').click()
     page.locator('#recovery-head').evaluate('(e,v)=>{e.value=v}',head)
-    page.locator('#truncate').click()
+    with page.expect_event('dialog',predicate=lambda d:'Восстановление необратимо' in d.message):
+        page.locator('#truncate').click()
+    page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
     with page.expect_download() as dl:page.locator('#save').click()
     cancelled=tmp/f'coverage-cancelled.{kind}';dl.value.save_as(str(cancelled))
     assert store_from_output(kind,cancelled.read_text('utf8'))==data

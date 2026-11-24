@@ -92,6 +92,23 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto'),db=requ
  assert.equal(db.readCipher(deletion,bid),undefined);
  assert.ok(!Object.hasOwn(db.snapshot(deletion).records,bid));
  db.commit(bare,deletion);assert.equal(db.readCipher(bare,bid),undefined);
+ // Recovery must reject a concurrent removal after the fresh authenticated
+ // diagnosis, even if the deletion list no longer includes that descendant.
+ const rs=db.newStore(),rg=await db.genesis(rs,'Recovery race',{x:0});
+ const ra=await db.append(rs,rg.head,[{op:'replace',path:'/x',value:1}]);
+ const rb=await db.append(rs,ra.head,[{op:'replace',path:'/x',value:2}]);
+ await db.overwrite(rs,rg.head,[{op:'replace',path:'/x',value:3}]);
+ const damage=await db.inspect(rs,rb.head),rid=db.unpackHead(rb.head).id,expected=db.snapshot(rs);
+ assert.equal(damage.code,'INVALID_GCM');assert.ok(damage.tailIds.includes(rid));
+ let raced=false;
+ subtle.digest=async function(algorithm,buffer){
+  const result=await digestOriginal.call(this,algorithm,buffer);
+  if(!raced&&Buffer.from(buffer).equals(Buffer.from(rg.head,'base64url'))){raced=true;db.removePhysical(rs,rid);}
+  return result;
+ };
+ try{await assert.rejects(db.truncateInvalidTail(rs,damage,rg.head),{code:'STALE_TRANSACTION'});}
+ finally{subtle.digest=digestOriginal;}
+ assert.equal(raced,true);delete expected.records[rid];assert.deepEqual(db.snapshot(rs),expected);
  console.log('REACHABLE COVERAGE BOUNDARIES PASS');
  console.log('BOUNDARIES PASS: codec residual bits, independent wrong address/hash ciphertext, RFC6902, JSON limits, genesis idempotence/overwrite, publication, second encryption failure, stale read');
 })().catch(e=>{console.error(e);process.exitCode=1;});
