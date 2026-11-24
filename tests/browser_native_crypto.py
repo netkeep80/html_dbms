@@ -11,6 +11,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import xml.etree.ElementTree as ET
 from playwright.sync_api import sync_playwright, expect
+from browser_network import block_service_workers
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -30,8 +31,9 @@ def child(page,kind):
 
 
 def case(browser, kind, path):
-    ctx=browser.new_context(accept_downloads=True,service_workers='block')
+    ctx=browser.new_context(accept_downloads=True)
     blocked=[];errors=[]
+    block_service_workers(ctx, blocked)
     def monitor(p):
         p.on('dialog',lambda d:d.accept('Касса'))
         p.on('pageerror',lambda e:errors.append(str(e)))

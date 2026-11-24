@@ -31,8 +31,9 @@ def select_db(page,value):
 
 def scenario(browser,kind,tmp):
     print("URL scenarios",kind,flush=True)
-    ctx=browser.new_context(accept_downloads=True,service_workers='block')
+    ctx=browser.new_context(accept_downloads=True)
     blocked=[];errors=[]
+    block_service_workers(ctx, blocked)
     ctx.on('request',lambda r:blocked.append(r.url) if r.url.startswith(('http:','https:')) else None)
     ctx.route('http**/*',lambda r:r.abort())
     def monitor(p):

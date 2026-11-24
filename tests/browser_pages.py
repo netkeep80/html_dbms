@@ -8,12 +8,14 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from threading import Thread
 import functools, hashlib, json, re, ssl, subprocess, sys, urllib.parse
 from playwright.sync_api import sync_playwright, expect
+from browser_network import block_service_workers
 ROOT=Path(__file__).resolve().parents[1]
 def test(url, expected=None, self_signed=False):
     with sync_playwright() as pw:
         browser=pw.chromium.launch(headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
-        ctx=browser.new_context(ignore_https_errors=self_signed,accept_downloads=True,service_workers='block')
+        ctx=browser.new_context(ignore_https_errors=self_signed,accept_downloads=True)
         errors=[]; unexpected=[]
+        block_service_workers(ctx, unexpected)
         def monitor(p):
             p.on('pageerror',lambda e:errors.append(str(e)))
             p.on('dialog',lambda d:d.accept())
