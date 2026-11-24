@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 import base64,json,re,shutil,os
 REAL_CRYPTO=os.environ.get("HDBMS_REAL_CRYPTO")=="1"
 from playwright.sync_api import sync_playwright,expect
+from browser_network import block_service_workers
 from browser_dual import ROOT,setup,frame,store_from_output,current_pair
 
 def replace_store(text,kind,store):
