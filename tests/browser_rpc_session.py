@@ -7,6 +7,7 @@ import shutil
 from playwright.sync_api import sync_playwright, expect
 from browser_dual import ROOT, frame, store_from_output
 from browser_head_url import replace_store
+from browser_network import block_service_workers
 
 def snapshot(page,kind,path):
     with page.expect_download() as dl:page.locator('#save').click()
@@ -15,20 +16,32 @@ def snapshot(page,kind,path):
 
 def scenario(browser,kind,tmp):
     ctx=browser.new_context(accept_downloads=True,viewport={'width':1440,'height':900})
-    requests=[];errors=[];probe_url='https://rpc-probe.invalid/replacement';probe_requests=[]
+    requests=[];errors=[];probe_url='https://rpc-probe.invalid/replacement';probe_requests=[];probe_frames=[]
+    block_service_workers(ctx,requests)
     ctx.on('request',lambda r:probe_requests.append(r.url) if r.url==probe_url else requests.append(r.url) if r.url.startswith(('http:','https:','ws:','wss:')) else None)
     ctx.route('http**/*',lambda r:r.abort())
-    ctx.route(probe_url,lambda r:r.fulfill(status=200,content_type='text/html',body='''<script>addEventListener('message',e=>{if(e.data?.kind==='html-dbms-reply')parent.postMessage(e.data,'*')});parent.postMessage({kind:'html-dbms-rpc',id:903,method:'read',payload:{ref:''}},'*');parent.postMessage({kind:'probe-ready'},'*');</script>'''))
-    page=ctx.new_page();page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept('Session') if d.type=='prompt' else d.accept())
+    def probe(route):
+        probe_frames.append(route.request.frame)
+        route.fulfill(status=200,content_type='text/html',body='''<script>addEventListener('message',e=>{if(e.data?.kind==='html-dbms-reply')parent.postMessage(e.data,'*')});const ch=new MessageChannel();ch.port1.onmessage=e=>parent.postMessage(e.data,'*');parent.postMessage({kind:'html-dbms-ready'},'*',[ch.port2]);parent.postMessage({kind:'html-dbms-rpc',id:903,method:'read',payload:{ref:''}},'*');parent.postMessage({kind:'probe-ready'},'*');</script>''')
+    ctx.route(probe_url,probe)
+    page=ctx.new_page();page.on('websocket',lambda w:requests.append(w.url));page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept('Session') if d.type=='prompt' else d.accept())
     src=ROOT/'dist'/f'html_dbms.{kind}';page.goto(src.as_uri(),wait_until='domcontentloaded')
     page.locator('#new-db').click();expect(frame(page).locator('#db-title')).to_have_text('Session')
     original=snapshot(page,kind,tmp/f'original-{kind}.{kind}')
     head=page.locator('#head').evaluate('e=>e.value')
     # The original WindowProxy alone is no longer an RPC capability.
-    page.evaluate('''()=>{window.forgedReplies=[];window.addEventListener('message',e=>{if(e.data?.kind==='html-dbms-reply')window.forgedReplies.push(e.data);});}''')
+    page.evaluate('''()=>{window.forgedReplies=[];window.addEventListener('message',e=>{if(['html-dbms-reply','html-dbms-start'].includes(e.data?.kind))window.forgedReplies.push(e.data);});}''')
     child=next(f for f in page.frames if f!=page.main_frame)
     child.evaluate('''()=>{window.addEventListener('message',e=>{if(e.data?.kind==='html-dbms-reply')parent.postMessage(e.data,'*');});parent.postMessage({kind:'html-dbms-rpc',id:900,method:'read',payload:{ref:''}},'*');}''')
     child.evaluate('''()=>parent.postMessage({kind:'html-dbms-rpc',id:901,method:'createDocument',payload:{name:'FORGED',state:{}}},'*')''')
+    def cross_origin_active():
+        # Capture the existing iframe's Frame before initiating navigation.
+        # Revocation may remove it before the replacement script executes.
+        active=page.locator('#entry-area iframe').element_handle().content_frame()
+        n=len(probe_frames)
+        page.locator('#entry-area iframe').evaluate("(f,url)=>{f.src=url;f.removeAttribute('srcdoc');}",probe_url)
+        expect(page.locator('#entry-area iframe')).to_have_count(0,timeout=15000)
+        assert len(probe_frames)==n+1 and probe_frames[-1]==active, 'HTTPS navigation did not target the active iframe'
     # Gate an actual staged write before it reaches the shell commit.
     page.evaluate('''()=>{
       const db=HTML_DBMS,original=db.createDocument;window.navGate={};
@@ -37,12 +50,8 @@ def scenario(browser,kind,tmp):
     frame(page).locator('#add-document').click();frame(page).locator('#new-document-name').fill('STALE_NAV')
     frame(page).locator('#new-document-json').fill('{}');frame(page).locator('#create-document').click()
     page.wait_for_function('window.navGate.entered')
-    # Same browsing context, different document. The original channel is revoked.
-    page.evaluate('''()=>{
-      const f=document.querySelector('#entry-area iframe');window.oldProxy=f.contentWindow;
-      f.srcdoc='<script>parent.postMessage({kind:"html-dbms-rpc",id:902,method:"read",payload:{ref:""}},"*")<\\/script>';
-    }''')
-    expect(page.locator('#entry-area iframe')).to_have_count(0,timeout=15000)
+    # Cross-origin navigation of the active iframe, not a parallel probe.
+    cross_origin_active()
     expect(page.locator('#entry-area')).to_contain_text('Сессия entry завершена')
     # A new session is usable even while the old RPC promise is suspended.
     page.locator('#open-head').click();expect(frame(page).locator('#db-title')).to_have_text('Session')
@@ -55,7 +64,7 @@ def scenario(browser,kind,tmp):
     page.evaluate('''url=>{window.probeReady=false;window.addEventListener('message',e=>{if(e.data?.kind==='probe-ready')window.probeReady=true;});const f=document.createElementNS('http://www.w3.org/1999/xhtml','iframe');f.id='rpc-probe';f.setAttribute('sandbox','allow-scripts');f.src=url;document.body.appendChild(f);}''',probe_url)
     page.wait_for_function('window.probeReady')
     page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
-    assert probe_requests==[probe_url],probe_requests
+    assert probe_requests==[probe_url,probe_url],probe_requests
     assert page.evaluate('window.forgedReplies.length')==0
     page.locator('#rpc-probe').evaluate('e=>e.remove()')
     # A delayed genuine read may finish after navigation, but cannot publish a
@@ -67,8 +76,8 @@ def scenario(browser,kind,tmp):
         return value;};
     }''')
     frame(page).locator('#refresh').click();page.wait_for_function('window.readGate.entered')
-    page.locator('#entry-area iframe').evaluate('''f=>{f.srcdoc='<script>addEventListener("message",e=>{if(e.data?.kind==="html-dbms-reply")parent.postMessage(e.data,"*")})<\\/script>';}''')
-    expect(page.locator('#entry-area iframe')).to_have_count(0,timeout=15000)
+    cross_origin_active()
+    assert probe_requests==[probe_url]*3,probe_requests
     page.locator('#open-head').click();expect(frame(page).locator('#db-title')).to_have_text('Session')
     page.evaluate('window.readGate.release()');page.wait_for_function('window.readGate.returned')
     page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
