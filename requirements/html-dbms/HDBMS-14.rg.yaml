@@ -16,6 +16,7 @@ normative: |
   Внешнее покрытие: исходный core V8 report дополнен списком непокрытых UTF-16 диапазонов; CDP собирает фактические production scripts по точному source identity из renderer основного документа и изолированного iframe, без изменения sandbox/CSP и site isolation. Диагностика покрытия отдельно от штатной native приёмки; измеряются наблюдаемые функции и эффективные диапазоны, не заявляется эквивалентность AST branch coverage. Инструментация и websocket-client остаются исключительно в тестах.
   Native gates выполняются отдельными CI steps без fail-fast внутри browser job: отказ одного сценария не отменяет последующие; итоговый job остаётся failed при любом отказе. Для активного iframe в XHTML берётся единственный живой browser Frame (ElementHandle.content_frame возвращает None), навигация location.replace инициируется из него; идентичность request.frame и route.request.frame обязательна. Дополнительный child oracle сравнивает физические снимки и коды ошибок при фиксированном тестовом timestamp: создание, patch, конфликт, разрушительная перезапись и сохранение исторической зависимости. Граничные тесты включают аутентифицированные malformed JSON и patch, отсутствующий каталог, ref depth и транзакционное удаление.
   Диагностическое покрытие дополнительно включает реальный RPC session test, отказ/подтверждение физического восстановления через UI и проверку getHead/недопустимых аргументов авторизованного entry. Имена критических функций оболочки восстанавливаются только внешним source map при доказанной побайтной идентичности с production; карта не включается в контейнер. Все перечисленные критические функции должны наблюдаться V8 как выполненные.
+  CI/CD (#43): общая внешняя подготовка Playwright для quality и Pages не выполняет безусловный apt. Сохраняется фиксированная версия браузера; запускаются headless shell и полный Chromium с проверкой нативного Web Crypto на file://. Системные пакеты устанавливаются только при диагностированной нехватке библиотек, повторный probe обязателен, другие ошибки не маскируются. Все native gates, coverage, dataset approval и SHA256 live artifact сохраняются. Устаревшие запуски одного PR отменяются, main и Pages не отменяются этим механизмом.
 relations:
   - predicates: [implemented_by]
     target: {kind: artifact, path: 'src/core.js'}
@@ -99,3 +100,6 @@ relations:
 
   - predicates: [verified_by]
     target: {kind: artifact, path: 'tests/browser_coverage.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tools/ci-browser.sh'}
