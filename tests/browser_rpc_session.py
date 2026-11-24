@@ -35,13 +35,16 @@ def scenario(browser,kind,tmp):
     child.evaluate('''()=>{window.addEventListener('message',e=>{if(e.data?.kind==='html-dbms-reply')parent.postMessage(e.data,'*');});parent.postMessage({kind:'html-dbms-rpc',id:900,method:'read',payload:{ref:''}},'*');}''')
     child.evaluate('''()=>parent.postMessage({kind:'html-dbms-rpc',id:901,method:'createDocument',payload:{name:'FORGED',state:{}}},'*')''')
     def cross_origin_active():
-        # Capture the existing iframe's Frame before initiating navigation.
-        # Revocation may remove it before the replacement script executes.
+        # Navigate from inside the active document, without changing both
+        # src and srcdoc (which can schedule competing navigations in XHTML).
         active=page.locator('#entry-area iframe').element_handle().content_frame()
         n=len(probe_frames)
-        page.locator('#entry-area iframe').evaluate("(f,url)=>{f.src=url;f.removeAttribute('srcdoc');}",probe_url)
+        with page.expect_request(lambda r:r.url==probe_url and r.is_navigation_request(),timeout=15000) as requested:
+            active.evaluate("url=>{setTimeout(()=>location.replace(url),0);}",probe_url)
+        assert requested.value.frame==active, 'HTTPS request came from a different browsing context'
         expect(page.locator('#entry-area iframe')).to_have_count(0,timeout=15000)
-        assert len(probe_frames)==n+1 and probe_frames[-1]==active, 'HTTPS navigation did not target the active iframe'
+        assert len(probe_frames)==n+1 and probe_frames[-1]==active, f'HTTPS route mismatch: expected {n+1}, got {len(probe_frames)}, detached={active.is_detached()}'
+        print('ACTIVE NAVIGATION REVOKED',kind,'request and intercepted route matched original Frame',flush=True)
     # Gate an actual staged write before it reaches the shell commit.
     page.evaluate('''()=>{
       const db=HTML_DBMS,original=db.createDocument;window.navGate={};
