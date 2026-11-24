@@ -73,6 +73,7 @@ class CDPCoverage:
         self.reports=reports
         self.by_source={r.source:r for r in reports}
         self.sessions={}
+        self.script_prohibited=set()
         self.sources={}
         self.replies={}
         self.setup={}
@@ -102,7 +103,16 @@ class CDPCoverage:
                     operation=self.setup.pop(number,None)
                     if operation:
                         if 'error' in message and operation[0] in self.sessions:
-                            raise AssertionError((operation,message['error']))
+                            sid,method=operation
+                            error=message['error']
+                            # A static sandbox deliberately has no script permission.
+                            # Chromium refuses Debugger/Profiler there. Never grant
+                            # permission or ignore any page/JS-capable frame error.
+                            if (self.sessions[sid]=='iframe' and method in ('Debugger.enable','Profiler.enable','Profiler.startPreciseCoverage')
+                                and error=={'code':-32000,'message':'Script execution is prohibited'}):
+                                self.script_prohibited.add(sid)
+                                print('CDP NONEXECUTABLE IFRAME',sid,method,flush=True)
+                            else:raise AssertionError((operation,error))
                     else:self.replies[number]=message
                     continue
                 params=message.get('params',{})
@@ -131,13 +141,16 @@ class CDPCoverage:
         result=self.replies.pop(number)
         if 'error' in result:
             if session and session not in self.sessions:return None
+            if (session in self.script_prohibited and method=='Profiler.takePreciseCoverage'
+                and result['error'] in ({'code':-32000,'message':'Script execution is prohibited'},{'code':-32000,'message':'Precise coverage has not been started.'})):
+                return None
             raise AssertionError((method,result['error']))
         return result['result']
 
     def collect(self):
         if self.failure:raise self.failure
         for sid in list(self.sessions):
-            if sid not in self.sessions:continue
+            if sid not in self.sessions or sid in self.script_prohibited:continue
             coverage=self.call('Profiler.takePreciseCoverage',session=sid)
             if coverage is None:continue
             for script in coverage['result']:
@@ -302,6 +315,7 @@ def main():
                     browser_rpc_session.scenario(browser,kind,tmp)
                     extra(browser,kind,tmp)
                 monitor.collect()
+            assert monitor.script_prohibited, 'static sandbox denial was not observed'
             result=[report.report() for report in reports]
             shell=result[0]
             critical={}
