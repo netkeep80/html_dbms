@@ -45,6 +45,7 @@ function js(source,sourceType='script'){
  function visit(n){
   if(!n||typeof n!=='object')return;
   if(n.type==='Literal'&&typeof n.value==='string')strings.push(n.value);
+  if(n.type==='TemplateLiteral'&&!n.expressions.length)strings.push(n.quasis.map(q=>q.value.cooked).join(''));
   if(n.type==='CallExpression'||n.type==='NewExpression')assert.ok(!['require','eval','Function'].includes(n.callee?.name),'Unexpected runtime loader');
   if(n.type==='MemberExpression')assert.ok(!(n.object?.name==='module'&&n.property?.name==='exports')&&n.object?.name!=='Buffer','Node-only runtime');
   for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object'&&v.type)visit(v);}
