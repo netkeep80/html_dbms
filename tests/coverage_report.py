@@ -62,6 +62,7 @@ class Coverage:
                 'uncoveredSpans':missed,'functions':functions}
         print('V8 COVERAGE',json.dumps({k:v for k,v in result.items() if k not in ('uncoveredSpans','functions')},ensure_ascii=False),flush=True)
         print('V8 UNCOVERED',self.name,json.dumps(missed,ensure_ascii=False),flush=True)
+        print('V8 FUNCTIONS',self.name,json.dumps([{k:v for k,v in f.items() if k!='text'} for f in functions],ensure_ascii=False),flush=True)
         return result
 
 def core_report(directory):
