@@ -100,7 +100,7 @@ function measure(s){
    const before=serial(store),base=db.adoptStore(JSON.parse(before)),root=(await db.load(base,at)).state,refs=root.$refs||{};
    let ref=null,actual=null,referenceError=null,actualError=null;
    try{
-    const escaped=alias.replace(/~/g,'~0').replace(/\\//g,'~1');
+    const escaped=alias.replace(/~/g,'~0').split('/').join('~1');
     let ch;
     if(kind==='create'){
      if(!alias||alias.includes('/')||Object.hasOwn(refs,alias))throw Object.assign(Error('Duplicate or invalid alias'),{code:'DUPLICATE_DOCUMENT'});
