@@ -14,15 +14,73 @@ class ExtractHTML(HTMLParser):
         super().__init__()
         self.current=None
         self.scripts={}
+        self.styles=[]
+        self.comments=[]
     def handle_starttag(self,tag,attrs):
         if tag=='script':
             self.current=dict(attrs).get('id','dynamic-'+str(len(self.scripts)))
             self.scripts[self.current]=''
+        elif tag=='style':
+            self.current='style'
+            self.styles.append('')
     def handle_endtag(self,tag):
-        if tag=='script':self.current=None
+        if tag in ('script','style'):self.current=None
     def handle_data(self,data):
-        if self.current is not None:self.scripts[self.current]+=data
+        if self.current=='style':self.styles[-1]+=data
+        elif self.current is not None:self.scripts[self.current]+=data
+    def handle_comment(self,data):self.comments.append(data)
 
+
+
+# acorn is already present at an exact version in package-lock.json (terser dependency).
+# CSS is checked by a syntax-aware normalizer which removes every comment;
+# byte identity to the normalized minified output excludes actual CSS comments.
+NODE_AUDIT=r"""
+const fs=require('node:fs'),assert=require('node:assert/strict'),acorn=require('acorn'),esbuild=require('esbuild');
+const input=JSON.parse(fs.readFileSync(0,'utf8'));
+function js(source,sourceType='script'){
+ const comments=[],strings=[];
+ const root=acorn.parse(source,{ecmaVersion:'latest',sourceType,onComment:comments});
+ assert.equal(comments.length,0,'JS comments found');
+ function visit(n){
+  if(!n||typeof n!=='object')return;
+  if(n.type==='Literal'&&typeof n.value==='string')strings.push(n.value);
+  if(n.type==='CallExpression'||n.type==='NewExpression')assert.ok(!['require','eval','Function'].includes(n.callee?.name),'Unexpected runtime loader');
+  if(n.type==='MemberExpression')assert.ok(!(n.object?.name==='module'&&n.property?.name==='exports')&&n.object?.name!=='Buffer','Node-only runtime');
+  for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object'&&v.type)visit(v);}
+ }
+ visit(root);return strings;
+}
+function css(source){assert.equal(esbuild.transformSync(source,{loader:'css',minify:true,legalComments:'none',charset:'utf8',target:'es2022'}).code.trim(),source.trim(),'CSS not normalized/comment-free');}
+js('const literal="/*not a comment*/";');
+assert.throws(()=>js('/*comment*/const x=1;'));
+assert.throws(()=>css('body{color:red}/*comment*/'));
+input.css.forEach(css);
+if(input.scripts){
+ js(input.scripts['core-source']);
+ const app=js(input.scripts['app-source']),starter=js(input.scripts['starter-source'],'module');
+ const sandbox=app.find(s=>s.startsWith('<!doctype html>')&&s.includes('html-dbms-ready'));
+ const starterMarkup=starter.find(s=>s.startsWith('<header>')&&s.includes('new-document'));
+ const starterCSS=starter.find(s=>s.startsWith('body{')&&s.includes('font:'));
+ assert.ok(sandbox&&starterMarkup&&starterCSS,'Embedded sandbox/starter missing');
+ css(starterCSS);console.log(JSON.stringify({sandbox,starterMarkup}));
+}else{js(input.sandbox);console.log('{}');}
+"""
+def syntax_audit(html_scripts,xml):
+    assert not html_scripts.comments, 'HTML comments found'
+    xml_comments=ET.fromstring(xml,parser=ET.XMLParser(target=ET.TreeBuilder(insert_comments=True)))
+    assert not any(node.tag is ET.Comment for node in xml_comments.iter()), 'XML comments found'
+    styles=[node.text or '' for node in xml_comments.iter('{'+XHTML+'}style')]
+    assert html_scripts.styles==styles
+    assert len(styles)==1
+    assert json.loads(html_scripts.scripts['db-store'])=={'format':'HTML_DBMS/4','publicHeads':{},'records':{}}
+    result=json.loads(subprocess.check_output(['node','-e',NODE_AUDIT],input=json.dumps({'scripts':html_scripts.scripts,'css':styles}),text=True,cwd=ROOT))
+    sandbox=ExtractHTML();sandbox.feed(result['sandbox']);sandbox.close()
+    starter=ExtractHTML();starter.feed(result['starterMarkup']);starter.close()
+    assert not sandbox.comments and not starter.comments
+    assert len(sandbox.scripts)==1 and not starter.scripts
+    subprocess.check_output(['node','-e',NODE_AUDIT],input=json.dumps({'sandbox':next(iter(sandbox.scripts.values())),'css':sandbox.styles+starter.styles}),text=True,cwd=ROOT)
+    print('SYNTAX AUDIT PASS: HTML/XML, shell/core/starter/sandbox AST, markup and CSS; no own comments or Node loader')
 
 def get_xml_store(xml):
     node=ET.fromstring(xml).find('.//{'+XHTML+'}script[@id="db-store"]')
@@ -52,6 +110,7 @@ def main():
         assert key in ('db-store','starter-source','core-source','app-source')
         assert content==html_scripts.scripts[key], key
     assert get_xml_store(xml)==json.loads(html_scripts.scripts['db-store'])
+    syntax_audit(html_scripts,xml)
     assert 'allow-scripts' in xml and 'allow-same-origin' not in xml
     assert len(html.encode('utf-8'))<66290 and len(xml.encode('utf-8'))<66483
     assert not any(x in html for x in ('require(\"node:crypto\")','Buffer.from','module.exports','Sequence is derived from verified ancestry','sourceMappingURL='))
