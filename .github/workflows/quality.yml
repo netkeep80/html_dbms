@@ -48,19 +48,35 @@ jobs:
           python3 -m venv .venv
           .venv/bin/pip install playwright==1.56.0 websocket-client==1.8.0
           .venv/bin/python -m playwright install --with-deps chromium
-      - name: Build and test cash application with sandboxed iframe
-        run: |
-          python3 build.py
-          node examples/cash/build-demo.cjs
-          .venv/bin/python tests/browser_cash_acceptance.py
-          .venv/bin/python tests/browser_smoke.py
-          .venv/bin/python tests/browser_dual.py
-          .venv/bin/python tests/browser_head_url.py
-          .venv/bin/python tests/browser_native_crypto.py
-          .venv/bin/python tests/browser_stability.py
-          .venv/bin/python tests/browser_rpc_session.py
-          HDBMS_REAL_CRYPTO=1 .venv/bin/python tests/browser_head_url.py
-          .venv/bin/python tests/browser_pages.py
+      - name: Build production containers and synthetic cash
+        run: python3 build.py && node examples/cash/build-demo.cjs
+      - name: Cash RPC integration
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_cash_acceptance.py
+      - name: Native UI smoke
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_smoke.py
+      - name: Dual HTML/XML UI integration
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_dual.py
+      - name: HEAD and URL integration
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_head_url.py
+      - name: Native file Web Crypto
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_native_crypto.py
+      - name: Native shell stability
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_stability.py
+      - name: Native RPC document sessions
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_rpc_session.py
+      - name: Native HEAD and URL
+        if: ${{ !cancelled() }}
+        run: HDBMS_REAL_CRYPTO=1 .venv/bin/python tests/browser_head_url.py
+      - name: Native HTTPS synthetic cash
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_pages.py
       - name: External V8 coverage of exact browser scripts (separate diagnostic run)
         if: ${{ !cancelled() }}
         run: .venv/bin/python tests/browser_coverage.py

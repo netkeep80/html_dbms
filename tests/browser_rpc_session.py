@@ -37,7 +37,13 @@ def scenario(browser,kind,tmp):
     def cross_origin_active():
         # Navigate from inside the active document, without changing both
         # src and srcdoc (which can schedule competing navigations in XHTML).
-        active=page.locator('#entry-area iframe').element_handle().content_frame()
+        # Playwright's ElementHandle.content_frame() does not resolve native
+        # XHTML iframe nodes (the same limitation as frame_locator in browser_dual).
+        # There is exactly one iframe and exactly one live child browsing context.
+        expect(page.locator('#entry-area iframe')).to_have_count(1)
+        live=[f for f in page.frames if f!=page.main_frame and not f.is_detached()]
+        assert len(live)==1,[(f.url,f.is_detached()) for f in page.frames]
+        active=live[0]
         n=len(probe_frames)
         with page.expect_request(lambda r:r.url==probe_url and r.is_navigation_request(),timeout=15000) as requested:
             active.evaluate("url=>{setTimeout(()=>location.replace(url),0);}",probe_url)

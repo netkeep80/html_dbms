@@ -117,8 +117,7 @@ function measure(s){
    try{actual=kind==='create'?await db.createDocument(store,at,name,value,alias,options):await db.patchDocument(store,at,alias,value,options);}catch(e){actualError=e.code;if(!actualError)throw e;}
    assert.equal(serial(store),before);
    assert.equal(actualError,referenceError,'child oracle decision/code differs');
-   if(expected==='reject'){assert.ok(actualError);console.log('CHILD ORACLE OVERWRITE REJECT',actualError);}
-   else assert.equal(actualError,expected);
+   assert.equal(actualError,expected);
    if(actual){
     assert.deepEqual({rootHead:actual.rootHead,documentHead:actual.documentHead},ref);
     assert.equal(serial(actual.store),serial(base));
@@ -140,7 +139,7 @@ function measure(s){
   // invalidate the current root graph and be rejected by BOTH algorithms.
   const shared=await db.patchRoot(store,h,[{op:'add',path:'/$refs/shared',value:created.documentHead}],{timestamp:stamp});db.commit(store,shared.store);h=shared.rootHead;
   await compareChild('patch','shared',[{op:'replace',path:'/n',value:3}],'SUCCESSOR_OCCUPIED');
-  await compareChild('patch','shared',[{op:'replace',path:'/n',value:3}],'reject',{overwriteChild:true});
+  await compareChild('patch','shared',[{op:'replace',path:'/n',value:3}],'INVALID_GCM',{overwriteChild:true});
   await compareChild('patch','a',[{op:'replace',path:'/n',value:4}],null);
   // Root replacement with a detached genesis and no dependency on its old
   // successor is explicitly allowed, with full revalidation.

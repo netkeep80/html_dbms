@@ -46,5 +46,52 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto'),db=requ
  try{await assert.rejects(db.patchDocument(q,d.rootHead,'child',[{op:'replace',path:'/n',value:1}]),/second encryption injected/);assert.equal(calls,2);assert.equal(JSON.stringify(db.snapshot(q)),before);}finally{subtle.encrypt=encrypt;}
  const read=db.readState(q,d.rootHead),tx=db.staging(q);db.publish(tx,'Failure',d.rootHead);db.commit(q,tx);await assert.rejects(read,{code:'STALE_TRANSACTION'});
  assert.equal((await db.verifyDatabase(q,d.rootHead)).status,'complete');
+ // Additional reachable ranges identified by the external V8 report.
+ assert.deepEqual(db.patch([1,[2]],[{op:'test',path:'',value:[1,[2]]},{op:'replace',path:'/0',value:3},{op:'add',path:'/2',value:4}]),[3,[2],4]);
+ assert.throws(()=>db.patch([1],[{op:'test',path:'',value:{0:1}}]),{code:'INVALID_PATCH'});
+ assert.equal(db.patch({n:0},[{op:'remove',path:''}]),null);
+ const bare=db.adoptStore({format:db.VERSION,records:{}});
+ assert.equal(db.readCipher({records:{}},originalId),undefined);
+ db.removePhysical(bare,originalId);db.unpublish(bare,'absent');
+ assert.deepEqual(db.snapshot(bare),{format:db.VERSION,records:{}});
+ const hidden=await db.createDatabase(bare,'Hidden',{visible:false});db.commit(bare,hidden.store);
+ const visible=await db.createDatabase(bare,'Visible');db.commit(bare,visible.store);
+ assert.deepEqual(db.catalog(bare),{Visible:visible.rootHead});
+ const bg=await db.genesis(bare,'Bare root',{n:0,ref:{$ref:'/n'}});
+ const bd=await db.createDocument(bare,bg.head,'child',{n:1});db.commit(bare,bd.store);
+ const detachedRaw=db.snapshot(bare);
+ assert.equal((await db.readState(detachedRaw,bd.rootHead)).$refs.child,bd.documentHead);
+ assert.equal((await db.resolve(detachedRaw,bd.rootHead,bd.rootHead,{$ref:'/ref'})).value,0);
+ await assert.rejects(db.resolve(detachedRaw,bd.rootHead,bd.rootHead,{$ref:'/ref'},{maxDepth:1}),{code:'REF_DEPTH'});
+ const unrelated=await db.genesis(bare,'Unrelated',{});
+ const foreign=await db.genesis(bare,'Foreign child',{},unrelated.head);
+ const rf=await db.patchRoot(bare,bd.rootHead,[{op:'add',path:'/$refs/foreign',value:foreign.head}]);db.commit(bare,rf.store);
+ assert.ok((await db.verifyDatabase(bare,rf.rootHead)).warnings.some(w=>w.includes('genesis.parent не входит')));
+ // Independent authenticated malformed plaintext: successful GCM and SHA
+ // checks must not imply valid JSON or a valid replayable patch.
+ function rawEvent(target,plaintext,previous){
+  const bytes=Buffer.from(plaintext),h=crypto.createHash('sha256').update(bytes).digest();
+  const address=crypto.createHash('sha256').update(previous?Buffer.from(previous,'base64url'):h).digest().subarray(0,16);
+  db.writePhysical(target,address.toString('base64url'),ciphertext(bytes,h,address));
+  return db.packHead(address,h);
+ }
+ const badJson=rawEvent(bare,'{not JSON',null);
+ await assert.rejects(db.readRecord(bare,badJson),{code:'INVALID_JSON'});
+ const badPatch=rawEvent(bare,JSON.stringify(['2026-01-01T00:00:00.000Z',rf.rootHead,[{op:'remove',path:'/missing'}]]),rf.rootHead);
+ const diagnosed=await db.inspect(bare,badPatch);
+ assert.equal(diagnosed.code,'INVALID_POINTER');assert.equal(diagnosed.invalid,badPatch);
+ assert.equal((await db.inspect(bare,'bad')).sourceHead,null);
+ const digestOriginal=subtle.digest;
+ subtle.digest=async()=>{throw 'injected unexpected digest rejection';};
+ try{
+  const failure=await db.inspect(bare,bg.head);
+  assert.equal(failure.code,'INVALID_CHAIN');assert.equal(failure.message,'injected unexpected digest rejection');
+ }finally{subtle.digest=digestOriginal;}
+ const deletion=db.staging(bare);const bid=db.unpackHead(badJson).id;
+ db.removePhysical(deletion,bid);
+ assert.equal(db.readCipher(deletion,bid),undefined);
+ assert.ok(!Object.hasOwn(db.snapshot(deletion).records,bid));
+ db.commit(bare,deletion);assert.equal(db.readCipher(bare,bid),undefined);
+ console.log('REACHABLE COVERAGE BOUNDARIES PASS');
  console.log('BOUNDARIES PASS: codec residual bits, independent wrong address/hash ciphertext, RFC6902, JSON limits, genesis idempotence/overwrite, publication, second encryption failure, stale read');
 })().catch(e=>{console.error(e);process.exitCode=1;});

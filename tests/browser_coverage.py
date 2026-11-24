@@ -172,7 +172,9 @@ def extra(browser,kind,tmp):
     page.locator('#anchor').evaluate("(e)=>{e.value='A'.repeat(64)}")
     page.locator('#verify-anchor').click()
     expect(page.locator('#validation-report')).to_contain_text('ANCHOR_MISMATCH')
-    page.locator('#external').set_input_files(str(saved))
+    page.locator('#external').evaluate('''(e,p)=>{
+        const dt=new DataTransfer();dt.items.add(new File([p.raw],p.name,{type:'text/plain'}));e.files=dt.files;
+    }''',{'name':saved.name,'raw':saved.read_text('utf8')})
     page.locator('#verify-file').click()
     expect(page.locator('#validation-report')).to_contain_text('"changedPhysicalSlots": 0')
     page.locator('#info-toggle').click()
