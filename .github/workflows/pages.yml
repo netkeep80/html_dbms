@@ -112,11 +112,9 @@ jobs:
             sleep 10
           done
           echo "$EXPECTED_SHA  $RUNNER_TEMP/published-index.html" | sha256sum --check
+      - name: Prepare Chromium (native probe, conditional OS dependencies)
+        run: bash tools/ci-browser.sh
       - name: Browser acceptance against actual Pages HTTPS
         env:
           PAGE_URL: ${{ needs.deploy.outputs.page_url }}
-        run: |
-          python3 -m venv .venv
-          .venv/bin/pip install playwright==1.56.0
-          .venv/bin/python -m playwright install --with-deps chromium
-          .venv/bin/python tests/browser_pages.py "$PAGE_URL" "$RUNNER_TEMP/published-index.html"
+        run: .venv/bin/python tests/browser_pages.py "$PAGE_URL" "$RUNNER_TEMP/published-index.html"

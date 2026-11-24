@@ -5,6 +5,10 @@ on:
   pull_request:
 permissions:
   contents: read
+# Superseded PR commits cannot become the accepted HEAD. Keep main runs independent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -43,11 +47,8 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install Chromium for full entry-shell RPC acceptance test
-        run: |
-          python3 -m venv .venv
-          .venv/bin/pip install playwright==1.56.0 websocket-client==1.8.0
-          .venv/bin/python -m playwright install --with-deps chromium
+      - name: Prepare Chromium (native probe, conditional OS dependencies)
+        run: bash tools/ci-browser.sh
       - name: Build production containers and synthetic cash
         run: python3 build.py && node examples/cash/build-demo.cjs
       - name: Cash RPC integration
