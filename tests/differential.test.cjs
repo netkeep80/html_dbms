@@ -87,6 +87,67 @@ function measure(s){
  await compareRoot([{op:'replace',path:'',value:{$refs:{child:newChild}}}],null);
  assert.equal(oracleAccepted,5);assert.equal(oracleRejected,6);
  console.log('BIDIRECTIONAL ROOT ORACLE PASS',JSON.stringify({accepted:oracleAccepted,rejected:oracleRejected}));
+ // Compare child transactions against independently constructed physical
+ // candidates. Freeze the clock only here so accepted snapshots compare byte
+ // for byte, not just by effective JSON value. The core code is unmodified.
+ const RealDate=globalThis.Date;
+ globalThis.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[stamp]));}static now(){return RealDate.parse(stamp);}};
+ let childAccepted=0,childRejected=0;
+ try{
+  const store=db.newStore(),g=await db.createDatabase(store,'Child oracle');db.commit(store,g.store);
+  let h=g.rootHead;
+  async function compareChild(kind,alias,value,expected,options={},at=h,name=alias){
+   const before=serial(store),base=db.adoptStore(JSON.parse(before)),root=(await db.load(base,at)).state,refs=root.$refs||{};
+   let ref=null,actual=null,referenceError=null,actualError=null;
+   try{
+    const escaped=alias.replace(/~/g,'~0').replace(/\\//g,'~1');
+    let ch;
+    if(kind==='create'){
+     if(!alias||alias.includes('/')||Object.hasOwn(refs,alias))throw Object.assign(Error('Duplicate or invalid alias'),{code:'DUPLICATE_DOCUMENT'});
+     ch=(await db.genesis(base,name,value,at)).head;
+    }else{
+     if(!Object.hasOwn(refs,alias))throw Object.assign(Error('Missing alias'),{code:'UNKNOWN_DOCUMENT'});
+     ch=(await db.append(base,refs[alias],value,{overwrite:!!options.overwriteChild,timestamp:stamp})).head;
+    }
+    const ops=kind==='create'&&!Object.hasOwn(root,'$refs')?[{op:'add',path:'/$refs',value:{[alias]:ch}}]:[{op:kind==='create'?'add':'replace',path:'/$refs/'+escaped,value:ch}];
+    const rr=await db.append(base,at,ops,{overwrite:!!options.overwriteRoot,timestamp:stamp});
+    await db.verifyDatabase(JSON.parse(serial(base)),rr.head);
+    ref={rootHead:rr.head,documentHead:ch};
+   }catch(e){referenceError=e.code;if(!referenceError)throw e;}
+   try{actual=kind==='create'?await db.createDocument(store,at,name,value,alias,options):await db.patchDocument(store,at,alias,value,options);}catch(e){actualError=e.code;if(!actualError)throw e;}
+   assert.equal(serial(store),before);
+   assert.equal(actualError,referenceError,'child oracle decision/code differs');
+   if(expected==='reject')assert.ok(actualError);
+   else assert.equal(actualError,expected);
+   if(actual){
+    assert.deepEqual({rootHead:actual.rootHead,documentHead:actual.documentHead},ref);
+    assert.equal(serial(actual.store),serial(base));
+    db.commit(store,actual.store);h=actual.rootHead;measure(store);childAccepted++;
+   }else{assert.equal(ref,null);childRejected++;}
+   return actual;
+  }
+  const created=await compareChild('create','a',{n:0},null);
+  const oldRoot=h;
+  await compareChild('create','a',{},'DUPLICATE_DOCUMENT');
+  await compareChild('create','bad/name',{},'DUPLICATE_DOCUMENT');
+  await compareChild('patch','missing',[],'UNKNOWN_DOCUMENT');
+  await compareChild('patch','a',[{op:'remove',path:'/missing'}],'INVALID_POINTER');
+  await compareChild('patch','a',[{op:'replace',path:'/n',value:1}],null);
+  await compareChild('patch','a',[{op:'replace',path:'/n',value:2}],'SUCCESSOR_OCCUPIED',{},oldRoot);
+  await compareChild('create','b',{},'SUCCESSOR_OCCUPIED',{},oldRoot);
+  await compareChild('create','b',{},null);
+  // Shared historical alias; a physical overwrite of its successor must
+  // invalidate the current root graph and be rejected by BOTH algorithms.
+  const shared=await db.patchRoot(store,h,[{op:'add',path:'/$refs/shared',value:created.documentHead}],{timestamp:stamp});db.commit(store,shared.store);h=shared.rootHead;
+  await compareChild('patch','shared',[{op:'replace',path:'/n',value:3}],'SUCCESSOR_OCCUPIED');
+  await compareChild('patch','shared',[{op:'replace',path:'/n',value:3}],'reject',{overwriteChild:true});
+  await compareChild('patch','a',[{op:'replace',path:'/n',value:4}],null);
+  // Root replacement with a detached genesis and no dependency on its old
+  // successor is explicitly allowed, with full revalidation.
+  await compareChild('create','alternate',{},null,{overwriteRoot:true},oldRoot);
+  assert.equal(childAccepted,5);assert.equal(childRejected,7);
+ }finally{globalThis.Date=RealDate;}
+ console.log('BIDIRECTIONAL CHILD ORACLE PASS',JSON.stringify({accepted:childAccepted,rejected:childRejected}));
  // Explicit overwrite invalidates the previous proof and leaves old ciphertext descendants untouched.
  const s=db.newStore(),g=await db.createDatabase(s,'Overwrite');db.commit(s,g.store);
  const a=await db.patchRoot(s,g.rootHead,[{op:'add',path:'/n',value:1}]);db.commit(s,a.store);
