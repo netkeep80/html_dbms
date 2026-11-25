@@ -59,7 +59,7 @@ function measureJson(x,limits=STATE,b){
 function assertJson(x){measureJson(x);}
 function cloneMeasured(x,m,b){spend(b,units(m));return JSON.parse(JSON.stringify(x));}
 function clone(x,b,limits=STATE){return cloneMeasured(x,measureJson(x,limits,b),b);}
-function cloneOps(ops){ensure(Array.isArray(ops)&&ops.length>=1&&ops.length<=MAX_PATCH,'INVALID_PATCH','Patch must contain an operation');return clone(ops,undefined,RECORD);}
+function cloneOps(ops){if(Array.isArray(ops))ensure(ops.length<=MAX_PATCH,'INVALID_PATCH','Too many patch operations');return clone(ops,undefined,RECORD);}
 // Lexical preflight bounds value count/nesting before JSON.parse; native parser validates syntax.
 function preflightText(text,b){
  let nodes=0,depth=0;const white=c=>c===' '||c==='\n'||c==='\r'||c==='\t';

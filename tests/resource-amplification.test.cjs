@@ -44,6 +44,34 @@ async function sizing(){
  console.log('RESOURCE SIZING',JSON.stringify({fixture:'500 child writes, 64KiB state',physical:db.storeInfo(s),childState:measure(await db.readState(fresh,v.chain.state.$refs.child)),rootEvents:v.report.checks.rootEvents,writeMs:Math.round(before-start),verifyMs:Math.round(performance.now()-before),heapUsed:process.memoryUsage().heapUsed}));
 }
 
+async function scaledReplay(){
+ // An externally generated module with a smaller replay threshold makes the
+ // cumulative boundary test fast, while the production limits are separately tested.
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{pathToFileURL}=require('node:url');
+ const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'hdbms-resource-scaled-'));
+ try{
+  const source=fs.readFileSync(path.join(__dirname,'../src/core.js'),'utf8');
+  const modified=source.replace('replayWork:1024*MiB','replayWork:250000');
+  assert.notEqual(modified,source);
+  const file=path.join(tmp,'core.mjs');fs.writeFileSync(file,modified);
+  const small=await import(pathToFileURL(file).href),s=small.newStore(),g=await small.createDatabase(s,'Scaled');small.commit(s,g.store);
+  const d=await small.createDocument(s,g.rootHead,'doc',{payload:'x'.repeat(16384),n:0});small.commit(s,d.store);
+  let h=d.rootHead,ch=d.documentHead,accepted=0;
+  for(let i=1;i<=20;i++){
+   const before=small.snapshot(s),revision=small.revision(s),ops=[{op:'replace',path:'/n',value:i}];
+   const detached=db.adoptStore(before),newChild=patchEvent(detached,ch,ops);
+   const newRoot=patchEvent(detached,h,[{op:'replace',path:'/$refs/doc',value:newChild}]);
+   let reference=null,actual=null,result;
+   try{await small.verifyDatabase(small.adoptStore(db.snapshot(detached)),newRoot);}catch(e){reference=e.code;if(!reference)throw e;}
+   try{result=await small.patchDocument(s,h,'doc',ops);}catch(e){actual=e.code;if(!actual)throw e;}
+   assert.equal(actual,reference,'cumulative replay threshold differs between checked write and verifier');
+   assert.deepEqual(small.snapshot(s),before);assert.equal(small.revision(s),revision);
+   if(actual){assert.equal(actual,'RESOURCE_LIMIT');assert.ok(accepted>=1&&accepted<20);const diag=await small.inspect(small.adoptStore(db.snapshot(detached)),newChild);console.log('RESOURCE SCALED REPLAY PASS',JSON.stringify({limit:small.LIMITS.replayWork,accepted,rejection:actual,childInspection:diag.status}));return;}
+   small.commit(s,result.store);h=result.rootHead;ch=result.documentHead;accepted++;
+  }
+  throw Error('Cumulative budget never reached');
+ }finally{fs.rmSync(tmp,{recursive:true,force:true});}
+}
 async function main(){
  // Independent UTF-8 oracle, including malformed surrogate sequences and escaping.
  const values=[null,true,false,0,-0,1e-7,1e21,1.2345,'\u0000\b\t\n\f\r"\\éЖ😀\ud800\udc00\ud800',{'\udc00😀\n':[null,'é',-123.4]}];
@@ -112,6 +140,7 @@ async function main(){
  const badProof=patchEvent(detached,h,[{op:'add',path:'/$refs/c',value:third.head}]);
  await assert.rejects(db.verifyDatabase(detached,badProof),code);
  assert.equal((await db.verifyDatabase(db.adoptStore(db.snapshot(ps)),h)).status,'complete');
+ await scaledReplay();
  await sizing();
  console.log('RESOURCE REGRESSION PASS: exact UTF8, before-clone controls, transient/work/node/depth limits, atomic write, authenticated limited replay, non-destructive diagnosis, historical proof budget');
 }
