@@ -131,6 +131,16 @@ async function main(){
  await assert.rejects(db.truncateInvalidTail(raw,{...diagnosis,status:'broken',code:'INVALID_GCM',tailIds:[db.unpackHead(bad).id]},ok.documentHead),{code:'STALE_DIAGNOSIS'});
  assert.deepEqual(state(raw),snapshot);
  // Historically removed aliases continue consuming the retained proof budget.
+ // Positive/negative parse instrumentation: a valid authenticated record is
+ // parsed, a record containing too many values is rejected before JSON.parse.
+ const parse=JSON.parse;let parseCalls=0;JSON.parse=function(...args){parseCalls++;return parse.apply(this,args);};
+ try{
+  await db.readRecord(raw,ok.documentHead);assert.ok(parseCalls>0);parseCalls=0;
+  const big=rawEvent(raw,[null,{name:'many nodes',parent:null,state:Array(L.recordNodes).fill(null)}],null);
+  await assert.rejects(db.readRecord(raw,big),code);assert.equal(parseCalls,0,'oversized authenticated record reached JSON.parse');
+  assert.throws(()=>db.parseStore('{"format":"HTML_DBMS/4","records":{"bad":'+ '['.repeat(15)+'0'+']'.repeat(15)+'}}'),code);
+  assert.equal(parseCalls,0,'oversized-depth physical input reached JSON.parse');
+ }finally{JSON.parse=parse;}
  const ps=db.newStore(),pg=await db.createDatabase(ps,'Proof');db.commit(ps,pg.store);let h=pg.rootHead;
  const payload=Array(90000).fill(null);
  for(const name of ['a','b']){const p=await db.createDocument(ps,h,name,payload);db.commit(ps,p.store);h=p.rootHead;}

@@ -9,7 +9,7 @@ function makeOption(label,value){const e=makeElement('option');e.textContent=lab
 // Export from a pristine template: never copy decrypted application DOM into saved HTML.
 let exportTemplate, templateBytes;
 const STARTER_SOURCE=$('starter-source').textContent,demoNode=$('cash-demo-source'),DEMO_SOURCE=demoNode?JSON.parse(demoNode.textContent):undefined;
-let pendingRpc=0;
+let pendingRpc=0,debugBusy=false;
 let store, rootHead=null, publicName=null, busy=null, activeFrame=null, lastDiagnosis=null, openEpoch=0, rpcBusy=null, session=null, startupListener=null;
 const OWN=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function notice(message,bad=false){$('status').textContent=message;$('status').className='notice '+(bad?'error':'good');}
@@ -197,10 +197,9 @@ async function createDatabase(){
 }
 async function showDebug(){
  if(!debugVisible())return false;
- const c=context(),h=c.head||fieldHead();$('debug-raw').textContent='';
- const text=await db.debugDatabase(c.store,h);
- if(!current(c)||!debugVisible())return false;
- $('debug-raw').textContent=text;return true;
+ if(debugBusy){$('debug-raw').textContent='Предыдущая диагностика ещё выполняется; откройте панель повторно.';return false;}
+ const c=context(),h=c.head||fieldHead();$('debug-raw').textContent='';debugBusy=true;
+ try{const text=await db.debugDatabase(c.store,h);if(!current(c)||!debugVisible())return false;$('debug-raw').textContent=text;return true;}finally{debugBusy=false;}
 }
 async function verify(){
  const c=context(),h=c.head||fieldHead();lastDiagnosis=null;
@@ -212,11 +211,8 @@ async function verify(){
  }
 }
 async function verifyStore(){
- const c=context();db.validateStore(db.snapshot(c.store));lastDiagnosis=null;const all=Object.create(null);
- for(const [alias,head] of Object.entries(db.catalog(c.store))){
-  try{all[alias]=await db.verifyDatabase(c.store,head);}catch(e){all[alias]={status:'failed',code:e.code||'ERROR',message:e.message};}
-  if(!current(c))return;
- }
+ const c=context();db.validateStore(db.snapshot(c.store));lastDiagnosis=null;let all;
+ try{all=await db.verifyCatalog(c.store);}catch(e){if(current(c)){validationOutput({status:e.code==='RESOURCE_LIMIT'?'limited':'failed',code:e.code||'ERROR',message:e.message});err(e);}return;}
  if(!current(c))return;
  validationOutput({format:db.VERSION,records:db.storeInfo(c.store).count,publishedHeads:Object.keys(all).length,publicDatabases:all,warnings:['Скрытые цепочки без известного head не перечисляются и не проверяются.']});
  notice('Проверка контейнера завершена. Детали в «Валидация».');
@@ -259,7 +255,7 @@ function readStoreFromDocument(raw){
  const nodes=[],pending=[scope];let templates=0;
  while(pending.length){const tree=pending.pop();for(const node of tree.querySelectorAll('[id="db-store"]')){nodes.push(node);if(nodes.length>1)throw Error('Не найден единственный валидный db-store');}for(const t of tree.querySelectorAll('template'))if(t.content){if(++templates>10000)throw Error('Слишком много вложенных template');pending.push(t.content);}}
  if(nodes.length!==1||nodes[0].localName!=='script'||nodes[0].namespaceURI!==XHTML_NS||nodes[0].getAttribute('type')!=='application/json'||nodes[0].hasAttribute('src')||nodes[0].children.length)throw Error('Не найден единственный валидный db-store');
- return db.adoptStore(JSON.parse(nodes[0].textContent));
+ return db.parseStore(nodes[0].textContent);
 }
 async function verifyFile(){
  const file=$('external').files[0];if(!file)throw Error('Выберите HTML или XML для внешней проверки');
@@ -321,7 +317,7 @@ function save(publishSite=false){
  notice('Новый '+extension.toUpperCase()+'-файл скачан. Исходный файл на диске не перезаписывается.');
 }
 async function init(){
- const node=$('db-store'),candidate=db.adoptStore(JSON.parse(node.textContent));
+ const node=$('db-store'),candidate=db.parseStore(node.textContent);
  // Adopt once, then discard the original ciphertext before cloning the pristine shell.
  node.textContent='';exportTemplate=document.documentElement.cloneNode(true);
  const envelope=asXML=>new Blob([exportDocument({},asXML)]).size-2;
