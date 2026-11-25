@@ -1,24 +1,13 @@
-"""Cash v3 acceptance: real outer HTML shell + sandboxed iframe + RPC + JSON patch.
-
-Covers clicks (not fake db methods), write authorization, persistent crypto-chain state,
-export/reopen, history and Excel row removal. Crypto shim is INTENTIONALLY INSECURE;
-run tests/cash_crud.test.cjs and tests/compare_excel.py separately with real Node WebCrypto.
-No external browser navigation is needed in this environment.
+"""Native Cash acceptance: actual shell, isolated iframe, RPC and JSON Patch.
+Real Web Crypto on file://, temporary source and exported snapshots; no shim.
 """
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import subprocess, json
 from playwright.sync_api import sync_playwright, expect
+from browser_network import block_service_workers
 
 root = Path(__file__).resolve().parents[1]
-SHIM = """
-Object.defineProperty(crypto,'subtle',{configurable:true,value:{
- async digest(_algorithm,data){const bytes=new Uint8Array(data),out=new Uint8Array(32);for(let k=0;k<8;k++){let a=(2166136261^(k*0x9e3779b1))>>>0;for(const b of bytes){a=Math.imul(a^(b+k),16777619)>>>0;a^=a>>>13;}for(let j=0;j<4;j++)out[k*4+j]=(a>>>(8*j))&255;}return out.buffer;},
- async importKey(_kind,key){return new Uint8Array(key);},
- async encrypt(_opts,key,buffer){const data=new Uint8Array(buffer),out=new Uint8Array(data.length+16);out.set(data);out.set(key.slice(0,16),data.length);return out.buffer;},
- async decrypt(_opts,key,buffer){const data=new Uint8Array(buffer);if(data.length<16||Array.from(data.slice(-16)).some((x,i)=>x!==key[i]))throw Error('bad tag');return data.slice(0,-16).buffer;}
-}});
-"""
 
 def frame(page):
     return page.frame_locator('iframe[title="Приложение из JSON entry"]')
@@ -30,14 +19,17 @@ def dict_page(page, name):
     return app
 
 with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
-    fake_html=Path(tmp)/'fake_crypto_browser_ui.html'
-    subprocess.run(['node',str(root/'tests/build_ui_integration_fixture.cjs'),str(fake_html)],check=True)
+    fixture=Path(tmp)/'native_cash_browser_ui.html'
+    subprocess.run(['node',str(root/'tests/build_ui_integration_fixture.cjs'),str(fixture)],check=True)
     with sync_playwright() as pw:
-        system_chromium=next((p for p in (Path('/usr/bin/google-chrome'),Path('/usr/bin/chromium')) if p.exists()),None)
-        binary={'executable_path':str(system_chromium)} if system_chromium else {}
-        browser=pw.chromium.launch(**binary,args=['--no-sandbox','--disable-dev-shm-usage'],headless=True)
-        page=browser.new_page(viewport={'width':1520,'height':900},accept_downloads=True)
-        errors=[]; dialogs=[]; allow={'write':True}
+        browser=pw.chromium.launch(args=['--no-sandbox','--disable-dev-shm-usage'],headless=True)
+        context=browser.new_context(viewport={'width':1520,'height':900},accept_downloads=True)
+        errors=[]; dialogs=[]; unexpected=[]; allow={'write':True}
+        block_service_workers(context,unexpected)
+        context.on('request',lambda r:unexpected.append(r.url) if r.url.startswith(('http:','https:')) else None)
+        context.route('http**/*',lambda r:r.abort())
+        page=context.new_page()
+        page.on('websocket',lambda w:unexpected.append(w.url))
         page.on('pageerror',lambda err:errors.append(str(err)))
         def handle_dialog(d):
             dialogs.append((d.type,d.message))
@@ -45,9 +37,9 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
                 raise AssertionError('Unexpected modal: '+d.type)
             d.accept() if allow['write'] else d.dismiss()
         page.on('dialog',handle_dialog)
-        page.evaluate(SHIM)
-        page.set_content(fake_html.read_text(encoding='utf8'),wait_until='domcontentloaded')
-        # The shim fixture is built from the universal shell, with no trusted demo-source tag.
+        page.goto(fixture.as_uri(),wait_until='domcontentloaded')
+        assert page.evaluate('isSecureContext && !!crypto.subtle')
+        # The fixture is built from the universal shell, with no trusted demo-source tag.
         # Require the explicit launch gate, never modify the production trust policy.
         expect(page.locator('.entry-launch')).to_be_visible(timeout=30000)
         page.locator('.entry-launch').click()
@@ -111,7 +103,7 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         app.locator('.form input[name="amount"]').fill('321,29')
         app.get_by_role('button',name='Записать транзакцию').click()
         expect(app.locator('#cash-count')).to_contain_text('21',timeout=20000)
-        # Full cryptographic graph validation at UI shell level (using deterministic test shim).
+        # Full cryptographic graph validation at UI shell level with native Web Crypto.
         page.locator('#validation-toggle').click()
         page.locator('#verify').click()
         expect(page.locator('#validation-report')).to_contain_text('"status": "complete"',timeout=20000)
@@ -123,10 +115,11 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         saved=saved_path.read_text(encoding='utf8')
         assert '<script id="db-store" type="application/json">' in saved
         # Reopen in fresh browser tab; actual shell bootstraps from exported ciphertext.
-        second=browser.new_page(viewport={'width':1520,'height':900})
+        second=context.new_page()
         second.on('pageerror',lambda err:errors.append(str(err)))
-        second.evaluate(SHIM)
-        second.set_content(saved,wait_until='domcontentloaded')
+        second.on('websocket',lambda w:unexpected.append(w.url))
+        second.goto(saved_path.as_uri(),wait_until='domcontentloaded')
+        assert second.evaluate('isSecureContext && !!crypto.subtle')
         expect(second.locator('.entry-launch')).to_be_visible(timeout=20000)
         second.locator('.entry-launch').click()
         app2=frame(second)
@@ -153,5 +146,6 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         assert data['history']=='complete'
         assert data['withoutExcelRows']
         assert not errors, errors
-        print('CASH FULL SHELL RPC ACCEPTANCE PASS: cancel/confirm, add/edit/create dictionary, transaction, 12 JSON chains, verify, export, reload; sandbox allow-scripts (no allow-forms); insecure shim ONLY for browser transport')
-        browser.close()
+        assert not unexpected, unexpected
+        print('CASH FULL SHELL RPC ACCEPTANCE PASS: cancel/confirm, add/edit/create dictionary, transaction, 12 JSON chains, verify, export, reload; sandbox allow-scripts (no allow-forms); NATIVE WEB CRYPTO, no external requests')
+        context.close();browser.close()
