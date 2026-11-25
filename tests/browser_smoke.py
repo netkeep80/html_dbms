@@ -62,8 +62,27 @@ with sync_playwright() as pl:
     kasa=pair(page)
     # No iframe modal dialogs: the starter must provide a real form.
     before=len(dialogs)
-    frame(page).locator('#add-document').click()
-    expect(frame(page).locator('#new-document')).to_be_visible()
+    # The title is assigned during draw(), not its completion. Wait for
+    # the actual startup completion and settled font/layout before pointer input.
+    expect(page.locator('#status')).to_contain_text('Открыто:')
+    expect(frame(page).locator('#message')).to_contain_text('Приложение из entry успешно запущено')
+    frame(page).locator('html').evaluate('async () => {await document.fonts.ready; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));}')
+    button=frame(page).locator('#add-document')
+    button.evaluate("""e => {
+        window.smokeClicks=[];
+        document.addEventListener('click', x => window.smokeClicks.push({id:x.target.id, trusted:x.isTrusted}), true);
+    }""")
+    button.click()
+    try:
+        expect(frame(page).locator('#new-document')).to_be_visible()
+    except AssertionError:
+        print('UI smoke startup diagnostics', json.dumps({
+            'status':page.locator('#status').inner_text(),
+            'message':frame(page).locator('#message').inner_text(),
+            'clicks':button.evaluate('() => window.smokeClicks'),
+            'button':button.bounding_box(), 'errors':errors
+        },ensure_ascii=False))
+        raise
     frame(page).locator('#new-document-name').fill('funds')
     frame(page).locator('#new-document-json').fill('{"F001":{"name":"Основной"}}')
     frame(page).locator('#create-document').click()
