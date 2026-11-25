@@ -133,8 +133,12 @@ def main():
     app.locator('input[name="amount"]').fill(text)
     app.locator('.form textarea').fill('Новая точная проводка')
     app.get_by_role('button',name='Записать транзакцию',exact=True).click()
+    # The previous success text may still be visible during a pending RPC.
+    # Require the NEW HEAD and row count before interpreting the message.
+    expect(page.locator('#head')).not_to_have_value(head,timeout=20000)
+    expect(app.locator('#cash-count')).to_contain_text(str(len(f['entries'])+1)+' операций',timeout=20000)
+    expect(app.locator('input[name="amount"]')).to_have_count(0)
     expect(app.locator('#cash-msg')).to_contain_text('Транзакция добавлена')
-    assert page.locator('#head').input_value()!=head
     f['entries'].append(dict(date=f['period']['toSerial'],toType='Фонд',to='Фонд_F011',fromType='Участник',**{'from':'Участник_A003'},type='Категория_34',amount=canonical,note='Новая точная проводка',dd='Да'))
    checks+=verify_reports(app,f);verify_ledger(app,f)
    page.locator('#validation-toggle').click();page.locator('#verify').click()
