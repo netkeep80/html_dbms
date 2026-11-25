@@ -25,6 +25,8 @@ jobs:
       - run: node tests/metrics.test.cjs
       - run: node tests/differential.test.cjs
       - run: node tests/boundaries.test.cjs
+      - name: Resource integrity regression and bounded sizing
+        run: node --max-old-space-size=384 tests/resource-amplification.test.cjs
       - run: node --expose-gc tests/benchmark.cjs
       - run: python3 build.py && git diff --exit-code -- dist/html_dbms.html dist/html_dbms.xml
       - run: node tests/app.test.cjs
@@ -64,6 +66,9 @@ jobs:
       - name: Native exact Cash money and history
         if: ${{ !cancelled() }}
         run: .venv/bin/python tests/browser_cash_exact.py
+      - name: Native resource integrity HTML/XML
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_resource_integrity.py
       - name: Native UI smoke
         if: ${{ !cancelled() }}
         run: .venv/bin/python tests/browser_smoke.py

@@ -9,6 +9,7 @@ function makeOption(label,value){const e=makeElement('option');e.textContent=lab
 // Export from a pristine template: never copy decrypted application DOM into saved HTML.
 let exportTemplate, templateBytes;
 const STARTER_SOURCE=$('starter-source').textContent,demoNode=$('cash-demo-source'),DEMO_SOURCE=demoNode?JSON.parse(demoNode.textContent):undefined;
+let pendingRpc=0,debugBusy=false;
 let store, rootHead=null, publicName=null, busy=null, activeFrame=null, lastDiagnosis=null, openEpoch=0, rpcBusy=null, session=null, startupListener=null;
 const OWN=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function notice(message,bad=false){$('status').textContent=message;$('status').className='notice '+(bad?'error':'good');}
@@ -39,7 +40,7 @@ function togglePanel(which){
  if(which==='info'&&next)updateInfo();
  return next;
 }
-function validationOutput(value){$('validation-report').textContent=typeof value==='string'?value:JSON.stringify(value,null,2);}
+function validationOutput(value){$('validation-report').textContent=typeof value==='string'?value:db.diagnosticText(value);}
 function setFields(head){$('head').value=head||'';}
 function fieldHead(){const h=$('head').value;if(!db.validHead(h))throw Error('Введите корректный HEAD (64 символа Base64url)');return h;}
 function syncCatalog(){
@@ -121,7 +122,8 @@ async function launchSandbox(entry){
    if(msg.kind==='html-dbms-error'){notice('entry: '+msg.error,true);return;}
    if(msg.kind!=='html-dbms-rpc')return;
    const reply=data=>{if(session===s)port.postMessage({kind:'html-dbms-reply',id:msg.id,...data});};
-   runRpc(msg,s).then(value=>reply({ok:true,value}),e=>reply({ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))}));
+   if(pendingRpc>=8){reply({ok:false,error:'RESOURCE_LIMIT: RPC concurrency limit exceeded'});return;}
+   pendingRpc++;runRpc(msg,s).then(value=>reply({ok:true,value}),e=>reply({ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))})).finally(()=>{pendingRpc--;});
   };
   port.postMessage({kind:'html-dbms-start',source:entry.source,exportName:entry.export||'main'});
  };
@@ -159,7 +161,7 @@ async function runRpc(message,s){
  needRoot();const c=context();
  const guard=()=>{requireCurrent(c);if(session!==s)throw Error('Сессия entry завершена');};
  guard();if(c.hash&&fragmentHead(c.hash)!==c.head)throw Error('Контекст URL изменился');
- const params=message.payload||{};
+ const params=message.payload||{};db.assertJson(params);
  switch(message.method){
  case 'read':{const ref=params.ref;if(typeof ref!=='string')throw Error('Неверная ссылка');const value=ref===''?await db.readState(c.store,c.head):(await db.resolve(c.store,c.head,c.head,{$ref:ref})).value;guard();return value;}
  case 'getHead':return c.head;
@@ -195,25 +197,22 @@ async function createDatabase(){
 }
 async function showDebug(){
  if(!debugVisible())return false;
- const c=context(),h=c.head||fieldHead(),root=await db.inspect(c.store,h),children=Object.create(null);
- if(!current(c)||!debugVisible())return false;
- if(root.status==='complete')for(const [name,head]of Object.entries(getRootRefs(root.chain.state))){children[name]=await db.inspect(c.store,head);if(!current(c)||!debugVisible())return false;}
- $('debug-raw').textContent=JSON.stringify({rootHead:h,root,children},null,2);return true;
+ if(debugBusy){$('debug-raw').textContent='Предыдущая диагностика ещё выполняется; откройте панель повторно.';return false;}
+ const c=context(),h=c.head||fieldHead();$('debug-raw').textContent='';debugBusy=true;
+ try{const text=await db.debugDatabase(c.store,h);if(!current(c)||!debugVisible())return false;$('debug-raw').textContent=text;return true;}finally{debugBusy=false;}
 }
 async function verify(){
  const c=context(),h=c.head||fieldHead();lastDiagnosis=null;
  try{const result=await db.verifyDatabase(c.store,h);if(!current(c))return;validationOutput(result);notice('Цепочки и ссылки выбранной БД проверены.');}
  catch(e){if(!current(c))return;
-  if(e.diagnosis?.sourceHead===h){lastDiagnosis=e.diagnosis;validationOutput({status:'broken',rootHead:h,diagnosis:e.diagnosis});notice('Обнаружен разрыв цепочки: '+e.code,true);}
-  else{validationOutput({status:'failed',code:e.code||'ERROR',message:e.message});err(e);}
+  if(e.code==='RESOURCE_LIMIT'){validationOutput({status:'limited',code:e.code,message:e.message,rootHead:h});err(e);}
+  else if(e.diagnosis?.sourceHead===h){lastDiagnosis=e.diagnosis;validationOutput({status:'broken',rootHead:h,diagnosis:e.diagnosis});notice('Обнаружен разрыв цепочки: '+e.code,true);}
+  else{validationOutput({status:e.code==='RESOURCE_LIMIT'?'limited':'failed',code:e.code||'ERROR',message:e.message});err(e);}
  }
 }
 async function verifyStore(){
- const c=context();db.validateStore(db.snapshot(c.store));lastDiagnosis=null;const all=Object.create(null);
- for(const [alias,head] of Object.entries(db.catalog(c.store))){
-  try{all[alias]=await db.verifyDatabase(c.store,head);}catch(e){all[alias]={status:'failed',code:e.code||'ERROR',message:e.message};}
-  if(!current(c))return;
- }
+ const c=context();db.validateStore(db.snapshot(c.store));lastDiagnosis=null;let all;
+ try{all=await db.verifyCatalog(c.store);}catch(e){if(current(c)){validationOutput({status:e.code==='RESOURCE_LIMIT'?'limited':'failed',code:e.code||'ERROR',message:e.message});err(e);}return;}
  if(!current(c))return;
  validationOutput({format:db.VERSION,records:db.storeInfo(c.store).count,publishedHeads:Object.keys(all).length,publicDatabases:all,warnings:['Скрытые цепочки без известного head не перечисляются и не проверяются.']});
  notice('Проверка контейнера завершена. Детали в «Валидация».');
@@ -221,7 +220,7 @@ async function verifyStore(){
 async function verifyAnchor(){
  const c=context(),h=c.head||fieldHead(),anchor=$('anchor').value;if(!anchor)throw Error('Укажите доверенный исторический HEAD');
  try{const result=await db.verifyDatabase(c.store,h,{anchorHead:anchor});if(!current(c))return;validationOutput(result);notice('Доверенный HEAD найден в проверенной ancestry.');}
- catch(e){if(current(c)){validationOutput({status:'failed',code:e.code||'ANCHOR_FAILED',message:e.message});err(e);}}
+ catch(e){if(current(c)){validationOutput({status:e.code==='RESOURCE_LIMIT'?'limited':'failed',code:e.code||'ANCHOR_FAILED',message:e.message});err(e);}}
 }
 const MAX_CONTAINER_BYTES=256*1024*1024;
 function checkSize(bytes){if(bytes>MAX_CONTAINER_BYTES)throw Error('Превышен размер контейнера (256 МиБ)');}
@@ -256,13 +255,13 @@ function readStoreFromDocument(raw){
  const nodes=[],pending=[scope];let templates=0;
  while(pending.length){const tree=pending.pop();for(const node of tree.querySelectorAll('[id="db-store"]')){nodes.push(node);if(nodes.length>1)throw Error('Не найден единственный валидный db-store');}for(const t of tree.querySelectorAll('template'))if(t.content){if(++templates>10000)throw Error('Слишком много вложенных template');pending.push(t.content);}}
  if(nodes.length!==1||nodes[0].localName!=='script'||nodes[0].namespaceURI!==XHTML_NS||nodes[0].getAttribute('type')!=='application/json'||nodes[0].hasAttribute('src')||nodes[0].children.length)throw Error('Не найден единственный валидный db-store');
- return db.adoptStore(JSON.parse(nodes[0].textContent));
+ return db.parseStore(nodes[0].textContent);
 }
 async function verifyFile(){
  const file=$('external').files[0];if(!file)throw Error('Выберите HTML или XML для внешней проверки');
  const c=context(),h=c.head||fieldHead(),raw=await containerText(file);if(!current(c))return;const other=readStoreFromDocument(raw);
  let external;
- try{external=await db.verifyDatabase(other,h);}catch(e){external={status:'failed',code:e.code||'ERROR',message:e.message};}
+ try{external=await db.verifyDatabase(other,h);}catch(e){external={status:e.code==='RESOURCE_LIMIT'?'limited':'failed',code:e.code||'ERROR',message:e.message};}
  if(!current(c))return;
  const changedIds=[],missingIds=[],addedIds=[],a=db.snapshot(c.store).records,b=db.snapshot(other).records;let shared=0;
  for(const [id,ct]of Object.entries(a)){if(!OWN(b,id))missingIds.push(id);else{shared++;if(b[id]!==ct)changedIds.push(id);}}
@@ -318,7 +317,7 @@ function save(publishSite=false){
  notice('Новый '+extension.toUpperCase()+'-файл скачан. Исходный файл на диске не перезаписывается.');
 }
 async function init(){
- const node=$('db-store'),candidate=db.adoptStore(JSON.parse(node.textContent));
+ const node=$('db-store'),candidate=db.parseStore(node.textContent);
  // Adopt once, then discard the original ciphertext before cloning the pristine shell.
  node.textContent='';exportTemplate=document.documentElement.cloneNode(true);
  const envelope=asXML=>new Blob([exportDocument({},asXML)]).size-2;

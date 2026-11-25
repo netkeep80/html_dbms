@@ -19,7 +19,8 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto'),db=requ
  for(const ops of [[{op:'test',path:'/x',value:{b:2}}],[{op:'move',from:'/x',path:'/x/b'}],[{op:'add',path:'/a/01',value:4}],[{op:'remove',path:'/absent'}],[{op:'invalid',path:''}]])assert.throws(()=>db.patch(input,ops));
  const cyclic={};cyclic.self=cyclic;let deep=null;for(let i=0;i<35;i++)deep=[deep];
  const accessor={};Object.defineProperty(accessor,'x',{get(){throw Error('must not run');},enumerable:true});
- for(const bad of [cyclic,deep,accessor,[,1],{n:Infinity},{n:undefined},new Date(),{[Symbol('x')]:1}])assert.throws(()=>db.assertJson(bad),{code:'INVALID_JSON'});
+ assert.throws(()=>db.assertJson(deep),{code:'RESOURCE_LIMIT'});
+ for(const bad of [cyclic,accessor,[,1],{n:Infinity},{n:undefined},new Date(),{[Symbol('x')]:1}])assert.throws(()=>db.assertJson(bad),{code:'INVALID_JSON'});
  const s=db.newStore(),g=await db.genesis(s,'Test',{});
  const again=await db.genesis(s,'Test',{});assert.equal(again.existing,true);assert.equal(again.head,g.head);
  const original=db.readCipher(s,db.unpackHead(g.head).id);

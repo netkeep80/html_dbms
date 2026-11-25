@@ -131,8 +131,8 @@ def scenario(browser, kind, tmp):
     assert save(page,kind,tmp/f'after-race.{kind}')==data
     assert current_pair(page)==heads['Alpha']
     # The hidden debug panel must not start another history traversal on commit.
-    page.evaluate('''()=>{const original=HTML_DBMS.inspect;window.inspectCount=0;
-      HTML_DBMS.inspect=(...a)=>{window.inspectCount++;return original(...a);};}''')
+    page.evaluate('''()=>{const original=HTML_DBMS.debugDatabase;window.inspectCount=0;
+      HTML_DBMS.debugDatabase=(...a)=>{window.inspectCount++;return original(...a);};}''')
     page.locator('#debug-toggle').click()
     expect(page.locator('#debug-raw')).to_contain_text('"rootHead"')
     observed=page.evaluate('window.inspectCount')
@@ -144,8 +144,8 @@ def scenario(browser, kind, tmp):
     # Use a fresh wrapper after the earlier intentionally delayed write.
     page.reload(wait_until='domcontentloaded')
     expect(frame(page).locator('#db-title')).to_have_text('Alpha')
-    page.evaluate('''()=>{const original=HTML_DBMS.inspect;window.inspectCount=0;
-      HTML_DBMS.inspect=(...a)=>{window.inspectCount++;return original(...a);};}''')
+    page.evaluate('''()=>{const original=HTML_DBMS.debugDatabase;window.inspectCount=0;
+      HTML_DBMS.debugDatabase=(...a)=>{window.inspectCount++;return original(...a);};}''')
     page.locator('#debug-toggle').click()
     expect(page.locator('#debug-raw')).to_contain_text('"rootHead"')
     observed=page.evaluate('window.inspectCount')
