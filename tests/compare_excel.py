@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Compare original XLSX cells with decrypted HTML DBMS/3 demo documents and JS views.
 Do not use XLSX formula-cache as source data; it is an independent report reference.
-Usage: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cash_demo.html
+Usage: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx /path/to/new-cash.html
 """
 from __future__ import annotations
 import hashlib,json,re,subprocess,sys,zipfile
+from decimal import Decimal
 from pathlib import Path
 from xml.etree import ElementTree as ET
 NS={'x':'http://schemas.openxmlformats.org/spreadsheetml/2006/main','r':'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
@@ -37,6 +38,8 @@ def xlsx_cells(filepath):
     elif typ=='s':val=shared[int(value.text)]
     elif typ in ('e','str','inlineStr'):val=value.text or ''
     elif typ=='b':val=value.text=='1'
+    elif (name=='Транзакции' and re.fullmatch(r'J\d+',ref)) or (name.startswith(('Операции(','Участники(')) and re.fullmatch(r'[DEF]\d+',ref)):
+     val=Decimal(value.text)
     else:
      try:
       val=float(value.text)
@@ -58,7 +61,64 @@ def column_name(n):
   n,i=divmod(n-1,26);s=chr(65+i)+s
  return s
 
+def exact_result(value):
+ # BigInt is serialized as a canonical decimal STRING, never a JSON number.
+ # Reject floats, booleans, exponent notation, leading zeroes, sign '+', negative zero.
+ assert type(value) is str and re.fullmatch(r'0|-?[1-9][0-9]*',value),'Noncanonical exact money result'
+ return int(value)
+
+def assert_result_contract():
+ for bad in (True,False,None,0,1,1.1,Decimal('1.1'),'1.1','1e0','+1','01','-0',' 1','1\n','١'):
+  try:exact_result(bad)
+  except AssertionError:continue
+  raise AssertionError('Noncanonical result was accepted')
+ for good,want in [('0',0),('1',1),('-1',-1),('18014398509481982',18014398509481982)]:
+  assert exact_result(good)==want
+
+def minor(value):
+ assert isinstance(value,(Decimal,int)) and not isinstance(value,bool),'Invalid exact source money'
+ d=Decimal(value)
+ assert d.is_finite(),'Nonfinite source money'
+ n,dn=d.as_integer_ratio()
+ assert n*100%dn==0,'Sub-cent source value'
+ result=n*100//dn
+ return result
+
+def source_lexemes(xlsx,fixture):
+ # Never emit source values into CI logs; stdout is consumed directly by the importer.
+ book=xlsx_cells(xlsx);s=book['Транзакции']
+ f=json.loads(Path(fixture).read_text('utf8'),parse_float=Decimal)
+ assert f['sourceSha256']==hashlib.sha256(Path(xlsx).read_bytes()).hexdigest(),'XLSX checksum mismatch'
+ expected=[i for i in range(4,2487) if isinstance(get(s,'D',i),(float,int)) and get(s,'E',i) and get(s,'H',i)]
+ # A candidate row with a missing amount is not silently dropped.
+ expected=[i for i in expected if get(s,'C',i) is not None or get(s,'J',i) is not None]
+ assert len(expected)==len(f['entries']),'Source row count mismatch'
+ result={}
+ for i,row in zip(expected,f['entries']):
+  assert row['excelRow']==i,'Source row identity mismatch'
+  n=minor(get(s,'J',i))
+  assert abs(n)<=9007199254740991,'Source money outside storage bound'
+  assert minor(row['amount'])==n,'Extracted amount differs from original XML'
+  result[str(i)]=('-' if n<0 else '')+str(abs(n)//100)+'.'+str(abs(n)%100).zfill(2)
+ print(json.dumps(result,separators=(',',':')))
+
+def oracle(raw,selected,categories,mode,period):
+ # Compute directly from original workbook cells, never JS views or formula caches.
+ totals={fold(c):[0,0] for c in categories}
+ for date,to_type,to,category,from_type,source,amount,dd in raw:
+  if not period['fromSerial']<=date<=period['toSerial'] or fold(dd)!='да':continue
+  if mode=='participants':
+   if fold(to)==selected and fold(from_type)=='участник' and fold(source) in totals:totals[fold(source)][0]+=amount
+   if fold(source)==selected and fold(to_type)=='участник' and fold(to) in totals:totals[fold(to)][1]+=amount
+  else:
+   target=fold(category)
+   assert target in totals,'Source category absent'
+   if fold(to_type if mode=='entityType' else to)==selected:totals[target][0]+=amount
+   if fold(from_type if mode=='entityType' else source)==selected:totals[target][1]+=amount
+ return [(i,o,i-o) for i,o in totals.values()]
+
 def main():
+ assert_result_contract()
  xlsx=Path(sys.argv[1]);demo=Path(sys.argv[2]);book=xlsx_cells(xlsx)
  project=Path(__file__).resolve().parents[1]
  data=json.loads(subprocess.check_output(['node',str(project/'tests/dump-demo.cjs'),str(demo)],text=True))
@@ -66,12 +126,13 @@ def main():
  assert len(data['root']['$refs'])==11,'Expected exactly 11 source documents'
  assert len(book)==17,'Excel sheets changed'
  docs=data['documents']; rows=data['transactions']['rows'];s=book['Транзакции']
- expected=[i for i in range(4,2487) if isinstance(get(s,'D',i),(float,int)) and isinstance(get(s,'J',i),(float,int)) and get(s,'E',i) and get(s,'H',i)]
+ expected=[i for i in range(4,2487) if isinstance(get(s,'D',i),(float,int)) and isinstance(get(s,'J',i),(Decimal,int)) and get(s,'E',i) and get(s,'H',i)]
  same(len(rows),len(expected),'populated transaction rows')
  variants=0
  for i,(r,rowidx) in enumerate(zip(rows,expected)):
   same(r['excelRow'],rowidx,f'transaction {i} Excel row');same(r['n'],get(s,'C',rowidx),f'transaction {i} number')
-  for k,col in [('date','D'),('amount','J'),('note','K'),('dd','L')]:same(r[k],get(s,col,rowidx),f'transaction {i} {k}')
+  for k,col in [('date','D'),('note','K'),('dd','L')]:same(r[k],get(s,col,rowidx),f'transaction {i} {k}')
+  assert 'amount' not in r and type(r['amountMinor']) is int and r['amountMinor']==minor(get(s,'J',rowidx)),f'transaction {i}: exact amount mismatch'
   for k,col in [('toTypeId','E'),('typeId','G'),('fromTypeId','H')]:
    assert isinstance(r[k],str) and r[k] in docs['entityTypes' if k!='typeId' else 'transactionTypes']['entries']
    value=docs['entityTypes' if k!='typeId' else 'transactionTypes']['entries'][r[k]]['name']
@@ -104,13 +165,28 @@ def main():
    e=entries[ident];assert 'excelRow' not in e,f'{name}: Excel row must not be persisted in JSON dictionary';same(e['name'],get(raw,'A',index),f'{name} label');dict_cells+=1
    for j,v in enumerate(e.get('extra',[]),2):
     same(v,get(raw,column_name(j),index),f'{name} row {index} {column_name(j)}');dict_cells+=1
- report_cells=0
+ report_cells=0;cache_differences=0
+ raw=[(get(s,'D',i),get(s,'E',i),get(s,'F',i),get(s,'G',i),get(s,'H',i),get(s,'I',i),minor(get(s,'J',i)),get(s,'L',i)) for i in expected]
  for name,report in data['reports'].items():
   cells=book[name];same(report['selector'],get(cells,'B',2),f'{name} selector')
-  for col,key in [('D','incoming'),('E','outgoing'),('F','balance')]:same(report[key],get(cells,col,6),f'{name}!{col}6');report_cells+=1
-  for i,r in enumerate(report['rows'],7):
-   for col,key in [('C','name'),('D','incoming'),('E','outgoing'),('F','balance')]:same(r[key],get(cells,col,i),f'{name}!{col}{i}');report_cells+=1
+  mode='participants' if name=='Участники(Фонд)' else 'entityType' if name=='Операции(ТипСущности)' else 'entity'
+  categories=[get(cells,'C',i) for i in range(7,7+len(report['rows']))]
+  result=oracle(raw,fold(report['selector']),categories,mode,data['transactions']['period'])
+  keys=('incoming','outgoing','balance')
+  for j,key in enumerate(keys):
+   value=sum(row[j] for row in result)
+   assert exact_result(report[key])==value,f'{name} total {key}: exact oracle mismatch'
+   if value!=minor(get(cells,'DEF'[j],6)):cache_differences+=1
+   report_cells+=1
+  for i,(r,expected_row) in enumerate(zip(report['rows'],result),7):
+   same(r['name'],get(cells,'C',i),f'{name} category {i}')
+   for j,key in enumerate(keys):
+    assert exact_result(r[key])==expected_row[j],f'{name} row {i} {key}: exact oracle mismatch'
+    if expected_row[j]!=minor(get(cells,'DEF'[j],i)):cache_differences+=1
+    report_cells+=1
  same(data['transactions']['source']['sha256'],hashlib.sha256(xlsx.read_bytes()).hexdigest(),'Excel source checksum')
  assert not any('"reports"' in str(data['root']['$refs']) for _ in [0]),'Analytic views must not be persisted'
- print(f'EXCEL↔HTML_DBMS PASS: {len(rows)} nonempty transactions, 11 source document chains, {dict_cells} dictionary cells, {report_cells} view cells, {variants} normalized spelling variants, all six cached Excel report totals')
-if __name__=='__main__':main()
+ print(f'EXCEL↔HTML_DBMS PASS: {len(rows)} nonempty transactions, 11 source document chains, {dict_cells} dictionary cells, {report_cells} view cells, {variants} normalized spelling variants, all six exact oracle reports; cached Excel differences: {cache_differences}')
+if __name__=='__main__':
+ if len(sys.argv)>1 and sys.argv[1]=='--source-lexemes':source_lexemes(Path(sys.argv[2]),Path(sys.argv[3]))
+ else:main()

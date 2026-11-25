@@ -3,10 +3,14 @@ The underlying demo is independently decrypted and verified by compare_excel.py.
 """
 import json,subprocess
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from compare_excel import exact_result
 from playwright.sync_api import sync_playwright,expect
 root=Path(__file__).resolve().parents[1]
 source=(root/'examples/cash/cash-entry.js').read_text()
-data=json.loads(subprocess.check_output(['node',str(root/'tests/dump-demo.cjs'),str(root/'dist/html_dbms_cash_demo.html')],text=True))
+workspace=TemporaryDirectory(prefix='cash-ui-');demo=Path(workspace.name)/'cash.html'
+subprocess.run(['node',str(root/'examples/cash/build-demo.cjs'),str(root/'tests/fixtures/cash_excel_extracted.json'),str(demo)],check=True)
+data=json.loads(subprocess.check_output(['node',str(root/'tests/dump-demo.cjs'),str(demo)],text=True))
 with sync_playwright() as pw:
  browser=pw.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'],headless=True)
  page=browser.new_page(viewport={'width':1512,'height':930})
@@ -46,9 +50,11 @@ with sync_playwright() as pw:
  assert page.locator('.pager').count()==0, 'Pager must be removed'
  assert page.locator('text=План/факт').count()==0
  page.locator('#cash-tabs button',has_text='Операции(ТипСущности)').click()
- expect(page.locator('.report .total')).to_contain_text('8\u00a0616\u00a0188,00')
+ for i,key in enumerate(('incoming','outgoing','balance'),1):
+  n=exact_result(data['reports']['Операции(ТипСущности)'][key]); expected=('−' if n<0 else '')+f'{abs(n)//100:,}'.replace(',','\u00a0')+','+f'{abs(n)%100:02}'+' ₽'
+  expect(page.locator('.report .total td').nth(i)).to_have_text(expected.replace('−','-'))
  assert page.locator('.histogram svg rect').count()>=32, 'Histogram must plot categories'
- page.screenshot(path=str(root/'dist/cash_demo_report.png'))
+ page.screenshot(path=str(Path(workspace.name)/'cash_demo_report.png'))
  page.locator('#cash-tabs button',has_text='Участники(Фонд)').click()
  expect(page.locator('.report .total')).to_contain_text('3\u00a0342\u00a0455,00')
  assert page.locator('.histogram svg rect').count()>=71, 'Fund participant histogram is missing'
@@ -95,11 +101,11 @@ with sync_playwright() as pw:
  page.locator('.form select[name="fromId"]').select_option(label='Участник_ПЕРЕИМЕНОВАН')
  page.locator('.form select[name="typeId"]').select_option(label='Взнос')
  page.locator('.form input[name="date"]').fill('2026-09-27')
- page.locator('.form input[name="amount"]').fill('345')
+ page.locator('.form input[name="amount"]').fill('345,29')
  page.locator('.form button',has_text='Записать транзакцию').click()
  expect(page.locator('#cash-count')).to_contain_text('1\u00a0642')
  saved=page.evaluate('window.__operations')
- assert len(saved)==1 and saved[0]['amount']==345
+ assert len(saved)==1 and saved[0]['amountMinor']==34529 and 'amount' not in saved[0]
  assert saved[0]['toId'].startswith('fu-') and saved[0]['fromId'].startswith('pa-') and saved[0]['typeId'].startswith('tt-')
  assert not errors,errors
  print('CASH ENTRY UI PASS: six reports and reference dropdowns, dependent entity types, ID-only append (mock host RPC)')

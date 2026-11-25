@@ -1,24 +1,46 @@
-"""Cash v3 acceptance: real outer HTML shell + sandboxed iframe + RPC + JSON patch.
-
-Covers clicks (not fake db methods), write authorization, persistent crypto-chain state,
-export/reopen, history and Excel row removal. Crypto shim is INTENTIONALLY INSECURE;
-run tests/cash_crud.test.cjs and tests/compare_excel.py separately with real Node WebCrypto.
-No external browser navigation is needed in this environment.
+"""Native Cash acceptance: actual shell, isolated iframe, RPC and JSON Patch.
+Real Web Crypto on file://, temporary source and exported snapshots; no shim.
 """
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import subprocess, json
 from playwright.sync_api import sync_playwright, expect
+from browser_network import block_service_workers
 
 root = Path(__file__).resolve().parents[1]
-SHIM = """
-Object.defineProperty(crypto,'subtle',{configurable:true,value:{
- async digest(_algorithm,data){const bytes=new Uint8Array(data),out=new Uint8Array(32);for(let k=0;k<8;k++){let a=(2166136261^(k*0x9e3779b1))>>>0;for(const b of bytes){a=Math.imul(a^(b+k),16777619)>>>0;a^=a>>>13;}for(let j=0;j<4;j++)out[k*4+j]=(a>>>(8*j))&255;}return out.buffer;},
- async importKey(_kind,key){return new Uint8Array(key);},
- async encrypt(_opts,key,buffer){const data=new Uint8Array(buffer),out=new Uint8Array(data.length+16);out.set(data);out.set(key.slice(0,16),data.length);return out.buffer;},
- async decrypt(_opts,key,buffer){const data=new Uint8Array(buffer);if(data.length<16||Array.from(data.slice(-16)).some((x,i)=>x!==key[i]))throw Error('bad tag');return data.slice(0,-16).buffer;}
-}});
-"""
+
+def assert_production_fixture(candidate):
+    """All bytes except the physical JSON payload must equal current production."""
+    import re
+    pattern=rb'(<script id="db-store" type="application/json">)([\s\S]*?)(</script>)'
+    production=(root/'dist/html_dbms.html').read_bytes()
+    def without_store(data):
+        assert len(list(re.finditer(pattern,data)))==1,'Expected exactly one physical store'
+        assert b'<script id="cash-demo-source"' not in data,'Unexpected trusted entry'
+        return re.sub(pattern,lambda m:m.group(1)+m.group(3),data)
+    expected=without_store(production)
+    actual=candidate.read_bytes()
+    assert without_store(actual)==expected,'Fixture shell differs from production bytes'
+    # Negative controls: historical executable or an altered executable byte must fail.
+    historical=(root/'dist/html_dbms_cash_demo.html').read_bytes()
+    try:
+        same=without_store(historical)==expected
+    except AssertionError:
+        same=False
+    assert not same,'Historical demo unexpectedly accepted'
+    mutated=actual.replace(b'<script id="app-source">',b'<script id="app-source"> ',1)
+    assert mutated!=actual and without_store(mutated)!=expected,'Executable mutation not detected'
+    print('CASH RPC FIXTURE IDENTITY PASS: all non-store bytes equal production; historical/mutated shell rejected')
+
+def assert_live_store_cleared(page):
+    # Verify actual DOM textContent, not normalized locator text. Retry only until
+    # the same exact invariant holds; include size-only diagnostics on failure.
+    try:
+        page.wait_for_function("""()=>{const nodes=document.querySelectorAll('#db-store');return nodes.length===1&&nodes[0].textContent===''}""",timeout=5000)
+    except Exception as error:
+        metadata=page.evaluate("""()=>Array.from(document.querySelectorAll('#db-store'),n=>({length:n.textContent.length,children:n.childNodes.length,type:n.type}))""")
+        raise AssertionError('Live ciphertext was not cleared: '+str(metadata)) from error
+    assert page.evaluate("""()=>document.querySelector('#db-store').textContent===''""")
 
 def frame(page):
     return page.frame_locator('iframe[title="Приложение из JSON entry"]')
@@ -30,14 +52,18 @@ def dict_page(page, name):
     return app
 
 with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
-    fake_html=Path(tmp)/'fake_crypto_browser_ui.html'
-    subprocess.run(['node',str(root/'tests/build_ui_integration_fixture.cjs'),str(fake_html)],check=True)
+    fixture=Path(tmp)/'native_cash_browser_ui.html'
+    subprocess.run(['node',str(root/'tests/build_ui_integration_fixture.cjs'),str(fixture)],check=True)
+    assert_production_fixture(fixture)
     with sync_playwright() as pw:
-        system_chromium=next((p for p in (Path('/usr/bin/google-chrome'),Path('/usr/bin/chromium')) if p.exists()),None)
-        binary={'executable_path':str(system_chromium)} if system_chromium else {}
-        browser=pw.chromium.launch(**binary,args=['--no-sandbox','--disable-dev-shm-usage'],headless=True)
-        page=browser.new_page(viewport={'width':1520,'height':900},accept_downloads=True)
-        errors=[]; dialogs=[]; allow={'write':True}
+        browser=pw.chromium.launch(args=['--no-sandbox','--disable-dev-shm-usage'],headless=True)
+        context=browser.new_context(viewport={'width':1520,'height':900},accept_downloads=True)
+        errors=[]; dialogs=[]; unexpected=[]; allow={'write':True}
+        block_service_workers(context,unexpected)
+        context.on('request',lambda r:unexpected.append(r.url) if r.url.startswith(('http:','https:')) else None)
+        context.route('http**/*',lambda r:r.abort())
+        page=context.new_page()
+        page.on('websocket',lambda w:unexpected.append(w.url))
         page.on('pageerror',lambda err:errors.append(str(err)))
         def handle_dialog(d):
             dialogs.append((d.type,d.message))
@@ -45,11 +71,16 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
                 raise AssertionError('Unexpected modal: '+d.type)
             d.accept() if allow['write'] else d.dismiss()
         page.on('dialog',handle_dialog)
-        page.evaluate(SHIM)
-        page.set_content(fake_html.read_text(encoding='utf8'),wait_until='domcontentloaded')
+        page.goto(fixture.as_uri(),wait_until='domcontentloaded')
+        assert page.evaluate('isSecureContext && !!crypto.subtle')
+        # The fixture is built from the universal shell, with no trusted demo-source tag.
+        # Require the explicit launch gate, never modify the production trust policy.
+        expect(page.locator('.entry-launch')).to_be_visible(timeout=30000)
+        page.locator('.entry-launch').click()
         app=frame(page)
         expect(app.locator('h1')).to_contain_text('Касса',timeout=30000)
         assert page.locator('#entry-area iframe').get_attribute('sandbox')=='allow-scripts', 'Sandbox must remain restrictive'
+        assert_live_store_cleared(page)
         head_before=page.locator('#head').input_value()
         dict_page(page,'Типы Транзакций')
         # User requested no Excel source line numbers either in UI or dictionary JSON.
@@ -104,10 +135,10 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         app.locator('#cash-tabs button',has_text='Транзакции').click()
         app.get_by_role('button',name='+ Транзакция').click()
         app.locator('.form input[name="date"]').fill('2026-09-27')
-        app.locator('.form input[name="amount"]').fill('321')
+        app.locator('.form input[name="amount"]').fill('321,29')
         app.get_by_role('button',name='Записать транзакцию').click()
         expect(app.locator('#cash-count')).to_contain_text('21',timeout=20000)
-        # Full cryptographic graph validation at UI shell level (using deterministic test shim).
+        # Full cryptographic graph validation at UI shell level with native Web Crypto.
         page.locator('#validation-toggle').click()
         page.locator('#verify').click()
         expect(page.locator('#validation-report')).to_contain_text('"status": "complete"',timeout=20000)
@@ -119,10 +150,13 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         saved=saved_path.read_text(encoding='utf8')
         assert '<script id="db-store" type="application/json">' in saved
         # Reopen in fresh browser tab; actual shell bootstraps from exported ciphertext.
-        second=browser.new_page(viewport={'width':1520,'height':900})
+        second=context.new_page()
         second.on('pageerror',lambda err:errors.append(str(err)))
-        second.evaluate(SHIM)
-        second.set_content(saved,wait_until='domcontentloaded')
+        second.on('websocket',lambda w:unexpected.append(w.url))
+        second.goto(saved_path.as_uri(),wait_until='domcontentloaded')
+        assert second.evaluate('isSecureContext && !!crypto.subtle')
+        expect(second.locator('.entry-launch')).to_be_visible(timeout=20000)
+        second.locator('.entry-launch').click()
         app2=frame(second)
         expect(app2.locator('h1')).to_contain_text('Касса',timeout=20000)
         expect(app2.locator('#cash-count')).to_contain_text('21',timeout=20000)
@@ -132,20 +166,21 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         app2.locator('.dict-nav button',has_text='Проекты').click()
         expect(app2.locator('.gridbox tbody tr').filter(has_text=project_id)).to_contain_text('Проект Б')
         # Inspect recovered JSON, not just visual cells.
-        assert second.locator('#db-store').text_content()==''
+        assert_live_store_cleared(second)
         from browser_dual import store_from_output
         data=second.evaluate('''async raw=>{
           const db=HTML_DBMS,s=db.adoptStore(raw),h=raw.publicHeads['Касса'];
           const root=await db.readState(s,h),docs={};
           for(const name of Object.keys(root.$refs))docs[name]=await db.readState(s,root.$refs[name]);
-          return {count:docs.transactions.rows.length,keys:Object.keys(root.$refs),types:docs.transactionTypes,projects:docs.projects,history:(await db.verifyDatabase(s,h)).status,withoutExcelRows:Object.values(docs).filter(v=>v.entries).every(d=>d.order.every(id=>!('excelRow' in d.entries[id])))};
+          return {amountMinor:docs.transactions.rows.at(-1).amountMinor,count:docs.transactions.rows.length,keys:Object.keys(root.$refs),types:docs.transactionTypes,projects:docs.projects,history:(await db.verifyDatabase(s,h)).status,withoutExcelRows:Object.values(docs).filter(v=>v.entries).every(d=>d.order.every(id=>!('excelRow' in d.entries[id])))};
         }''',store_from_output('html',saved))
-        assert data['count']==21
+        assert data['count']==21 and data['amountMinor']==32129
         assert len(data['keys'])==12
         assert data['types']['entries'][first_id]['name']=='Тестовая категория 2'
         assert data['projects']['entries'][project_id]['name']=='Проект Б'
         assert data['history']=='complete'
         assert data['withoutExcelRows']
         assert not errors, errors
-        print('CASH FULL SHELL RPC ACCEPTANCE PASS: cancel/confirm, add/edit/create dictionary, transaction, 12 JSON chains, verify, export, reload; sandbox allow-scripts (no allow-forms); insecure shim ONLY for browser transport')
-        browser.close()
+        assert not unexpected, unexpected
+        print('CASH FULL SHELL RPC ACCEPTANCE PASS: cancel/confirm, add/edit/create dictionary, transaction, 12 JSON chains, verify, export, reload; sandbox allow-scripts (no allow-forms); NATIVE WEB CRYPTO, no external requests')
+        context.close();browser.close()

@@ -2,10 +2,14 @@
 /** Integration without shims: real WebCrypto, generic JSON chains and CAS root refs. */
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const path=require('node:path');
+const path=require('node:path'),os=require('node:os'),cp=require('node:child_process');
 const db=require(path.resolve(__dirname,'../src/core-node.cjs'));
 async function main(){
- const html=fs.readFileSync(path.resolve(__dirname,'../dist/html_dbms_cash_demo.html'),'utf8');
+ const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'hdbms-cash-crud-'));
+ const demo=process.env.HDBMS_CASH_TEST_DEMO||path.join(tmp,'cash.html');
+ try{
+ if(!process.env.HDBMS_CASH_TEST_DEMO)cp.execFileSync(process.execPath,[path.resolve(__dirname,'../examples/cash/build-demo.cjs'),path.resolve(__dirname,'fixtures/cash_excel_extracted.json'),demo],{stdio:'inherit'});
+ const html=fs.readFileSync(demo,'utf8');
  const match=html.match(/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/);
  assert.ok(match,'encrypted store is embedded');
  const store=db.adoptStore(JSON.parse(match[1]));
@@ -38,10 +42,12 @@ async function main(){
  const rows=(await db.load(store,endRoot.$refs.transactions)).state.rows;
  assert.ok(rows.some(row=>row.fromId===firstId||row.toId===firstId));
  assert.equal(rows.length,1641);
+ assert.ok(rows.every(r=>Number.isSafeInteger(r.amountMinor)&&!Object.hasOwn(r,'amount')));
  assert.equal((await db.load(store,originalRoot.state.$refs.participants)).state.entries[firstId].name,beforeName,'historical snapshot preserved');
  const verified=await db.verifyDatabase(store,renamed.rootHead);
  assert.equal(verified.status,'complete');
  assert.equal(verified.checks.documents,12);
  console.log('CASH REAL CRYPTO CRUD PASS: 12 reference chains, create dictionary, insert/edit and stable historical IDs');
+ }finally{fs.rmSync(tmp,{recursive:true,force:true});}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

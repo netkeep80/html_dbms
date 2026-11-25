@@ -30,10 +30,17 @@ jobs:
       - run: node tests/app.test.cjs
       - run: node tests/docs-language.test.cjs
       - run: python3 tests/dual_build.py
-      - run: node examples/cash/build-demo.cjs
+      - name: Build isolated regression Cash snapshot
+        run: |
+          demo="$RUNNER_TEMP/cash-regression.html"
+          node examples/cash/build-demo.cjs tests/fixtures/cash_excel_extracted.json "$demo"
+          echo "HDBMS_CASH_TEST_DEMO=$demo" >> "$GITHUB_ENV"
+      - run: node tests/cash-money.test.cjs
+      - run: python3 tests/cash-oracle.py
       - run: node tests/cash_crud.test.cjs
       - run: node tests/pages-data.test.cjs
-      - run: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cash_demo.html
+      - run: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx "$HDBMS_CASH_TEST_DEMO"
+      - run: git diff --exit-code -- dist/html_dbms_cash_demo.html
       - name: External V8 coverage of core functions and branches
         run: |
           NODE_V8_COVERAGE="$RUNNER_TEMP/hdbms-core-coverage" node --test --experimental-test-coverage --test-coverage-include=src/core.js tests/core.test.cjs tests/stability.test.cjs tests/boundaries.test.cjs tests/differential.test.cjs tests/metrics.test.cjs tests/cash_crud.test.cjs tests/pages-data.test.cjs
@@ -49,11 +56,14 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Prepare Chromium (native probe, conditional OS dependencies)
         run: bash tools/ci-browser.sh
-      - name: Build production containers and synthetic cash
-        run: python3 build.py && node examples/cash/build-demo.cjs
+      - name: Build production containers
+        run: python3 build.py && git diff --exit-code -- dist/html_dbms.html dist/html_dbms.xml dist/html_dbms_cash_demo.html
       - name: Cash RPC integration
         if: ${{ !cancelled() }}
         run: .venv/bin/python tests/browser_cash_acceptance.py
+      - name: Native exact Cash money and history
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python tests/browser_cash_exact.py
       - name: Native UI smoke
         if: ${{ !cancelled() }}
         run: .venv/bin/python tests/browser_smoke.py

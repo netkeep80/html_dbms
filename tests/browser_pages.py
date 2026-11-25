@@ -47,7 +47,13 @@ def test(url, expected=None, self_signed=False):
         expect(app.locator('.histogram svg')).to_be_visible()
         app.locator('#cash-tabs button',has_text='Транзакции').click()
         app.get_by_role('button',name='+ Транзакция').click()
-        app.locator('.form input[name="amount"]').fill('321')
+        before=page.locator('#head').input_value()
+        for invalid in ('','1.005','1e2','90071992547409.92'):
+            app.locator('.form input[name="amount"]').fill(invalid)
+            app.get_by_role('button',name='Записать транзакцию').click()
+            expect(app.locator('.form-error')).not_to_have_text('')
+            assert page.locator('#head').input_value()==before
+        app.locator('.form input[name="amount"]').fill('321,29')
         app.get_by_role('button',name='Записать транзакцию').click()
         expect(app.locator('#cash-count')).to_contain_text('721',timeout=30000)
         with page.expect_download() as download:page.locator('#save').click()
@@ -56,6 +62,11 @@ def test(url, expected=None, self_signed=False):
             other=ctx.new_page()
             other.goto(saved.as_uri(),wait_until='domcontentloaded')
             expect(other.frame_locator('#entry-area iframe').locator('#cash-count')).to_contain_text('721',timeout=30000)
+            from browser_dual import store_from_output
+            result=other.evaluate('''async raw=>{const db=HTML_DBMS,s=db.adoptStore(raw),h=raw.publicHeads['Касса'],r=await db.readState(s,h),tx=await db.readState(s,r.$refs.transactions);return {last:tx.rows.at(-1),head:h};}''',store_from_output('html',saved.read_text('utf8')))
+            assert result['last']['amountMinor']==32129 and 'amount' not in result['last']
+            other.locator('#head').fill(before);other.locator('#open-head').click()
+            expect(other.frame_locator('#entry-area iframe').locator('#cash-count')).to_contain_text('720',timeout=30000)
             other.close()
         page.reload(wait_until='domcontentloaded')
         expect(page.frame_locator('#entry-area iframe').locator('#cash-count')).to_contain_text('720',timeout=30000)
