@@ -44,3 +44,6 @@ relations:
 
   - predicates: [verified_by]
     target: {kind: artifact, path: 'tests/cash-oracle.py'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/browser_cash_exact.py'}
