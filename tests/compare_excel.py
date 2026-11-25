@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare original XLSX cells with decrypted HTML DBMS/3 demo documents and JS views.
 Do not use XLSX formula-cache as source data; it is an independent report reference.
-Usage: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cash_demo.html
+Usage: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx /path/to/new-cash.html
 """
 from __future__ import annotations
 import hashlib,json,re,subprocess,sys,zipfile
@@ -61,6 +61,20 @@ def column_name(n):
   n,i=divmod(n-1,26);s=chr(65+i)+s
  return s
 
+def exact_result(value):
+ # BigInt is serialized as a canonical decimal STRING, never a JSON number.
+ # Reject floats, booleans, exponent notation, leading zeroes, sign '+', negative zero.
+ assert type(value) is str and re.fullmatch(r'0|-?[1-9][0-9]*',value),'Noncanonical exact money result'
+ return int(value)
+
+def assert_result_contract():
+ for bad in (True,False,None,0,1,1.1,Decimal('1.1'),'1.1','1e0','+1','01','-0',' 1','1\n','١'):
+  try:exact_result(bad)
+  except AssertionError:continue
+  raise AssertionError('Noncanonical result was accepted')
+ for good,want in [('0',0),('1',1),('-1',-1),('18014398509481982',18014398509481982)]:
+  assert exact_result(good)==want
+
 def minor(value):
  assert isinstance(value,(Decimal,int)) and not isinstance(value,bool),'Invalid exact source money'
  d=Decimal(value)
@@ -104,6 +118,7 @@ def oracle(raw,selected,categories,mode,period):
  return [(i,o,i-o) for i,o in totals.values()]
 
 def main():
+ assert_result_contract()
  xlsx=Path(sys.argv[1]);demo=Path(sys.argv[2]);book=xlsx_cells(xlsx)
  project=Path(__file__).resolve().parents[1]
  data=json.loads(subprocess.check_output(['node',str(project/'tests/dump-demo.cjs'),str(demo)],text=True))
@@ -160,13 +175,13 @@ def main():
   keys=('incoming','outgoing','balance')
   for j,key in enumerate(keys):
    value=sum(row[j] for row in result)
-   assert int(report[key])==value,f'{name} total {key}: exact oracle mismatch'
+   assert exact_result(report[key])==value,f'{name} total {key}: exact oracle mismatch'
    if value!=minor(get(cells,'DEF'[j],6)):cache_differences+=1
    report_cells+=1
   for i,(r,expected_row) in enumerate(zip(report['rows'],result),7):
    same(r['name'],get(cells,'C',i),f'{name} category {i}')
    for j,key in enumerate(keys):
-    assert int(r[key])==expected_row[j],f'{name} row {i} {key}: exact oracle mismatch'
+    assert exact_result(r[key])==expected_row[j],f'{name} row {i} {key}: exact oracle mismatch'
     if expected_row[j]!=minor(get(cells,'DEF'[j],i)):cache_differences+=1
     report_cells+=1
  same(data['transactions']['source']['sha256'],hashlib.sha256(xlsx.read_bytes()).hexdigest(),'Excel source checksum')

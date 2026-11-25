@@ -2,12 +2,16 @@
 No insecure cryptographic shim. HTTP loopback is a secure context for Web Crypto.
 """
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from compare_excel import exact_result
 import json,subprocess
 from functools import partial
 from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
 from threading import Thread
 from playwright.sync_api import sync_playwright,expect
-root=Path(__file__).resolve().parents[1];demo=root/'dist/html_dbms_cash_demo.html'
+root=Path(__file__).resolve().parents[1]
+workspace=TemporaryDirectory(prefix='cash-real-');demo=Path(workspace.name)/'cash.html'
+subprocess.run(['node',str(root/'examples/cash/build-demo.cjs'),str(root/'tests/fixtures/cash_excel_extracted.json'),str(demo)],check=True)
 data=json.loads(subprocess.check_output(['node',str(root/'tests/dump-demo.cjs'),str(demo)],text=True))
 server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=str(demo.parent)))
 Thread(target=server.serve_forever,daemon=True).start()
@@ -28,7 +32,7 @@ try:
   assert app.locator('#cash-tabs button').count()==8,'Wrong number of primary tabs'
   app.locator('#cash-tabs button',has_text='Операции(ТипСущности)').click()
   for i,key in enumerate(('incoming','outgoing','balance'),1):
-   n=int(data['reports']['Операции(ТипСущности)'][key]); expected=('-' if n<0 else '')+f'{abs(n)//100:,}'.replace(',','\u00a0')+','+f'{abs(n)%100:02}'+' ₽'
+   n=exact_result(data['reports']['Операции(ТипСущности)'][key]); expected=('-' if n<0 else '')+f'{abs(n)//100:,}'.replace(',','\u00a0')+','+f'{abs(n)%100:02}'+' ₽'
    expect(app.locator('.report .total td').nth(i)).to_have_text(expected)
   app.locator('#cash-tabs button',has_text='Участники(Фонд)').click()
   expect(app.locator('.report .total')).to_contain_text('3\u00a0342\u00a0455,00',timeout=20000)
@@ -56,11 +60,11 @@ try:
   expect(page.locator('#validation-report')).to_contain_text('"status": "complete"',timeout=30000)
   assert not errors,errors
   with page.expect_download() as dl:page.locator('#save').click()
-  saved=root/'dist/cash_saved_browser.html';dl.value.save_as(str(saved))
+  saved=Path(workspace.name)/'cash_saved_browser.html';dl.value.save_as(str(saved))
   page.goto(f'http://127.0.0.1:{server.server_address[1]}/{saved.name}',wait_until='domcontentloaded')
   page.locator('#open-head').click();app=page.frame_locator('iframe[title="Приложение из JSON entry"]')
   expect(app.locator('#cash-count')).to_contain_text('1\u00a0642',timeout=30000)
   assert not errors,errors
   print('REAL WEB CRYPTO CASH UI PASS: 11 source chains, 6 views, ID dropdown transaction, verified append, export and reopen')
   browser.close()
-finally:server.shutdown()
+finally:server.shutdown();workspace.cleanup()

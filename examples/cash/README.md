@@ -17,8 +17,9 @@
 
 ```sh
 python3 build.py
-node examples/cash/build-demo.cjs
-python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cash_demo.html
+cash_tmp=$(mktemp -d)
+node examples/cash/build-demo.cjs tests/fixtures/cash_excel_extracted.json "$cash_tmp/cash.html"
+python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx "$cash_tmp/cash.html"
 ```
 
 Дополнительно браузерное представление (при наличии Playwright и Chromium):
@@ -94,3 +95,5 @@ Workflow `.github/workflows/pages.yml` запускается после усп�
 `amountMinor` — безопасное целое число копеек, от −9007199254740991 до 9007199254740991; ввод десятичной строки с точкой или запятой, максимум два знака, без экспоненты. Отрицательные суммы сохраняют направление и знак; -0 канонизируется в 0. Агрегаты BigInt, форматирование без Number, округление запрещено. Геометрия SVG допускает приближение, подписи точны. Отчёты: период включительно и ДД = Да; журнал: период и текстовый поиск без фильтра ДД, обороты фонда. Сохранённые ранее demo HTML — исторические snapshots; новый build не переписывает их в Git. Числовые источники принимаются только как безопасные целые рубли, дробные требуют исходной десятичной лексемы. Старые XLSX регрессии не публикуются на Pages.
 
 Внешние проверки: `node tests/cash-money.test.cjs`; `python3 tests/cash-oracle.py` (утверждённые 720 операций, seeded fractional/permutations, независимый integer oracle); `python3 tests/compare_excel.py` (оригинальные Decimal-лексемы, сверка всех шести отчётов, диагностика кэша); `python3 tests/browser_cash_exact.py` (новый синтетический snapshot, нативная криптография, 33/34 категории, большие обороты, UI, сохранение и история). Новые приватные или Excel-derived артефакты не коммитятся.
+
+Сборщик без выходного аргумента создаёт новый файл во временном каталоге ОС и печатает его путь; явный выход обязан отсутствовать, запись с `wx`. Исторический `dist/html_dbms_cash_demo.html` не перезаписывается. CI и автономные регрессии строят отдельные временные snapshots. Python oracle сначала проверяет каноническую строку целого BigInt (без дроби, экспоненты, лишних знаков, ведущих нулей), затем сравнивает целые копейки.

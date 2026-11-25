@@ -4,7 +4,7 @@ No private data, no float arithmetic, no use of JS report logic in expected valu
 """
 import json,random,subprocess,tempfile
 from pathlib import Path
-from compare_excel import oracle,fold,minor
+from compare_excel import oracle,fold,minor,exact_result,assert_result_contract
 ROOT=Path(__file__).resolve().parents[1]
 def node(*args,stdin=None):
  return json.loads(subprocess.check_output(['node',*args],input=stdin,text=True,cwd=ROOT))
@@ -12,8 +12,8 @@ KEYS=('incoming','outgoing','balance')
 def compare(report,expected):
  assert len(report['rows'])==len(expected)
  for cell,wanted in zip(report['rows'],expected):
-  assert tuple(int(cell[k]) for k in KEYS)==tuple(wanted),'Report cell differs from oracle'
- assert tuple(int(report[k]) for k in KEYS)==tuple(sum(row[j] for row in expected) for j in range(3)),'Report total differs from oracle'
+  assert tuple(exact_result(cell[k]) for k in KEYS)==tuple(wanted),'Report cell differs from oracle'
+ assert tuple(exact_result(report[k]) for k in KEYS)==tuple(sum(row[j] for row in expected) for j in range(3)),'Report total differs from oracle'
  return 3*(1+len(expected))
 def approved():
  f=node('examples/cash/synthetic-pages.cjs')
@@ -28,7 +28,7 @@ def approved():
  docs=data['documents']
  for src,actual in zip(f['entries'],data['transactions']['rows']):
   n=minor(src['amount'])
-  assert actual['amountMinor']==n and 'amount' not in actual
+  assert type(actual['amountMinor']) is int and actual['amountMinor']==n and 'amount' not in actual
   for side in ('to','from'):
    ty=docs['entityTypes']['entries'][actual[side+'TypeId']]
    assert fold(ty['name'])==fold(src[side+'Type'])
@@ -93,10 +93,11 @@ def stress():
  count=0
  for a,w,l in zip(actual,expected,ledger):
   count+=compare(a['report'],w)
-  assert tuple(int(a['ledger'][k]) for k in KEYS)==l,'Ledger period/search oracle mismatch'
+  assert tuple(exact_result(a['ledger'][k]) for k in KEYS)==l,'Ledger period/search oracle mismatch'
   count+=3
  assert len(actual)==len(inputs)==48
  return count
 
 if __name__=='__main__':
+ assert_result_contract()
  print(f'CASH INDEPENDENT ORACLE PASS: approved 720 source rows, {approved()} report money cells; 48 seeded fractional/permutation cases, {stress()} report/ledger money cells')

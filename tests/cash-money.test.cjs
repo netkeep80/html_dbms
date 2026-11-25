@@ -38,3 +38,16 @@ const ledger=calculateLedger(rows.filter(x=>x.date===1),'f');assert.equal(ledger
 assert.equal(calculateLedger(Array.from({length:10000},()=>row(1,ids[0])),'f').incoming,10000n);
 validateMoneyRows(rows);
 console.log('CASH MONEY PASS: strict decimal, canonical zero, safe storage, unbounded exact aggregates, 33 categories, signed self-transfer, invalid excluded row, ledger DD difference');
+
+// Reject historical and existing output even when invoked explicitly; no fixture is read on this path.
+{
+ const cp=require('node:child_process'),crypto=require('node:crypto');
+ const builder=path.resolve(__dirname,'../examples/cash/build-demo.cjs'),history=path.resolve(__dirname,'../dist/html_dbms_cash_demo.html');
+ const digest=()=>crypto.createHash('sha256').update(fs.readFileSync(history)).digest('hex'),before=digest();
+ const rejected=cp.spawnSync(process.execPath,[builder,'missing-fixture.json',history],{encoding:'utf8'});
+ assert.notEqual(rejected.status,0);assert.match(rejected.stderr,/historical snapshots/);assert.equal(digest(),before);
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cash-output-'));
+ try{const file=path.join(dir,'existing.html');fs.writeFileSync(file,'sentinel');const res=cp.spawnSync(process.execPath,[builder,'missing-fixture.json',file],{encoding:'utf8'});assert.notEqual(res.status,0);assert.equal(fs.readFileSync(file,'utf8'),'sentinel');}finally{fs.rmSync(dir,{recursive:true,force:true});}
+ const created=cp.spawnSync(process.execPath,[builder],{encoding:'utf8',env:{...process.env,TMPDIR:os.tmpdir()}});assert.equal(created.status,0,created.stderr);const match=created.stdout.match(/CASH DEMO BUILD PASS: (.+) bytes /);assert.ok(match);assert.notEqual(path.resolve(match[1]),history);assert.equal(digest(),before);fs.rmSync(path.dirname(match[1]),{recursive:true,force:true});
+ console.log('CASH HISTORICAL ARTIFACT PASS: default isolated, explicit existing path rejected, original SHA unchanged');
+}
