@@ -20,14 +20,25 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      # Temporary draft-only transport of deterministic PUBLIC generic build bytes.
+      # Removed when exact generated dist artifacts are committed.
+      - name: Draft resource build transport
+        run: |
+          python3 build.py
+          node - <<'JS'
+          const fs=require('node:fs');
+          for(const ext of ['html','xml']){
+            const s=fs.readFileSync('dist/html_dbms.'+ext,'utf8');
+            for(let i=0;i<s.length;i+=1800) console.log('RESOURCE_BUILD_'+ext+' '+JSON.stringify(s.slice(i,i+1800)));
+          }
+          JS
       - run: node tests/core.test.cjs
       - run: node tests/stability.test.cjs
       - run: node tests/metrics.test.cjs
       - run: node tests/differential.test.cjs
       - run: node tests/boundaries.test.cjs
-      # Draft #46 baseline only; replace with rejection/regression gate before acceptance.
-      - name: Bounded resource amplification baseline (pre-fix only)
-        run: node --max-old-space-size=384 tests/resource-amplification.test.cjs --baseline
+      - name: Resource integrity regression and bounded sizing
+        run: node --max-old-space-size=384 tests/resource-amplification.test.cjs
       - run: node --expose-gc tests/benchmark.cjs
       - run: python3 build.py && git diff --exit-code -- dist/html_dbms.html dist/html_dbms.xml
       - run: node tests/app.test.cjs
