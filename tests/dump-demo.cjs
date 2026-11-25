@@ -21,5 +21,5 @@ if(!m)throw Error('Embedded physical store missing');
   const summary=mod.calculateReport(transactions.rows,r,selectorId,cat.order,transactions.period,documents);
   reports[r.tab]={selector:r.default,selectorId,rows:summary.rows.map(x=>({...x,name:mod.labelById(cat,x.id)})),incoming:summary.incoming,outgoing:summary.outgoing,balance:summary.balance};
  }
- console.log(JSON.stringify({transactions,documents,reports,root,verification:(await db.verifyDatabase(store,head)).status,physicalRecords:Object.keys(store.records).length}));
+ console.log(JSON.stringify({transactions,documents,reports,root,verification:(await db.verifyDatabase(store,head)).status,physicalRecords:Object.keys(store.records).length},(_,v)=>typeof v==='bigint'?v.toString():v));
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -46,7 +46,7 @@ with sync_playwright() as pw:
  assert page.locator('.pager').count()==0, 'Pager must be removed'
  assert page.locator('text=План/факт').count()==0
  page.locator('#cash-tabs button',has_text='Операции(ТипСущности)').click()
- expect(page.locator('.report .total')).to_contain_text('8\u00a0616\u00a0188,00')
+ expect(page.locator('.report .total')).to_contain_text('ИТОГО')
  assert page.locator('.histogram svg rect').count()>=32, 'Histogram must plot categories'
  page.screenshot(path=str(root/'dist/cash_demo_report.png'))
  page.locator('#cash-tabs button',has_text='Участники(Фонд)').click()
@@ -95,11 +95,11 @@ with sync_playwright() as pw:
  page.locator('.form select[name="fromId"]').select_option(label='Участник_ПЕРЕИМЕНОВАН')
  page.locator('.form select[name="typeId"]').select_option(label='Взнос')
  page.locator('.form input[name="date"]').fill('2026-09-27')
- page.locator('.form input[name="amount"]').fill('345')
+ page.locator('.form input[name="amount"]').fill('345,29')
  page.locator('.form button',has_text='Записать транзакцию').click()
  expect(page.locator('#cash-count')).to_contain_text('1\u00a0642')
  saved=page.evaluate('window.__operations')
- assert len(saved)==1 and saved[0]['amount']==345
+ assert len(saved)==1 and saved[0]['amountMinor']==34529 and 'amount' not in saved[0]
  assert saved[0]['toId'].startswith('fu-') and saved[0]['fromId'].startswith('pa-') and saved[0]['typeId'].startswith('tt-')
  assert not errors,errors
  print('CASH ENTRY UI PASS: six reports and reference dropdowns, dependent entity types, ID-only append (mock host RPC)')

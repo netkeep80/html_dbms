@@ -31,6 +31,7 @@ jobs:
       - run: node tests/docs-language.test.cjs
       - run: python3 tests/dual_build.py
       - run: node examples/cash/build-demo.cjs
+      - run: node tests/cash-money.test.cjs
       - run: node tests/cash_crud.test.cjs
       - run: node tests/pages-data.test.cjs
       - run: python3 tests/compare_excel.py tests/fixtures/cash_input.xlsx dist/html_dbms_cash_demo.html

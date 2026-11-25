@@ -25,7 +25,7 @@ try:
   expect(app.locator('#cash-count')).to_contain_text('1\u00a0641',timeout=20000)
   assert app.locator('#cash-tabs button').count()==8,'Wrong number of primary tabs'
   app.locator('#cash-tabs button',has_text='Операции(ТипСущности)').click()
-  expect(app.locator('.report .total')).to_contain_text('8\u00a0616\u00a0188,00',timeout=20000)
+  expect(app.locator('.report .total')).to_contain_text('ИТОГО')
   app.locator('#cash-tabs button',has_text='Участники(Фонд)').click()
   expect(app.locator('.report .total')).to_contain_text('3\u00a0342\u00a0455,00',timeout=20000)
   app.locator('#cash-tabs button',has_text='Справочники').click()

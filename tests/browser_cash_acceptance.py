@@ -104,7 +104,7 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         app.locator('#cash-tabs button',has_text='Транзакции').click()
         app.get_by_role('button',name='+ Транзакция').click()
         app.locator('.form input[name="date"]').fill('2026-09-27')
-        app.locator('.form input[name="amount"]').fill('321')
+        app.locator('.form input[name="amount"]').fill('321,29')
         app.get_by_role('button',name='Записать транзакцию').click()
         expect(app.locator('#cash-count')).to_contain_text('21',timeout=20000)
         # Full cryptographic graph validation at UI shell level (using deterministic test shim).
@@ -138,9 +138,9 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
           const db=HTML_DBMS,s=db.adoptStore(raw),h=raw.publicHeads['Касса'];
           const root=await db.readState(s,h),docs={};
           for(const name of Object.keys(root.$refs))docs[name]=await db.readState(s,root.$refs[name]);
-          return {count:docs.transactions.rows.length,keys:Object.keys(root.$refs),types:docs.transactionTypes,projects:docs.projects,history:(await db.verifyDatabase(s,h)).status,withoutExcelRows:Object.values(docs).filter(v=>v.entries).every(d=>d.order.every(id=>!('excelRow' in d.entries[id])))};
+          return {amountMinor:docs.transactions.rows.at(-1).amountMinor,count:docs.transactions.rows.length,keys:Object.keys(root.$refs),types:docs.transactionTypes,projects:docs.projects,history:(await db.verifyDatabase(s,h)).status,withoutExcelRows:Object.values(docs).filter(v=>v.entries).every(d=>d.order.every(id=>!('excelRow' in d.entries[id])))};
         }''',store_from_output('html',saved))
-        assert data['count']==21
+        assert data['count']==21 and data['amountMinor']==32129
         assert len(data['keys'])==12
         assert data['types']['entries'][first_id]['name']=='Тестовая категория 2'
         assert data['projects']['entries'][project_id]['name']=='Проект Б'

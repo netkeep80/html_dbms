@@ -33,14 +33,53 @@ export function validateReferences(rows,documents){
  }
  return errors;
 }
-/** Excel SUMIFS parity: values matched by normalized canonical lookup IDs, not display strings. */
+
+export const MAX_MINOR=BigInt(Number.MAX_SAFE_INTEGER);
+export function parseMinor(text){
+ if(typeof text!=='string')throw Error('Сумма должна быть десятичной строкой');
+ const m=/^(-?)(\d+)(?:[.,](\d{1,2}))?$/.exec(text.trim());
+ if(!m)throw Error('Некорректная сумма: укажите рубли и не более двух знаков копеек');
+ const whole=m[2].replace(/^0+(?=\d)/,'');
+ if(whole.length>14)throw Error('Сумма вне допустимого диапазона');
+ const n=BigInt(whole)*100n+BigInt((m[3]||'').padEnd(2,'0'));
+ if(n>MAX_MINOR)throw Error('Сумма вне допустимого диапазона');
+ return Number(m[1]? -n:n);
+}
+export function minorAmount(row){
+ if(!row||Object.hasOwn(row,'amount')||!Object.hasOwn(row,'amountMinor')||!Number.isSafeInteger(row.amountMinor)||Object.is(row.amountMinor,-0))throw Error('Некорректная денежная запись: требуется целое количество копеек');
+ return BigInt(row.amountMinor);
+}
+export function validateMoneyRows(rows){
+ if(!Array.isArray(rows))throw Error('Некорректный журнал');
+ for(const [i,row] of rows.entries()){
+  try{minorAmount(row);}catch{throw Error('Некорректная денежная запись: строка '+(i+1));}
+ }
+}
+export function formatMinor(value){
+ if(typeof value!=='bigint')throw Error('Для форматирования суммы требуется BigInt');
+ const n=value<0n?-value:value;
+ const whole=(n/100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'\u00a0');
+ return (value<0n?'-':'')+whole+','+(n%100n).toString().padStart(2,'0')+' ₽';
+}
+export function calculateLedger(rows,fund){
+ validateMoneyRows(rows);
+ let incoming=0n,outgoing=0n;
+ for(const row of rows){const amount=minorAmount(row);if(row.toTypeId===fund)incoming+=amount;if(row.fromTypeId===fund)outgoing+=amount;}
+ return {incoming,outgoing,balance:incoming-outgoing};
+}
+
+/** Exact financial views: all catalog categories, stable IDs, inclusive period and DD. */
 export function calculateReport(rows,report,selectorId,categoryIds,period,documents){
  const participantId=(documents.entityTypes?.order||[]).find(id=>entityAlias(documents,id)==='participants')||idByLabel(documents.entityTypes,'Участник');
- const data=[];let incoming=0,outgoing=0;
- for(const categoryId of categoryIds){let i=0,o=0;
+ validateMoneyRows(rows);
+ const catalog=documents[report.mode==='participants'?'participants':'transactionTypes'];
+ const expected=new Set(catalog.order),selected=new Set(categoryIds);
+ if(expected.size!==catalog.order.length||selected.size!==categoryIds.length||expected.size!==selected.size||categoryIds.some(id=>!expected.has(id)))throw Error('Неполный или повторяющийся набор категорий');
+ const data=[];let incoming=0n,outgoing=0n;
+ for(const categoryId of categoryIds){let i=0n,o=0n;
   for(const row of rows){
    if(row.date<period.fromSerial||row.date>period.toSerial||norm(row.dd)!=='да')continue;
-   const amount=Number(row.amount)||0;
+   const amount=minorAmount(row);
    if(report.mode==='participants'){
     if(row.toId===selectorId&&row.fromId===categoryId&&row.fromTypeId===participantId)i+=amount;
     if(row.fromId===selectorId&&row.toId===categoryId&&row.toTypeId===participantId)o+=amount;
@@ -55,8 +94,7 @@ export function calculateReport(rows,report,selectorId,categoryIds,period,docume
    }
   }
   data.push({id:categoryId,incoming:i,outgoing:o,balance:i-o});
-  // Known source workbook defect: 32nd visible transaction category excluded from five SUM ranges.
-  if(report.mode==='participants'||data.length<=31){incoming+=i;outgoing+=o;}
+  incoming+=i;outgoing+=o;
  }
  return {rows:data,incoming,outgoing,balance:incoming-outgoing};
 }
@@ -97,6 +135,7 @@ export async function main(db,mount){
  const $=id=>document.getElementById(id);
  let tx=await db.read('transactions/'),docs={},catalogList=SOURCE_CATALOGS.map(x=>[...x]);for(const [alias] of catalogList)docs[alias]=await db.read(alias+'/');
  const root=await db.read('');for(const alias of Object.keys(root.$refs||{})){if(alias==='transactions'||docs[alias]||catalogList.some(x=>x[0]===alias))continue;const extra=await db.read(alias+'/');if(extra&&Array.isArray(extra.order)&&extra.entries&&typeof extra.entries==='object'){docs[alias]=extra;catalogList.push([alias,extra.sourceSheet||alias]);}}
+ validateMoneyRows(tx.rows);
  const refs=validateReferences(tx.rows,docs);if(refs.length)throw Error('Ошибка ссылок: '+refs.slice(0,3).join('; '));
  let tab='Транзакции',dictionaryTab='funds',showCreate=false,dictForm=null,editingId=null;
  let from=tx.period.fromSerial,to=tx.period.toSerial,mode='По периоду',search='';
@@ -107,7 +146,7 @@ export async function main(db,mount){
  function dropdown(doc,selected,onchange){const s=el('select');for(const id of doc.order){const e=el('option',doc.entries[id].name);e.value=id;s.appendChild(e);}if(selected&&doc.entries[selected])s.value=selected;s.addEventListener('change',()=>onchange(s.value));return s;}
  function choose(values,selected,onchange){const s=el('select');for(const x of values){const o=el('option',x);o.value=x;s.appendChild(o);}s.value=selected;s.addEventListener('change',()=>onchange(s.value));return s;}
  const td=(tr,x,cl)=>{const cell=el('td',x,cl);tr.appendChild(cell);};const th=(tr,x,cl)=>{const cell=el('th',x,cl);tr.appendChild(cell);};
- const money=n=>Number(n||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₽';
+ const money=formatMinor;
  const message=(s,bad=false)=>{$('cash-msg').textContent=s;$('cash-msg').className=bad?'error':'good';};
  // The entry iframe deliberately has sandbox=allow-scripts WITHOUT allow-forms.
  // The browser blocks native form submit even when submit handlers call preventDefault.
@@ -134,10 +173,10 @@ export async function main(db,mount){
   host.appendChild(div);
  }
  function renderMetrics(host,inc,out,balance,n){const area=el('div',undefined,'summary');for(const [name,value] of [['Поступления',money(inc)],['Расходы',money(out)],['Остаток',money(balance)],['Транзакций',n]]){const box=el('div',undefined,'metric');box.appendChild(el('span',name));box.appendChild(el('strong',value));area.appendChild(box);}host.appendChild(area);}
- function visibleTransaction(r){const v=describeTransaction(r,docs);return [v.n,dateFromExcel(v.date),v.toType,v.to,v.type,v.fromType,v.from,v.amount,v.note,v.dd];}
+ function visibleTransaction(r){const v=describeTransaction(r,docs);return [v.n,dateFromExcel(v.date),v.toType,v.to,v.type,v.fromType,v.from,money(minorAmount(v)),v.note,v.dd];}
  function transactionForm(host){const box=el('section',undefined,'form');box.appendChild(el('h2','Добавить транзакцию'));const form=el('section'),grid=el('div',undefined,'form-grid');const fields={};
   const input=(key,title,type,value)=>{const i=el('input');i.type=type;i.name=key;i.value=value;if(type==='number')i.step='any';i.required=true;grid.appendChild(line(title,i));fields[key]=i;return i;};
-  input('date','Дата','date',dateFromExcel(to));input('amount','Числовое значение','number','0');
+  input('date','Дата','date',dateFromExcel(to));input('amount','Сумма, ₽','text','0').inputMode='decimal';
   const selectField=(key,title,doc,id,onchange)=>{const s=dropdown(doc,id,onchange||(()=>{}));s.name=key;s.required=true;grid.appendChild(line(title,s));fields[key]=s;return s;};
   const toType=selectField('toTypeId','Тип реципиента',docs.entityTypes,idByLabel(docs.entityTypes,'Фонд'));
   const toAlias=()=>entityAlias(docs,toType.value);
@@ -153,18 +192,19 @@ export async function main(db,mount){
   const buttons=el('div',undefined,'controls');const submit=el('button','Записать транзакцию','primary');submit.type='button';buttons.appendChild(submit);buttons.appendChild(btn('Отмена',()=>{showCreate=false;render();}));form.appendChild(buttons);
   bindWriteAction(form,submit,async()=>{
 
-    const amount=Number(fields.amount.value);if(!Number.isFinite(amount))throw Error('Сумма должна быть конечным числом');
-    const row={excelRow:null,n:Math.max(0,...tx.rows.map(r=>Number(r.n)||0))+1,date:dateToExcel(fields.date.value),toTypeId:fields.toTypeId.value,toId:fields.toId.value,typeId:fields.typeId.value,fromTypeId:fields.fromTypeId.value,fromId:fields.fromId.value,amount,note:note.value,dd:fields.dd.value};
+    validateMoneyRows(tx.rows);
+    const amountMinor=parseMinor(fields.amount.value);
+    const row={excelRow:null,n:Math.max(0,...tx.rows.map(r=>Number(r.n)||0))+1,date:dateToExcel(fields.date.value),toTypeId:fields.toTypeId.value,toId:fields.toId.value,typeId:fields.typeId.value,fromTypeId:fields.fromTypeId.value,fromId:fields.fromId.value,amountMinor,note:note.value,dd:fields.dd.value};
     const errors=validateReferences([row],docs);if(errors.length)throw Error(errors[0]);
-    await db.patch('transactions',[{op:'add',path:'/rows/-',value:row}]);tx=await db.read('transactions/');showCreate=false;await render();message('Транзакция добавлена. Сохраните HTML кнопкой в системной панели.');
+    await db.patch('transactions',[{op:'add',path:'/rows/-',value:row}]);tx=await db.read('transactions/');validateMoneyRows(tx.rows);showCreate=false;await render();message('Транзакция добавлена. Сохраните HTML кнопкой в системной панели.');
   });box.appendChild(form);host.appendChild(box);
  }
  function renderTransactions(host){controlPeriod(host);const ctrl=el('div',undefined,'controls');const q=el('input');q.placeholder='Поиск в транзакциях';q.value=search;q.style.width='300px';q.addEventListener('change',()=>{search=q.value;render();});ctrl.appendChild(q);
   ctrl.appendChild(btn(showCreate?'Скрыть форму':'+ Транзакция',()=>{showCreate=!showCreate;render();},'primary'));host.appendChild(ctrl);if(showCreate)transactionForm(host);
   const period=timeRange(),needle=norm(search);
   const filtered=tx.rows.filter(r=>{if(r.date<period.fromSerial||r.date>period.toSerial)return false;if(!needle)return true;return norm(visibleTransaction(r).join(' ')).includes(needle);});
-  const fund=idByLabel(docs.entityTypes,'Фонд');let inc=0,out=0;for(const r of filtered){if(r.toTypeId===fund)inc+=r.amount;if(r.fromTypeId===fund)out+=r.amount;}
-  renderMetrics(host,inc,out,inc-out,filtered.length);
+  const fund=idByLabel(docs.entityTypes,'Фонд'), totals=calculateLedger(filtered,fund);
+  renderMetrics(host,totals.incoming,totals.outgoing,totals.balance,filtered.length);
   const pane=el('div',undefined,'gridbox'),table=el('table',undefined,'ledger'),head=el('thead'),hr=el('tr');
   for(const name of tx.headers.slice(0,10))th(hr,name);head.appendChild(hr);table.appendChild(head);const body=el('tbody');
   for(const r of filtered){const tr=el('tr');visibleTransaction(r).forEach((v,i)=>td(tr,v??'',i===7?'num':''));body.appendChild(tr);}table.appendChild(body);pane.appendChild(table);host.appendChild(pane);
@@ -178,16 +218,16 @@ export async function main(db,mount){
   svg.setAttribute('aria-label',`Гистограмма остатков ${report.tab}`);
   const ns=(tag,attrs={},text)=>{const n=document.createElementNS(svgns,tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,String(v));if(text!==undefined)n.textContent=String(text);svg.appendChild(n);return n;};
   const inner=w-left-right;
-  const neg=Math.max(0,...rows.map(r=>-r.balance)),pos=Math.max(0,...rows.map(r=>r.balance));
-  const scale=inner/Math.max(1,neg+pos),zero=left+neg*scale;
+  let neg=0n,pos=0n;for(const r of rows){if(r.balance>pos)pos=r.balance;if(-r.balance>neg)neg=-r.balance;}
+  const span=neg+pos||1n, pixels=n=>Number(n*1000000n/span)/1000000*inner,zero=left+pixels(neg);
   ns('line',{x1:zero,y1:top-5,x2:zero,y2:h-17,stroke:'#597588','stroke-width':1.3});
-  rows.forEach((r,i)=>{const y=top+i*step,value=Number(r.balance)||0;
+  rows.forEach((r,i)=>{const y=top+i*step,value=r.balance;
    if(i%2===0)ns('rect',{x:0,y:y-7,width:w,height:step,fill:'#f5f9fc'});
    ns('text',{x:8,y:y+12,fill:'#263f56','font-size':12},labelById(catalog,r.id).slice(0,43));
-   const width=Math.abs(value)*scale;
+   const width=pixels(value<0n?-value:value);
    const bar=ns('rect',{x:value<0?zero-width:zero,y:y-1,width:Math.max(width,value?0.7:0),height:17,fill:value<0?'#e88693':'#53b37c',rx:2});
    const tip=document.createElementNS(svgns,'title');tip.textContent=labelById(catalog,r.id)+': '+money(value);bar.appendChild(tip);
-   ns('text',{x:value<0?Math.max(left-8,zero-width-7):Math.min(w-5,zero+width+7),y:y+12,'text-anchor':value<0?'end':'start',fill:'#1b3649','font-size':11},Math.round(value).toLocaleString('ru-RU'));
+   ns('text',{x:value<0?Math.max(left-8,zero-width-7):Math.min(w-5,zero+width+7),y:y+12,'text-anchor':value<0?'end':'start',fill:'#1b3649','font-size':11},money(value));
   });
   ns('text',{x:left,y:15,fill:'#567185','font-size':12},'← отрицательный остаток');
   ns('text',{x:w-right,y:15,'text-anchor':'end',fill:'#567185','font-size':12},'положительный остаток →');
@@ -200,7 +240,7 @@ export async function main(db,mount){
   const t=el('table'),h=el('thead'),hr=el('tr');for(const [n,c] of [['Категория','label-col'],['Поступления','income'],['Расходы','expense'],['Остаток','balance']])th(hr,n,c);h.appendChild(hr);t.appendChild(h);const body=el('tbody'),tr=el('tr',undefined,'total');
   for(const [v,c] of [['ИТОГО','label-col'],[money(totals.incoming),'income'],[money(totals.outgoing),'expense'],[money(totals.balance),'balance']])td(tr,v,c);body.appendChild(tr);
   for(const r of totals.rows){const row=el('tr');td(row,labelById(catDoc,r.id),'label-col');td(row,money(r.incoming),'income');td(row,money(r.outgoing),'expense');td(row,money(r.balance),'balance');body.appendChild(row);}t.appendChild(body);area.appendChild(t);host.appendChild(area);renderHistogram(host,report,totals,catDoc);
-  host.appendChild(el('p',report.mode==='participants'?'View: суммы взносов участников по выбранному фонду и периоду.':'View: пересчёт из транзакций по ID источников, реципиентов и категорий. В исходном Excel пять итогов исключают последнюю видимую категорию — сохранено для идентичности отчёта.','view-note'));
+  host.appendChild(el('p',report.mode==='participants'?'View: суммы взносов участников по выбранному фонду и периоду.':'View: пересчёт из транзакций по ID источников, реципиентов и категорий. Итоги включают все категории; ДД = Да.','view-note'));
  }
  function selectDictionaryForm(host){
   const form=el('section',undefined,'form'),grid=el('div',undefined,'form-grid');
