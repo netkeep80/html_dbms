@@ -1,0 +1,8 @@
+format: repo-guard/requirement-v1
+id: HDBMS-15
+normative: |
+  ### HDBMS-15 — Передача контекста разработки через ANet Memory
+  Репозиторий объявляет минимальный bootstrap ANet Memory в .anet/memory.json. Контекст и файлы выбираются по текущему Git ref anet/memory, точному Library file_id, размеру и SHA-256. Снимок не заменяет актуальные GitHub issues, требования, исходники или CI. Не публиковать чувствительные данные в GitHub. Новое поколение выбирается нефорсированным expected-head CAS; при недоступности выбранного файла не считать старый снимок текущим. Механизм не входит в runtime HTML DBMS.
+relations:
+  - predicates: [implemented_by]
+    target: {kind: artifact, path: '.anet/memory.json'}
