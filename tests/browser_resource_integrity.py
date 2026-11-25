@@ -20,12 +20,18 @@ SOURCE=r"""export async function main(api,mount){
   results.push(['unchanged',(await api.getHead())===before]);
   await call('valid',()=>api.patch('doc',[{op:'add',path:'/n',value:1}]));
   results.push(['saved',(await api.read('doc/n'))===1]);
+  const parallel=await Promise.allSettled(Array.from({length:9},()=>api.read('doc/n')));
+  results.push(['concurrency',parallel.filter(x=>x.status==='fulfilled').length===8&&parallel.filter(x=>x.status==='rejected').length===1&&parallel.at(-1).reason.message.startsWith('RESOURCE_LIMIT:')]);
   out.textContent=JSON.stringify(results);
  };
 }"""
 def run(context,tmp,kind):
  page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
- page.on('dialog',lambda d:d.accept() if d.type=='confirm' else d.dismiss())
+ dialogs=[]
+ def dialog(d):
+  dialogs.append(d.message)
+  d.accept() if d.type=='confirm' else d.dismiss()
+ page.on('dialog',dialog)
  base=ROOT/'dist'/f'html_dbms.{kind}'
  page.goto(base.as_uri(),wait_until='domcontentloaded')
  assert page.evaluate('isSecureContext && !!crypto.subtle')
@@ -44,7 +50,7 @@ def run(context,tmp,kind):
  expect(app.locator('pre')).to_contain_text('"saved",true',timeout=30000)
  results=dict(json.loads(app.locator('pre').text_content()))
  assert results['oversized'].startswith('RESOURCE_LIMIT:') and results['unchanged'] is True
- assert results['valid']=='accepted' and results['saved'] is True
+ assert results['valid']=='accepted' and results['saved'] is True and results['concurrency'] is True
  page.locator('#validation-toggle').click();page.locator('#verify').click()
  expect(page.locator('#validation-report')).to_contain_text('"status": "complete"')
  # Independently encrypt a valid /4 event with small Patch and oversized replay.
@@ -63,6 +69,13 @@ def run(context,tmp,kind):
   const r=await event(fixture.root,[{op:'replace',path:'/$refs/doc',value:c}]);fixture.data.publicHeads.Resource=r;return {data:fixture.data,head:r};
  }""",fixture)
  badfile=tmp/f'limited.{kind}';badfile.write_text(replace_store(base.read_text('utf8'),kind,bad['data']),encoding='utf8')
+ # Actual import as well as initial opening. Use native File/DataTransfer for XHTML.
+ page.locator('#input-html').evaluate("""(e,p)=>{
+   const dt=new DataTransfer();dt.items.add(new File([p.raw],p.name,{type:'text/plain'}));
+   e.files=dt.files;e.dispatchEvent(new Event('change',{bubbles:true}));
+ }""",{'raw':badfile.read_text('utf8'),'name':badfile.name})
+ expect(page.locator('#status')).to_contain_text('RESOURCE_LIMIT',timeout=30000)
+ assert page.locator('#entry-area iframe').count()==0
  page.goto(badfile.as_uri(),wait_until='domcontentloaded')
  expect(page.locator('#status')).to_contain_text('RESOURCE_LIMIT',timeout=30000)
  assert page.locator('#entry-area iframe').count()==0 and page.locator('.entry-launch').count()==0
@@ -70,8 +83,13 @@ def run(context,tmp,kind):
  page.locator('#validation-toggle').click();page.locator('#verify').click()
  expect(page.locator('#validation-report')).to_contain_text('"status": "limited"')
  page.locator('#debug-toggle').click();expect(page.locator('#debug-raw')).to_contain_text('"status": "limited"')
- page.locator('#validation-toggle').click();page.locator('#recovery-head').fill(fixture['root']);page.locator('#truncate').click()
+ page.locator('#validation-toggle').click()
+ page.locator('#recovery-section summary').click()
+ expect(page.locator('#recovery-head')).to_be_visible()
+ page.locator('#recovery-head').fill(fixture['root'])
+ before=len(dialogs);page.locator('#truncate').click()
  expect(page.locator('#status')).to_contain_text('диагноз')
+ assert len(dialogs)==before,'Resource refusal must not offer destructive confirmation'
  with page.expect_download() as dl:page.locator('#save').click()
  out=tmp/f'saved-limited.{kind}';dl.value.save_as(out)
  assert store_from_output(kind,out.read_text('utf8'))==bad['data']
