@@ -150,6 +150,7 @@ def main():
    other=ctx.new_page();other.goto(saved.as_uri(),wait_until='domcontentloaded')
    reopened=app_frame(other)
    expect(reopened.locator('#cash-count')).to_contain_text(str(len(f['entries']))+' операций')
+   assert other.evaluate("document.querySelectorAll('#db-store').length===1 && document.querySelector('#db-store').textContent===''")
    recovered=other.evaluate("""async raw=>{
     const db=HTML_DBMS,s=db.adoptStore(raw),head=db.catalog(s)['Касса'],r=await db.readState(s,head),t=await db.readState(s,r.$refs.transactions);
     return t.rows.slice(-3).map(row=>[row.amountMinor,Object.hasOwn(row,'amount')]);

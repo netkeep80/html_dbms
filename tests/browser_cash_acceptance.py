@@ -9,6 +9,16 @@ from browser_network import block_service_workers
 
 root = Path(__file__).resolve().parents[1]
 
+def assert_live_store_cleared(page):
+    # Verify actual DOM textContent, not normalized locator text. Retry only until
+    # the same exact invariant holds; include size-only diagnostics on failure.
+    try:
+        page.wait_for_function("""()=>{const nodes=document.querySelectorAll('#db-store');return nodes.length===1&&nodes[0].textContent===''}""",timeout=5000)
+    except Exception as error:
+        metadata=page.evaluate("""()=>Array.from(document.querySelectorAll('#db-store'),n=>({length:n.textContent.length,children:n.childNodes.length,type:n.type}))""")
+        raise AssertionError('Live ciphertext was not cleared: '+str(metadata)) from error
+    assert page.evaluate("""()=>document.querySelector('#db-store').textContent===''""")
+
 def frame(page):
     return page.frame_locator('iframe[title="Приложение из JSON entry"]')
 
@@ -46,6 +56,7 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         app=frame(page)
         expect(app.locator('h1')).to_contain_text('Касса',timeout=30000)
         assert page.locator('#entry-area iframe').get_attribute('sandbox')=='allow-scripts', 'Sandbox must remain restrictive'
+        assert_live_store_cleared(page)
         head_before=page.locator('#head').input_value()
         dict_page(page,'Типы Транзакций')
         # User requested no Excel source line numbers either in UI or dictionary JSON.
@@ -131,7 +142,7 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         app2.locator('.dict-nav button',has_text='Проекты').click()
         expect(app2.locator('.gridbox tbody tr').filter(has_text=project_id)).to_contain_text('Проект Б')
         # Inspect recovered JSON, not just visual cells.
-        assert second.locator('#db-store').text_content()==''
+        assert_live_store_cleared(second)
         from browser_dual import store_from_output
         data=second.evaluate('''async raw=>{
           const db=HTML_DBMS,s=db.adoptStore(raw),h=raw.publicHeads['Касса'];
