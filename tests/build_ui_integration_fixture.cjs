@@ -13,8 +13,10 @@ const {createModel,SHEETS,loadFixture}=require(path.join(root,'examples/cash/imp
  let h=g.rootHead;
  for(const [alias,d] of [['transactions',transactions],...SHEETS.map(([a])=>[a,catalogs[a]])]){const t=await db.createDocument(s,h,alias,d);db.commit(s,t.store);h=t.rootHead;}
  db.publish(s,'Касса',h,g.rootHead);
- let html=fs.readFileSync(path.join(root,'dist/html_dbms_cash_demo.html'),'utf8');
- html=html.replace(/<script id="db-store" type="application\/json">[\s\S]*?<\/script>/,'<script id="db-store" type="application/json">'+JSON.stringify(db.snapshot(s))+'</script>');
+ const production=fs.readFileSync(path.join(root,'dist/html_dbms.html'),'utf8');
+ const marker=/<script id="db-store" type="application\/json">([\s\S]*?)<\/script>/g;
+ if([...production.matchAll(marker)].length!==1)throw Error('Expected exactly one production store');
+ const html=production.replace(marker,()=>'<script id="db-store" type="application/json">'+JSON.stringify(db.snapshot(s)).replace(/</g,'\\u003c')+'</script>');
  const output=process.argv[2]||path.join(fs.mkdtempSync(path.join(os.tmpdir(),'cash-rpc-')),'cash.html');
  fs.writeFileSync(output,html,{flag:'wx'});
  console.log('Native crypto UI integration fixture ready:',db.storeInfo(s).count,output);

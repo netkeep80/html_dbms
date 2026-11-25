@@ -9,6 +9,29 @@ from browser_network import block_service_workers
 
 root = Path(__file__).resolve().parents[1]
 
+def assert_production_fixture(candidate):
+    """All bytes except the physical JSON payload must equal current production."""
+    import re
+    pattern=rb'(<script id="db-store" type="application/json">)([\s\S]*?)(</script>)'
+    production=(root/'dist/html_dbms.html').read_bytes()
+    def without_store(data):
+        assert len(list(re.finditer(pattern,data)))==1,'Expected exactly one physical store'
+        assert b'<script id="cash-demo-source"' not in data,'Unexpected trusted entry'
+        return re.sub(pattern,lambda m:m.group(1)+m.group(3),data)
+    expected=without_store(production)
+    actual=candidate.read_bytes()
+    assert without_store(actual)==expected,'Fixture shell differs from production bytes'
+    # Negative controls: historical executable or an altered executable byte must fail.
+    historical=(root/'dist/html_dbms_cash_demo.html').read_bytes()
+    try:
+        same=without_store(historical)==expected
+    except AssertionError:
+        same=False
+    assert not same,'Historical demo unexpectedly accepted'
+    mutated=actual.replace(b'<script id="app-source">',b'<script id="app-source"> ',1)
+    assert mutated!=actual and without_store(mutated)!=expected,'Executable mutation not detected'
+    print('CASH RPC FIXTURE IDENTITY PASS: all non-store bytes equal production; historical/mutated shell rejected')
+
 def assert_live_store_cleared(page):
     # Verify actual DOM textContent, not normalized locator text. Retry only until
     # the same exact invariant holds; include size-only diagnostics on failure.
@@ -31,6 +54,7 @@ def dict_page(page, name):
 with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
     fixture=Path(tmp)/'native_cash_browser_ui.html'
     subprocess.run(['node',str(root/'tests/build_ui_integration_fixture.cjs'),str(fixture)],check=True)
+    assert_production_fixture(fixture)
     with sync_playwright() as pw:
         browser=pw.chromium.launch(args=['--no-sandbox','--disable-dev-shm-usage'],headless=True)
         context=browser.new_context(viewport={'width':1520,'height':900},accept_downloads=True)
