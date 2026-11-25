@@ -70,6 +70,24 @@ def minor(value):
  result=n*100//dn
  return result
 
+def source_lexemes(xlsx,fixture):
+ # Never emit source values into CI logs; stdout is consumed directly by the importer.
+ book=xlsx_cells(xlsx);s=book['Транзакции']
+ f=json.loads(Path(fixture).read_text('utf8'),parse_float=Decimal)
+ assert f['sourceSha256']==hashlib.sha256(Path(xlsx).read_bytes()).hexdigest(),'XLSX checksum mismatch'
+ expected=[i for i in range(4,2487) if isinstance(get(s,'D',i),(float,int)) and get(s,'E',i) and get(s,'H',i)]
+ # A candidate row with a missing amount is not silently dropped.
+ expected=[i for i in expected if get(s,'C',i) is not None or get(s,'J',i) is not None]
+ assert len(expected)==len(f['entries']),'Source row count mismatch'
+ result={}
+ for i,row in zip(expected,f['entries']):
+  assert row['excelRow']==i,'Source row identity mismatch'
+  n=minor(get(s,'J',i))
+  assert abs(n)<=9007199254740991,'Source money outside storage bound'
+  assert minor(row['amount'])==n,'Extracted amount differs from original XML'
+  result[str(i)]=('-' if n<0 else '')+str(abs(n)//100)+'.'+str(abs(n)%100).zfill(2)
+ print(json.dumps(result,separators=(',',':')))
+
 def oracle(raw,selected,categories,mode,period):
  # Compute directly from original workbook cells, never JS views or formula caches.
  totals={fold(c):[0,0] for c in categories}
@@ -154,4 +172,6 @@ def main():
  same(data['transactions']['source']['sha256'],hashlib.sha256(xlsx.read_bytes()).hexdigest(),'Excel source checksum')
  assert not any('"reports"' in str(data['root']['$refs']) for _ in [0]),'Analytic views must not be persisted'
  print(f'EXCEL↔HTML_DBMS PASS: {len(rows)} nonempty transactions, 11 source document chains, {dict_cells} dictionary cells, {report_cells} view cells, {variants} normalized spelling variants, all six exact oracle reports; cached Excel differences: {cache_differences}')
-if __name__=='__main__':main()
+if __name__=='__main__':
+ if len(sys.argv)>1 and sys.argv[1]=='--source-lexemes':source_lexemes(Path(sys.argv[2]),Path(sys.argv[3]))
+ else:main()

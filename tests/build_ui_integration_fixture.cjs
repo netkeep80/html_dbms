@@ -9,9 +9,9 @@ const subtle={
 };
 Object.defineProperty(globalThis,'crypto',{value:{subtle},configurable:true});
 const db=require(path.join(root,'src/core-node.cjs'));
-const {createModel,SHEETS}=require(path.join(root,'examples/cash/import-model.cjs'));
+const {createModel,SHEETS,loadFixture}=require(path.join(root,'examples/cash/import-model.cjs'));
 (async()=>{
- const f=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/cash_excel_extracted.json'),'utf8'));
+ const f=loadFixture(path.join(root,'tests/fixtures/cash_excel_extracted.json'));
  const {transactions,catalogs}=createModel(f);
  // Browser RPC fixture keeps every dictionary but only 20 cash rows. Full 1641-row parity is tested independently.
  transactions.rows=transactions.rows.slice(0,20);

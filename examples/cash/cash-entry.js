@@ -61,6 +61,11 @@ export function formatMinor(value){
  const whole=(n/100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'\u00a0');
  return (value<0n?'-':'')+whole+','+(n%100n).toString().padStart(2,'0')+' ₽';
 }
+// Ungrouped search alias preserves the former decimal-number text search as well as exact display.
+export function decimalMinor(value){
+ const n=value<0n?-value:value,fraction=(n%100n).toString().padStart(2,'0').replace(/0+$/,'');
+ return (value<0n?'-':'')+(n/100n).toString()+(fraction?'.'+fraction:'');
+}
 export function calculateLedger(rows,fund){
  validateMoneyRows(rows);
  let incoming=0n,outgoing=0n;
@@ -70,32 +75,33 @@ export function calculateLedger(rows,fund){
 
 /** Exact financial views: all catalog categories, stable IDs, inclusive period and DD. */
 export function calculateReport(rows,report,selectorId,categoryIds,period,documents){
- const participantId=(documents.entityTypes?.order||[]).find(id=>entityAlias(documents,id)==='participants')||idByLabel(documents.entityTypes,'Участник');
  validateMoneyRows(rows);
- const catalog=documents[report.mode==='participants'?'participants':'transactionTypes'];
+ if(!['entityType','entity','participants'].includes(report.mode))throw Error('Неизвестный режим отчёта');
+ const participants=report.mode==='participants';
+ const participantId=(documents.entityTypes?.order||[]).find(id=>entityAlias(documents,id)==='participants')||idByLabel(documents.entityTypes,'Участник');
+ const catalog=documents[participants?'participants':'transactionTypes'];
  const expected=new Set(catalog.order),selected=new Set(categoryIds);
  if(expected.size!==catalog.order.length||selected.size!==categoryIds.length||expected.size!==selected.size||categoryIds.some(id=>!expected.has(id)))throw Error('Неполный или повторяющийся набор категорий');
- const data=[];let incoming=0n,outgoing=0n;
- for(const categoryId of categoryIds){let i=0n,o=0n;
-  for(const row of rows){
-   if(row.date<period.fromSerial||row.date>period.toSerial||norm(row.dd)!=='да')continue;
-   const amount=minorAmount(row);
-   if(report.mode==='participants'){
-    if(row.toId===selectorId&&row.fromId===categoryId&&row.fromTypeId===participantId)i+=amount;
-    if(row.fromId===selectorId&&row.toId===categoryId&&row.toTypeId===participantId)o+=amount;
-   }else if(row.typeId===categoryId){
-    if(report.mode==='entityType'){
-     if(row.toTypeId===selectorId)i+=amount;
-     if(row.fromTypeId===selectorId)o+=amount;
-    }else{
-     if(row.toId===selectorId)i+=amount;
-     if(row.fromId===selectorId)o+=amount;
-    }
-   }
+ const data=categoryIds.map(id=>({id,incoming:0n,outgoing:0n,balance:0n}));
+ const byId=new Map(data.map(r=>[r.id,r])),types=new Set(documents.transactionTypes.order);
+ const add=(id,key,n)=>{const cell=byId.get(id);if(!cell)throw Error('Категория операции отсутствует в отчёте');cell[key]+=n;};
+ for(const row of rows){
+  if(!types.has(row.typeId))throw Error('Тип операции отсутствует в порядке справочника');
+  if(row.date<period.fromSerial||row.date>period.toSerial||norm(row.dd)!=='да')continue;
+  const n=minorAmount(row);
+  if(participants){
+   if(row.toId===selectorId&&row.fromTypeId===participantId)add(row.fromId,'incoming',n);
+   if(row.fromId===selectorId&&row.toTypeId===participantId)add(row.toId,'outgoing',n);
+  }else if(report.mode==='entityType'){
+   if(row.toTypeId===selectorId)add(row.typeId,'incoming',n);
+   if(row.fromTypeId===selectorId)add(row.typeId,'outgoing',n);
+  }else{
+   if(row.toId===selectorId)add(row.typeId,'incoming',n);
+   if(row.fromId===selectorId)add(row.typeId,'outgoing',n);
   }
-  data.push({id:categoryId,incoming:i,outgoing:o,balance:i-o});
-  incoming+=i;outgoing+=o;
  }
+ let incoming=0n,outgoing=0n;
+ for(const cell of data){cell.balance=cell.incoming-cell.outgoing;incoming+=cell.incoming;outgoing+=cell.outgoing;}
  return {rows:data,incoming,outgoing,balance:incoming-outgoing};
 }
 export function describeTransaction(row,docs){
@@ -202,7 +208,7 @@ export async function main(db,mount){
  function renderTransactions(host){controlPeriod(host);const ctrl=el('div',undefined,'controls');const q=el('input');q.placeholder='Поиск в транзакциях';q.value=search;q.style.width='300px';q.addEventListener('change',()=>{search=q.value;render();});ctrl.appendChild(q);
   ctrl.appendChild(btn(showCreate?'Скрыть форму':'+ Транзакция',()=>{showCreate=!showCreate;render();},'primary'));host.appendChild(ctrl);if(showCreate)transactionForm(host);
   const period=timeRange(),needle=norm(search);
-  const filtered=tx.rows.filter(r=>{if(r.date<period.fromSerial||r.date>period.toSerial)return false;if(!needle)return true;return norm(visibleTransaction(r).join(' ')).includes(needle);});
+  const filtered=tx.rows.filter(r=>{if(r.date<period.fromSerial||r.date>period.toSerial)return false;if(!needle)return true;return norm([...visibleTransaction(r),decimalMinor(minorAmount(r))].join(' ')).includes(needle);});
   const fund=idByLabel(docs.entityTypes,'Фонд'), totals=calculateLedger(filtered,fund);
   renderMetrics(host,totals.incoming,totals.outgoing,totals.balance,filtered.length);
   const pane=el('div',undefined,'gridbox'),table=el('table',undefined,'ledger'),head=el('thead'),hr=el('tr');
@@ -306,7 +312,7 @@ export async function main(db,mount){
   t.appendChild(body);pane.appendChild(t);host.appendChild(pane);
  }
 
- async function render(){renderTabs();$('cash-count').textContent=`${tx.rows.length.toLocaleString('ru-RU')} операций · ${catalogList.length} справочников · 6 views`;
+ async function render(){validateMoneyRows(tx.rows);renderTabs();$('cash-count').textContent=`${tx.rows.length.toLocaleString('ru-RU')} операций · ${catalogList.length} справочников · 6 views`;
   const content=$('cash-content');content.replaceChildren();if(tab==='Транзакции')renderTransactions(content);else if(tab==='Справочники')renderDictionaries(content);else renderReport(content,REPORTS.find(r=>r.tab===tab));
  }
  await render();message('Данные восстановлены из JSON-цепочек. Справочные значения связаны по ID.');

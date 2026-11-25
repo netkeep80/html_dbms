@@ -3,11 +3,11 @@
 const fs=require('node:fs'),path=require('node:path');
 const project=path.resolve(__dirname,'../..');
 const db=require(path.join(project,'src/core-node.cjs'));
-const {createModel,SHEETS}=require('./import-model.cjs');
+const {createModel,SHEETS,loadFixture}=require('./import-model.cjs');
 const fixturePath=process.argv[2]||path.join(project,'tests/fixtures/cash_excel_extracted.json');
 const output=process.argv[3]||path.join(project,'dist/html_dbms_cash_demo.html');
 async function main(){
- const f=JSON.parse(fs.readFileSync(fixturePath,'utf8'));
+ const f=loadFixture(fixturePath);
  const {transactions,catalogs}=createModel(f);
  const appSource=fs.readFileSync(path.join(__dirname,'cash-entry.js'),'utf8');
  const store=db.newStore();

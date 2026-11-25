@@ -46,7 +46,9 @@ with sync_playwright() as pw:
  assert page.locator('.pager').count()==0, 'Pager must be removed'
  assert page.locator('text=План/факт').count()==0
  page.locator('#cash-tabs button',has_text='Операции(ТипСущности)').click()
- expect(page.locator('.report .total')).to_contain_text('ИТОГО')
+ for i,key in enumerate(('incoming','outgoing','balance'),1):
+  n=int(data['reports']['Операции(ТипСущности)'][key]); expected=('−' if n<0 else '')+f'{abs(n)//100:,}'.replace(',','\u00a0')+','+f'{abs(n)%100:02}'+' ₽'
+  expect(page.locator('.report .total td').nth(i)).to_have_text(expected.replace('−','-'))
  assert page.locator('.histogram svg rect').count()>=32, 'Histogram must plot categories'
  page.screenshot(path=str(root/'dist/cash_demo_report.png'))
  page.locator('#cash-tabs button',has_text='Участники(Фонд)').click()

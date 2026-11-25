@@ -1,6 +1,23 @@
 'use strict';
 /** Pure import stage. Runtime documents only contain source records and stable dictionary IDs. */
 const {parseMinor}=require('./cash-entry.js');
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const fixtureDir=path.resolve(__dirname,'../../tests/fixtures'),excelFixture=path.join(fixtureDir,'cash_excel_extracted.json');
+function loadFixture(file){
+ file=path.resolve(file);
+ if(file===excelFixture){
+  // Parse original XLSX decimal lexemes with an independent exact parser before any event is encrypted.
+  const lexemes=JSON.parse(cp.execFileSync('python3',[path.resolve(__dirname,'../../tests/compare_excel.py'),'--source-lexemes',path.join(fixtureDir,'cash_input.xlsx'),file],{encoding:'utf8'}));
+  const f=JSON.parse(fs.readFileSync(file,'utf8'));
+  return {...f,entries:f.entries.map(row=>({...row,amount:lexemes[String(row.excelRow)]}))};
+ }
+ // JSON.parse may round a decimal numeric literal before handing it to us.
+ // Only syntactically integral Number tokens or original decimal strings are accepted.
+ return JSON.parse(fs.readFileSync(file,'utf8'),(key,value,context)=>{
+  if(key==='amount'&&typeof value==='number'&&(!context?.source||!/^(-?)(0|[1-9]\d*)$/.test(context.source)))throw Error('Дробная сумма источника должна быть точной десятичной строкой');
+  return value;
+ });
+}
 // Numeric sources are accepted only as exact integer rubles. Fractional sources must supply original decimal text.
 function sourceAmountMinor(value){
  if(typeof value==='number'&&Number.isSafeInteger(value))return parseMinor(String(value));
@@ -59,4 +76,4 @@ function createModel(f){
  const transactions={sourceSheet:'Транзакции',headers:f.headers.slice(0,10),period:f.period,rows,source:{file:f.sourceFile,sha256:f.sourceSha256,excelSheets:f.sheetNames.length,sourceRows:rows.length,caseVariants:variants}};
  return {transactions,catalogs,typeDocuments:TYPE_DOCUMENTS};
 }
-module.exports={SHEETS,TYPE_DOCUMENTS,createModel,fold,sourceAmountMinor};
+module.exports={SHEETS,TYPE_DOCUMENTS,createModel,fold,sourceAmountMinor,loadFixture};

@@ -2,11 +2,13 @@
 No insecure cryptographic shim. HTTP loopback is a secure context for Web Crypto.
 """
 from pathlib import Path
+import json,subprocess
 from functools import partial
 from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
 from threading import Thread
 from playwright.sync_api import sync_playwright,expect
 root=Path(__file__).resolve().parents[1];demo=root/'dist/html_dbms_cash_demo.html'
+data=json.loads(subprocess.check_output(['node',str(root/'tests/dump-demo.cjs'),str(demo)],text=True))
 server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=str(demo.parent)))
 Thread(target=server.serve_forever,daemon=True).start()
 url=f'http://127.0.0.1:{server.server_address[1]}/{demo.name}'
@@ -25,7 +27,9 @@ try:
   expect(app.locator('#cash-count')).to_contain_text('1\u00a0641',timeout=20000)
   assert app.locator('#cash-tabs button').count()==8,'Wrong number of primary tabs'
   app.locator('#cash-tabs button',has_text='Операции(ТипСущности)').click()
-  expect(app.locator('.report .total')).to_contain_text('ИТОГО')
+  for i,key in enumerate(('incoming','outgoing','balance'),1):
+   n=int(data['reports']['Операции(ТипСущности)'][key]); expected=('-' if n<0 else '')+f'{abs(n)//100:,}'.replace(',','\u00a0')+','+f'{abs(n)%100:02}'+' ₽'
+   expect(app.locator('.report .total td').nth(i)).to_have_text(expected)
   app.locator('#cash-tabs button',has_text='Участники(Фонд)').click()
   expect(app.locator('.report .total')).to_contain_text('3\u00a0342\u00a0455,00',timeout=20000)
   app.locator('#cash-tabs button',has_text='Справочники').click()

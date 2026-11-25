@@ -1,7 +1,17 @@
 'use strict';
 const assert=require('node:assert/strict');
 const {parseMinor,minorAmount,validateMoneyRows,formatMinor,calculateLedger,calculateReport}=require('../examples/cash/cash-entry.js');
-const {sourceAmountMinor}=require('../examples/cash/import-model.cjs');
+const {sourceAmountMinor,loadFixture}=require('../examples/cash/import-model.cjs');
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'cash-lexemes-'));
+try{
+ const file=path.join(tmp,'fixture.json');
+ for(const raw of ['1.0000000000000000001','1e2','0.29']){
+  fs.writeFileSync(file,'{"amount":'+raw+'}');assert.throws(()=>loadFixture(file));
+ }
+ fs.writeFileSync(file,'{"amount":"0.29"}');assert.equal(loadFixture(file).amount,'0.29');
+ fs.writeFileSync(file,'{"amount":100}');assert.equal(loadFixture(file).amount,100);
+}finally{fs.rmSync(tmp,{recursive:true,force:true});}
 for(const [text,n] of [['0.1',10],['0,29',29],['-0.01',-1],['-0',0],[' 000.20 ',20],['90071992547409.91',Number.MAX_SAFE_INTEGER],['-90071992547409.91',-Number.MAX_SAFE_INTEGER]]){
  assert.equal(parseMinor(text),n);assert.ok(!Object.is(parseMinor(text),-0));
 }
@@ -22,6 +32,7 @@ assert.equal(t.rows[31].incoming,BigInt(max));assert.equal(t.rows[32].outgoing,B
 assert.equal(t.rows.reduce((s,x)=>s+x.balance,0n),1n);
 assert.equal(calculateReport(rows.slice().reverse(),r,'f',ids.slice().reverse(),period,docs).balance,1n);
 assert.throws(()=>calculateReport(rows,r,'f',ids.slice(0,31),period,docs));
+assert.throws(()=>calculateReport([...rows,row(1,'omitted','f','pType',{date:99})],r,'f',ids,period,docs));
 assert.throws(()=>calculateReport([...rows,{...row(0,ids[0], 'f','pType',{date:99}),amountMinor:null}],r,'f',ids,period,docs));
 const ledger=calculateLedger(rows.filter(x=>x.date===1),'f');assert.equal(ledger.balance,6n);
 assert.equal(calculateLedger(Array.from({length:10000},()=>row(1,ids[0])),'f').incoming,10000n);
