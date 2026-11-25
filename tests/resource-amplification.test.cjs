@@ -74,7 +74,7 @@ async function scaledReplay(){
 }
 async function main(){
  // Independent UTF-8 oracle, including malformed surrogate sequences and escaping.
- const values=[null,true,false,0,-0,1e-7,1e21,1.2345,'\u0000\b\t\n\f\r"\\éЖ😀\ud800\udc00\ud800',{'\udc00😀\n':[null,'é',-123.4]}];
+ const values=[null,true,false,0,-0,1e-7,1e21,1.2345,'',' !#[]~\x7f','ascii'.repeat(13000),'\u0000\b\t\n\f\r"\\éЖ😀\ud800\udc00\ud800',{'\udc00😀\n':[null,'é',-123.4]}];
  for(const v of values){const m=db.measureJson(v),o=measure(v);assert.deepEqual({bytes:m.bytes,nodes:m.nodes,maxDepth:m.depth},o);}
  const rng=(()=>{let x=45;return n=>{x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)%n;};})();
  for(let i=0;i<250;i++){const v=Array.from({length:20},()=>String.fromCharCode(rng(65536)));assert.equal(db.measureJson(v).bytes,Buffer.byteLength(JSON.stringify(v)));}

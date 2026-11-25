@@ -25,6 +25,8 @@ function sizeCheck(m,limits=STATE){resource(m.bytes<=limits.bytes,'Materialized 
 // Exact UTF-8 length of JSON.stringify(string), without allocating its escaped form.
 function quotedBytes(s,max,b){
  resource(s.length+2<=max,'JSON byte limit exceeded');spend(b,s.length+2);
+ // Measured long ASCII payloads need no per-code-unit escaping branch.
+ if(/^[\x20-\x21\x23-\x5b\x5d-\x7f]*$/.test(s))return s.length+2;
  let n=2;for(let i=0;i<s.length;i++){
   const c=s.charCodeAt(i);
   if(c===34||c===92||c===8||c===9||c===10||c===12||c===13)n+=2;
