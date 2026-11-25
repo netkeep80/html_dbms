@@ -9,6 +9,7 @@ function makeOption(label,value){const e=makeElement('option');e.textContent=lab
 // Export from a pristine template: never copy decrypted application DOM into saved HTML.
 let exportTemplate, templateBytes;
 const STARTER_SOURCE=$('starter-source').textContent,demoNode=$('cash-demo-source'),DEMO_SOURCE=demoNode?JSON.parse(demoNode.textContent):undefined;
+let pendingRpc=0;
 let store, rootHead=null, publicName=null, busy=null, activeFrame=null, lastDiagnosis=null, openEpoch=0, rpcBusy=null, session=null, startupListener=null;
 const OWN=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function notice(message,bad=false){$('status').textContent=message;$('status').className='notice '+(bad?'error':'good');}
@@ -121,7 +122,8 @@ async function launchSandbox(entry){
    if(msg.kind==='html-dbms-error'){notice('entry: '+msg.error,true);return;}
    if(msg.kind!=='html-dbms-rpc')return;
    const reply=data=>{if(session===s)port.postMessage({kind:'html-dbms-reply',id:msg.id,...data});};
-   runRpc(msg,s).then(value=>reply({ok:true,value}),e=>reply({ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))}));
+   if(pendingRpc>=8){reply({ok:false,error:'RESOURCE_LIMIT: RPC concurrency limit exceeded'});return;}
+   pendingRpc++;runRpc(msg,s).then(value=>reply({ok:true,value}),e=>reply({ok:false,error:(e?.code?e.code+': ':'')+(e?.message||String(e))})).finally(()=>{pendingRpc--;});
   };
   port.postMessage({kind:'html-dbms-start',source:entry.source,exportName:entry.export||'main'});
  };
@@ -159,7 +161,7 @@ async function runRpc(message,s){
  needRoot();const c=context();
  const guard=()=>{requireCurrent(c);if(session!==s)throw Error('Сессия entry завершена');};
  guard();if(c.hash&&fragmentHead(c.hash)!==c.head)throw Error('Контекст URL изменился');
- const params=message.payload||{};
+ const params=message.payload||{};db.assertJson(params);
  switch(message.method){
  case 'read':{const ref=params.ref;if(typeof ref!=='string')throw Error('Неверная ссылка');const value=ref===''?await db.readState(c.store,c.head):(await db.resolve(c.store,c.head,c.head,{$ref:ref})).value;guard();return value;}
  case 'getHead':return c.head;
@@ -195,16 +197,17 @@ async function createDatabase(){
 }
 async function showDebug(){
  if(!debugVisible())return false;
- const c=context(),h=c.head||fieldHead(),root=await db.inspect(c.store,h),children=Object.create(null);
+ const c=context(),h=c.head||fieldHead();$('debug-raw').textContent='';
+ const text=await db.debugDatabase(c.store,h);
  if(!current(c)||!debugVisible())return false;
- if(root.status==='complete')for(const [name,head]of Object.entries(getRootRefs(root.chain.state))){children[name]=await db.inspect(c.store,head);if(!current(c)||!debugVisible())return false;}
- $('debug-raw').textContent=JSON.stringify({rootHead:h,root,children},null,2);return true;
+ $('debug-raw').textContent=text;return true;
 }
 async function verify(){
  const c=context(),h=c.head||fieldHead();lastDiagnosis=null;
  try{const result=await db.verifyDatabase(c.store,h);if(!current(c))return;validationOutput(result);notice('Цепочки и ссылки выбранной БД проверены.');}
  catch(e){if(!current(c))return;
-  if(e.diagnosis?.sourceHead===h){lastDiagnosis=e.diagnosis;validationOutput({status:'broken',rootHead:h,diagnosis:e.diagnosis});notice('Обнаружен разрыв цепочки: '+e.code,true);}
+  if(e.code==='RESOURCE_LIMIT'){validationOutput({status:'limited',code:e.code,message:e.message,rootHead:h});err(e);}
+  else if(e.diagnosis?.sourceHead===h){lastDiagnosis=e.diagnosis;validationOutput({status:'broken',rootHead:h,diagnosis:e.diagnosis});notice('Обнаружен разрыв цепочки: '+e.code,true);}
   else{validationOutput({status:'failed',code:e.code||'ERROR',message:e.message});err(e);}
  }
 }

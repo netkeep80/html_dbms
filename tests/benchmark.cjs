@@ -16,7 +16,7 @@ Object.create=function(proto,...args){const obj=native.create(proto,...args);ret
 JSON.stringify=function(value,...args){const result=native.stringify(value,...args);if(physical(value?.records))counts.serializedStoreBytes+=Buffer.byteLength(result);return result;};
 Buffer.from=function(value,...args){if(typeof value==='string'&&value.length===64&&args[0]==='base64url')counts.headDecodes++;return native.from.call(Buffer,value,...args);};
 globalThis.atob=function(s){if(s.length===64&&!s.endsWith('='))counts.headDecodes++;return native.atob(s);};
-function instrument(s){for(const [anchor,key] of [['function patch(json,ops){','patchCalls'],['function validateStore(s){','fullValidation']]){assert.ok(s.includes(anchor));s=s.replace(anchor,anchor+'globalThis.__hdbmsBench.'+key+'++;');}return s;}
+function instrument(s){for(const [anchor,key] of [['function patch(json,ops){','patchCalls'],['function validateStore(s){','fullValidation']]){const actual=s.includes(anchor)?anchor:anchor==='function patch(json,ops){'?'function patch(json,ops,parent){':anchor;assert.ok(s.includes(actual));s=s.replace(actual,actual+'globalThis.__hdbmsBench.'+key+'++;');}return s;}
 async function measured(kind,fn){mode=kind;global.gc?.();const heap=process.memoryUsage().heapUsed,start=performance.now();reset();await fn();const result={...counts,ms:+(performance.now()-start).toFixed(3),heapDeltaBytes:process.memoryUsage().heapUsed-heap};mode='';return result;}
 (async()=>{
  const oldPath=path.join(temp,'baseline.cjs'),newPath=path.join(temp,'current.mjs');

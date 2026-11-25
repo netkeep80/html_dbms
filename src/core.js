@@ -222,6 +222,19 @@ async function inspectChain(s,head,limit=MAX_RECORDS,visit,b=budget()){const sta
 const events=rev.reverse();let state=clone(events[0].r[1].state,b);if(visit)visit(state,events[0].head,false);for(let i=1;i<events.length;i++){try{state=patch(state,events[i].r[2],b);}catch(e){const d=diagnose(e,head,events.slice(i));if(d.status==='limited')return d;d.invalid=events[i].head;return d;}if(visit)visit(state,events[i-1].head,true);}
 unchanged(s,revisionAtStart);return {status:'complete',chain:{head,genesis:clone(events[0].r[1],undefined,RECORD),state,events,stats:deltaStats(b,start),size:measureJson(state)}};
 }catch(e){return diagnose(e,head);}}
+async function debugDatabase(s,head){
+ const b=budget(),root=await inspectChain(s,head,MAX_RECORDS,undefined,b),children=Object.create(null);
+ if(root.status==='complete'){
+  for(const [name,h] of Object.entries(getRootRefs(root.chain.state))){
+   const child=await inspectChain(s,h,MAX_RECORDS,undefined,b);
+   if(child.status==='limited')return JSON.stringify({rootHead:head,status:'limited',diagnosis:child},null,2);
+   children[name]=child;
+  }
+ }
+ const result={rootHead:head,root,children},m=measureJson(result,{bytes:LIMITS.debugBytes,nodes:LIMITS.debugNodes,depth:MAX_DEPTH+8});
+ resource(m.bytes+(2*m.depth+6)*m.nodes<=LIMITS.debugBytes,'Debug output budget exceeded');
+ return JSON.stringify(result,null,2);
+}
 async function load(s,head){return loadChain(s,head);}
 async function loadChain(s,head,visit,b){const x=await inspectChain(s,head,MAX_RECORDS,visit,b);if(x.status!=='complete')throw error(x.code,x.message,{diagnosis:x});return x.chain;}
 async function genesis(s,name,state,parent=null,options={}){const rev=revision(s),overwrite=!!options.overwrite,b=budget();ensure(typeof name==='string'&&name.trim(),'INVALID_NAME','Document name required');ensure(parent===null||validHead(parent),'INVALID_HEAD','Invalid genesis parent');const r=validateRecord([null,{name,parent:parent===null?null:clone(parent),state:clone(state,b)}]);const size=measureJson(r[1].state);const {bytes,h}=await encodeRecord(r,b),idBytes=await address(h),id=encode64(idBytes),head=packHead(idBytes,h);const occupied=readCipher(s,id)!==undefined;if(occupied&&!overwrite){const old=await readRecord(s,head).catch(()=>null);unchanged(s,rev);if(old&&JSON.stringify(old)===JSON.stringify(r))return {head,existing:true,overwritten:false,stats:b,size};throw error('ROOT_OCCUPIED','Genesis slot occupied');}
@@ -230,46 +243,57 @@ async function append(s,head,operations,options={}){const rev=revision(s),ops=cl
 async function appendKnown(s,head,previous,operations,{overwrite=false,timestamp}={},rev=revision(s),prior){unchanged(s,rev);const b=budget(prior),state=patch(previous,operations,b),size=measureJson(state);const idBytes=await address(decodeHead(head)),id=encode64(idBytes);const occupied=readCipher(s,id)!==undefined;if(occupied&&!overwrite)throw error('SUCCESSOR_OCCUPIED','Canonical successor occupied',{id,predecessor:head});const stamp=timestamp||new Date().toISOString();ensure(iso(stamp),'INVALID_TIME','Invalid timestamp');const r=validateRecord([stamp,head,operations]);const {bytes,h}=await encodeRecord(r,b);const ciphertext=await encrypt(bytes,h,idBytes);unchanged(s,rev);writePhysical(s,id,ciphertext);return {head:packHead(idBytes,h),state,overwritten:occupied,stats:b,size};}
 async function patchRoot(s,head,operations,options={}){
  const ops=cloneOps(operations),opts={overwrite:!!options.overwrite,timestamp:options.timestamp},tx=staging(s),proof=await checkedProof(s,head);
- const r=await appendKnown(tx,head,proof.state,ops,opts);
+ const r=await appendKnown(tx,head,proof.state,ops,opts,revision(tx),proof.rootStats);
  await checkChange(tx,proof,r,null,r.overwritten);
  return {store:tx,rootHead:r.head};
 }
-function pointer(value,path){return clone(atPath(value,parts(path)));}
+function pointer(value,path,b){return clone(atPath(value,parts(path)),b);}
 function escapePtr(k){return k.replace(/~/g,'~0').replace(/\//g,'~1');}
 function getRootRefs(root){if(!plain(root))return {};if(!own(root,'$refs'))return {};ensure(plain(root.$refs),'INVALID_ROOT','$refs must be an object');for(const [k,h] of Object.entries(root.$refs))ensure(k.length>0&&!k.includes('/')&&validHead(h),'INVALID_ROOT','Invalid $refs: '+k);return root.$refs;}
 // A reference has exactly one field: {$ref:"/local/pointer"} or {$ref:"alias/path"}.
-async function resolve(s,rootHead,currentHead,reference,{maxDepth=16}={}){ensure(validHead(rootHead)&&validHead(currentHead),'INVALID_HEAD','Need root and current heads');if(!stores.has(s))s=adoptStore(s);let ref=clone(reference);const rev=beginRead(s),proof=stores.get(s)?.proof;const root=await stateFor(s,rootHead,proof);const refs=getRootRefs(root);const visited=new Set();let here=currentHead;
+async function resolve(s,rootHead,currentHead,reference,{maxDepth=16}={}){ensure(validHead(rootHead)&&validHead(currentHead),'INVALID_HEAD','Need root and current heads');if(!stores.has(s))s=adoptStore(s);let ref=clone(reference);const rev=beginRead(s),proof=stores.get(s)?.proof,b=budget();resource(Number.isSafeInteger(maxDepth)&&maxDepth>=0&&maxDepth<=MAX_DEPTH,'Reference depth budget exceeded');const root=await stateFor(s,rootHead,proof,b);const refs=getRootRefs(root);const visited=new Set();let here=currentHead;
  for(let depth=0;depth<maxDepth;depth++){ensure(plain(ref)&&Object.keys(ref).length===1&&typeof ref.$ref==='string','INVALID_REF','Expected {$ref: string}');const source=ref.$ref;let h,p;if(source.startsWith('/')){h=here;p=source;}else{const i=source.indexOf('/');ensure(i>0,'INVALID_REF','External ref must contain /');const name=source.slice(0,i);ensure(own(refs,name),'UNKNOWN_DOCUMENT','Unknown document '+name);h=refs[name];p=source.slice(i);if(p==='/')p='';}
- const signature=h+' '+p;ensure(!visited.has(signature),'REF_CYCLE','Reference cycle');visited.add(signature);const value=pointer(await stateFor(s,h,proof),p);if(plain(value)&&Object.keys(value).length===1&&own(value,'$ref')){ref=value;here=h;continue;}unchanged(s,rev);return {head:h,pointer:p,value};}
+ const signature=h+' '+p;ensure(!visited.has(signature),'REF_CYCLE','Reference cycle');visited.add(signature);const value=pointer(await stateFor(s,h,proof,b),p,b);if(plain(value)&&Object.keys(value).length===1&&own(value,'$ref')){ref=value;here=h;continue;}unchanged(s,rev);return {head:h,pointer:p,value};}
  throw error('REF_DEPTH','Reference resolution depth exceeded');}
 // Proofs never escape the core. A physical write invalidates them; a checked
 // commit installs a proof of the new revision. Independent verification ignores them.
-function stateFor(s,head,proof){
+function stateFor(s,head,proof,b){
  if(proof?.head===head)return proof.state;
- if(proof)for(const child of proof.children.values())if(child.head===head)return child.state;
- return load(s,head).then(c=>c.state);
+ if(proof){spend(b,16*proof.children.size);for(const child of proof.children.values())if(child.head===head)return child.state;}
+ return loadChain(s,head,undefined,b).then(c=>c.state);
 }
-async function readState(s,head){if(!stores.has(s))s=adoptStore(s);const rev=beginRead(s),state=await stateFor(s,head,stores.get(s)?.proof);unchanged(s,rev);return clone(state);}
+async function readState(s,head){if(!stores.has(s))s=adoptStore(s);const rev=beginRead(s),b=budget(),state=await stateFor(s,head,stores.get(s)?.proof,b);unchanged(s,rev);return clone(state,b);}
 async function checkedProof(s,head){
  const m=meta(s);if(m.proof?.head===head)return m.proof;
- return (await verifySnapshot(s,head)).proof;
+ return (await verifySnapshot(s,head,{install:false})).proof;
+}
+function refCost(refs,b){
+ const m=measureJson(refs,STATE,b);resource(m.nodes-1<=LIMITS.aliases,'Too many references');spend(b,64*(m.nodes-1));
+}
+function proofBound(rootSize,children){
+ let bytes=rootSize.bytes,nodes=rootSize.nodes;
+ resource(children.size<=LIMITS.aliases,'Too many historical aliases');
+ for(const child of children.values()){bytes+=child.size.bytes;nodes+=child.size.nodes;resource(bytes<=LIMITS.proofBytes&&nodes<=LIMITS.proofNodes,'Retained proof budget exceeded');}
 }
 async function checkChange(tx,proof,root,known,overwritten){
- // Occupied-slot replacement can destroy dependencies elsewhere in this graph.
- // Never use old proofs across such a replacement.
  if(overwritten){await openDatabase(tx,root.head);return;}
- const rev=revision(tx),children=new Map(proof.children);
- for(const [alias,head] of Object.entries(getRootRefs(root.state))){
-  const last=children.get(alias);
-  if(last?.head===head)continue;
+ const rev=revision(tx),children=new Map(proof.children),rootStats=root.stats,refs=getRootRefs(root.state);
+ refCost(refs,rootStats);const total=budget(rootStats),changed=[];
+ for(const [alias,head] of Object.entries(refs)){const last=children.get(alias);if(last?.head!==head){changed.push([alias,head,last]);children.delete(alias);}}
+ for(const child of children.values())mergeStats(total,child.stats);
+ proofBound(root.size,children);
+ for(const [alias,head,last] of changed){
+  resource(children.size<LIMITS.aliases,'Too many historical aliases');
   if(known?.alias===alias&&known.head===head&&(!last||last.head===known.previous)){
-   children.set(alias,{head,state:known.state});continue;
+   mergeStats(total,known.stats);children.set(alias,{head,state:known.state,stats:known.stats,size:known.size});
+  }else{
+   const next=await loadChain(tx,head,undefined,total);
+   ensure(!last||next.events.some(e=>e.head===last.head),'REFERENCE_ROLLBACK','Document "'+alias+'" was replaced, rolled back or diverged across historical $refs');
+   children.set(alias,{head,state:next.state,stats:next.stats,size:next.size});
   }
-  const next=await load(tx,head);
-  ensure(!last||next.events.some(e=>e.head===last.head),'REFERENCE_ROLLBACK','Document "'+alias+'" was replaced, rolled back or diverged across historical $refs');
-  children.set(alias,{head,state:next.state});
+  proofBound(root.size,children);
  }
- unchanged(tx,rev);meta(tx).proof={head:root.head,state:root.state,children};
+ unchanged(tx,rev);meta(tx).proof={head:root.head,state:root.state,rootStats,children};
 }
 function staging(s){const base=meta(s);ensure(!base.base,'INVALID_TRANSACTION','Nested staging is not supported');return makeStore({base,baseRev:base.rev,delta:new Map(),count:base.count,bytes:base.bytes,catalog:base.catalog?catalogFrom(base.catalog):null,rev:0,proof:base.proof});}
 function publish(s,alias,newHead,oldHead=null){
@@ -279,22 +303,22 @@ function publish(s,alias,newHead,oldHead=null){
 }
 function unpublish(s,alias){const m=meta(s);if(!m.catalog||!own(m.catalog,alias))return;delete m.catalog[alias];if(!Object.keys(m.catalog).length)m.catalog=null;m.rev++;}
 
-async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(meta(tx).catalog||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);meta(tx).proof={head:g.head,state:root,children:new Map()};return {store:tx,rootHead:g.head,genesis:g};}
+async function createDatabase(s,name,{visible=true,entry=null}={}){const tx=staging(s);ensure(!visible||!own(meta(tx).catalog||{},name),'DUPLICATE_DB','DB alias already exists');const root={name,entry:clone(entry),$refs:{}};const g=await genesis(tx,name,root,null);if(visible)publish(tx,name,g.head);refCost(getRootRefs(root),g.stats);meta(tx).proof={head:g.head,state:root,rootStats:g.stats,children:new Map()};return {store:tx,rootHead:g.head,genesis:g};}
 async function createDocument(s,rootHead,name,initial,alias=null,options={}){
  const state=clone(initial),overwriteRoot=!!options.overwriteRoot,tx=staging(s),proof=await checkedProof(s,rootHead),refs=getRootRefs(proof.state),n=alias||name;
  ensure(typeof n==='string'&&n.length>0&&!n.includes('/')&&!own(refs,n),'DUPLICATE_DOCUMENT','Name already exists');
  const g=await genesis(tx,name,state,rootHead);
  const ops=own(proof.state,'$refs')?[{op:'add',path:'/$refs/'+escapePtr(n),value:g.head}]:[{op:'add',path:'/$refs',value:{[n]:g.head}}];
- const r=await appendKnown(tx,rootHead,proof.state,ops,{overwrite:overwriteRoot});
- await checkChange(tx,proof,r,{alias:n,head:g.head,state},r.overwritten||g.overwritten);
+ const r=await appendKnown(tx,rootHead,proof.state,ops,{overwrite:overwriteRoot},revision(tx),proof.rootStats);
+ await checkChange(tx,proof,r,{alias:n,head:g.head,state,stats:g.stats,size:g.size},r.overwritten||g.overwritten);
  return {store:tx,rootHead:r.head,documentHead:g.head};
 }
 async function patchDocument(s,rootHead,alias,operations,options={}){
  const ops=cloneOps(operations),overwriteChild=!!options.overwriteChild,overwriteRoot=!!options.overwriteRoot,tx=staging(s),proof=await checkedProof(s,rootHead),refs=getRootRefs(proof.state);
  ensure(own(refs,alias),'UNKNOWN_DOCUMENT','Unknown document');let p,r;
- try{p=await appendKnown(tx,refs[alias],proof.children.get(alias).state,ops,{overwrite:overwriteChild});}catch(e){if(e.code==='SUCCESSOR_OCCUPIED')e.phase='child';throw e;}
- try{r=await appendKnown(tx,rootHead,proof.state,[{op:'replace',path:'/$refs/'+escapePtr(alias),value:p.head}],{overwrite:overwriteRoot});}catch(e){if(e.code==='SUCCESSOR_OCCUPIED')e.phase='root';throw e;}
- await checkChange(tx,proof,r,{alias,head:p.head,state:p.state,previous:refs[alias]},p.overwritten||r.overwritten);
+ try{p=await appendKnown(tx,refs[alias],proof.children.get(alias).state,ops,{overwrite:overwriteChild},revision(tx),proof.children.get(alias).stats);}catch(e){if(e.code==='SUCCESSOR_OCCUPIED')e.phase='child';throw e;}
+ try{r=await appendKnown(tx,rootHead,proof.state,[{op:'replace',path:'/$refs/'+escapePtr(alias),value:p.head}],{overwrite:overwriteRoot},revision(tx),proof.rootStats);}catch(e){if(e.code==='SUCCESSOR_OCCUPIED')e.phase='root';throw e;}
+ await checkChange(tx,proof,r,{alias,head:p.head,state:p.state,previous:refs[alias],stats:p.stats,size:p.size},p.overwritten||r.overwritten);
  return {store:tx,rootHead:r.head,documentHead:p.head};
 }
 // Validate a database snapshot, including the historical references published by its root.
@@ -303,16 +327,17 @@ async function verifyDatabase(s, rootHead, options={}) {
   return (await openDatabase(s,rootHead,options)).report;
 }
 async function openDatabase(s,rootHead,options={}) {const {chain,report}=await verifySnapshot(s,rootHead,options);return {chain,report};}
-async function verifySnapshot(s,rootHead,{anchorHead}={}) {
+async function verifySnapshot(s,rootHead,{anchorHead,install=true}={}) {
   if(!stores.has(s))s=adoptStore(s);const rev=beginRead(s);
   // NEVER forget an alias when it disappears from an effective root state.
   // A removal does not erase earlier references or reset the rollback baseline.
-  const history=new Map(), warnings=[];
+  const history=new Map(), warnings=[],b=budget();
   const checks={rootEvents:0,documents:0,activeDocuments:0,historicalReferences:0,causalOrigins:0};
   function scan(references, beforeHead, introduced) {
+    refCost(references,b);
     for(const [name,head] of Object.entries(references)) {
       let entry=history.get(name);
-      if(!entry){entry={firstBefore:clone(beforeHead),firstEvent:introduced,heads:[]};history.set(name,entry);}
+      if(!entry){resource(history.size<LIMITS.aliases,'Too many historical aliases');entry={firstBefore:clone(beforeHead),firstEvent:introduced,heads:[]};history.set(name,entry);}
       const previous=entry.heads.at(-1);
       if(previous!==head) {
         entry.heads.push(clone(head));
@@ -320,14 +345,14 @@ async function verifySnapshot(s,rootHead,{anchorHead}={}) {
       }
     }
   }
-  const root=await loadChain(s,rootHead,(state,before,introduced)=>scan(getRootRefs(state),before,introduced));
+  const root=await loadChain(s,rootHead,(state,before,introduced)=>scan(getRootRefs(state),before,introduced),b);
   checks.rootEvents=root.events.length;
-  const activeRefs=getRootRefs(root.state),documents={},children=new Map(),loaded=new Map();
+  const activeRefs=getRootRefs(root.state),documents={},children=new Map(),loaded=new Map(),rootHeads=new Set(root.events.map(e=>e.head));
   for(const [name,meta] of history){
     // The most recently referenced head must descend from EVERY earlier head,
     // including ones removed and subsequently reintroduced. Loading it checks
     // the entire authenticated child ancestry (genesis, patches, ciphertext).
-    const lastHead=meta.heads.at(-1);let child=loaded.get(lastHead);if(!child){child=await load(s,lastHead);loaded.set(lastHead,child);}children.set(name,{head:lastHead,state:child.state});
+    const lastHead=meta.heads.at(-1);let child=loaded.get(lastHead);if(!child){child=await loadChain(s,lastHead,undefined,b);loaded.set(lastHead,child);}else mergeStats(b,child.stats);children.set(name,{head:lastHead,state:child.state,stats:child.stats,size:child.size});proofBound(root.size,children);
     const indices=new Map(child.events.map((e,i)=>[e.head,i]));
     let previousIndex=-1;
     for(const referencedHead of meta.heads){
@@ -341,7 +366,7 @@ async function verifySnapshot(s,rootHead,{anchorHead}={}) {
     if(active)checks.activeDocuments++;
     const parent=child.genesis.parent;
     if(meta.firstEvent&&parent===meta.firstBefore)checks.causalOrigins++;
-    else if(parent!==null&&!root.events.some(e=>e.head===parent))
+    else if(parent!==null&&!rootHeads.has(parent))
       warnings.push('Документ '+name+': genesis.parent не входит в ancestry выбранного корня');
     else if(meta.firstEvent&&parent!==null&&!sameHead(parent,meta.firstBefore))
       warnings.push('Документ '+name+': origin не совпадает с версией корня перед первой регистрацией (возможно, импортирован)');
@@ -353,7 +378,7 @@ async function verifySnapshot(s,rootHead,{anchorHead}={}) {
     ensure(index>=0,'ANCHOR_MISMATCH','Trusted HEAD is not in the root ancestry');
     checks.anchorIndex=index;
   }
-  unchanged(s,rev);const proof={head:rootHead,state:clone(root.state),children};if(stores.has(s))meta(s).proof=proof;return {chain:root,proof,report:{status:'complete',rootHead,checks,documents,warnings}};
+  unchanged(s,rev);const proof={head:rootHead,state:clone(root.state),rootStats:root.stats,children};if(install&&stores.has(s))meta(s).proof=proof;return {chain:root,proof,report:{status:'complete',rootHead,checks,documents,warnings}};
 }
 // Recovery is explicitly destructive. Never remove a physical slot whose contents
 // were overwritten: it might belong to a different branch of history.
@@ -392,4 +417,4 @@ function commit(s,tx){
 }
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
-export {VERSION,LIMITS,measureJson,newStore,validateStore,adoptStore,revision,storeInfo,snapshot,catalog,readCipher,writePhysical,removePhysical,unpublish,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
+export {VERSION,LIMITS,measureJson,newStore,validateStore,adoptStore,revision,storeInfo,snapshot,catalog,readCipher,writePhysical,removePhysical,unpublish,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,debugDatabase,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
