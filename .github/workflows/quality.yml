@@ -25,6 +25,9 @@ jobs:
       - run: node tests/metrics.test.cjs
       - run: node tests/differential.test.cjs
       - run: node tests/boundaries.test.cjs
+      # Draft #46 baseline only; replace with rejection/regression gate before acceptance.
+      - name: Bounded resource amplification baseline (pre-fix only)
+        run: node --max-old-space-size=384 tests/resource-amplification.test.cjs --baseline
       - run: node --expose-gc tests/benchmark.cjs
       - run: python3 build.py && git diff --exit-code -- dist/html_dbms.html dist/html_dbms.xml
       - run: node tests/app.test.cjs

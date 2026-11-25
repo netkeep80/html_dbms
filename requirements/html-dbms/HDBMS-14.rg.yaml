@@ -103,3 +103,6 @@ relations:
 
   - predicates: [verified_by]
     target: {kind: artifact, path: 'tools/ci-browser.sh'}
+
+  - predicates: [verified_by]
+    target: {kind: artifact, path: 'tests/resource-amplification.test.cjs'}
