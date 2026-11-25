@@ -1,13 +1,13 @@
 {
   "schema": "anet-github-library-generation/research-1",
   "scope": "netkeep80/html_dbms",
-  "generation": 2,
-  "predecessor_commit": "64eb588db89eb1ac0a4a0c069952fbe04c1a84f1",
+  "generation": 3,
+  "predecessor_commit": "807e6910d19b46cdbffce325268517e90b6026c4",
   "root": {
-    "path": "/html_dbms/anet/g00000000000000000002/summary.json",
-    "file_id": "file_00000000daf081f48fd6910317cdfab6",
-    "size_bytes": 1966,
-    "sha256": "b153342efc6ec619dbf762201e34fce1d36e854cb06b629eb2236bbdbf900a27"
+    "path": "/html_dbms/anet/g00000000000000000003/summary.json",
+    "file_id": "file_00000000f9188210a61ccbdb8b62095e",
+    "size_bytes": 1894,
+    "sha256": "47edcafb8c7078d2347937183ae904bcda4b7991202288bdf7093ce381dd6c4c"
   },
   "application_effects_allowed": false
 }
