@@ -35,7 +35,25 @@ function witness(seed,ops,label){
  console.log('RESOURCE BASELINE',JSON.stringify({label,initial:start,operations:ops.length,patchBytes:Buffer.byteLength(JSON.stringify(ops)),materialized:actual,ms:Math.round((performance.now()-t)*100)/100}));
  return actual;
 }
+async function sizing(){
+ const {syntheticFixture}=require('../examples/cash/synthetic-pages.cjs');
+ const {createModel}=require('../examples/cash/import-model.cjs');
+ const fs=require('node:fs'),path=require('node:path');
+ const model=createModel(syntheticFixture()),entry=fs.readFileSync(path.join(__dirname,'../examples/cash/cash-entry.js'),'utf8');
+ const root={name:'Касса',entry:{type:'application/javascript',export:'main',source:entry},$refs:{}};
+ for(const alias of ['transactions',...Object.keys(model.catalogs)])root.$refs[alias]='A'.repeat(64);
+ const sizes=[root,model.transactions,...Object.values(model.catalogs)].map(measure);
+ console.log('RESOURCE SIZING',JSON.stringify({fixture:'approved synthetic',rows:model.transactions.rows.length,largest:sizes.reduce((a,b)=>a.bytes>b.bytes?a:b),total:sizes.reduce((a,b)=>({bytes:a.bytes+b.bytes,nodes:a.nodes+b.nodes,maxDepth:Math.max(a.maxDepth,b.maxDepth)}),{bytes:0,nodes:0,maxDepth:0})}));
+ const s=db.newStore(),g=await db.createDatabase(s,'Long history');db.commit(s,g.store);
+ const d=await db.createDocument(s,g.rootHead,'child',{payload:'x'.repeat(64*1024),n:0});db.commit(s,d.store);
+ let h=d.rootHead;const start=performance.now();
+ for(let i=0;i<500;i++){const p=await db.patchDocument(s,h,'child',[{op:'replace',path:'/n',value:i+1}]);db.commit(s,p.store);h=p.rootHead;}
+ const before=performance.now(),fresh=db.adoptStore(db.snapshot(s)),v=await db.openDatabase(fresh,h);
+ assert.equal(v.report.status,'complete');
+ console.log('RESOURCE SIZING',JSON.stringify({fixture:'500 child writes, 64KiB state',physical:db.storeInfo(s),childState:measure(await db.readState(fresh,v.chain.state.$refs.child)),rootEvents:v.report.checks.rootEvents,writeMs:Math.round(before-start),verifyMs:Math.round(performance.now()-before),heapUsed:process.memoryUsage().heapUsed}));
+}
 async function main(){
+ await sizing();
  const seed={payload:'x'.repeat(512*1024)},ops=copies(5);
  const large=witness(seed,ops,'byte amplification');
  assert.ok(large.bytes>12*MiB);
