@@ -40,7 +40,7 @@ function togglePanel(which){
  if(which==='info'&&next)updateInfo();
  return next;
 }
-function validationOutput(value){$('validation-report').textContent=typeof value==='string'?value:JSON.stringify(value,null,2);}
+function validationOutput(value){$('validation-report').textContent=typeof value==='string'?value:db.diagnosticText(value);}
 function setFields(head){$('head').value=head||'';}
 function fieldHead(){const h=$('head').value;if(!db.validHead(h))throw Error('Введите корректный HEAD (64 символа Base64url)');return h;}
 function syncCatalog(){
@@ -207,7 +207,7 @@ async function verify(){
  catch(e){if(!current(c))return;
   if(e.code==='RESOURCE_LIMIT'){validationOutput({status:'limited',code:e.code,message:e.message,rootHead:h});err(e);}
   else if(e.diagnosis?.sourceHead===h){lastDiagnosis=e.diagnosis;validationOutput({status:'broken',rootHead:h,diagnosis:e.diagnosis});notice('Обнаружен разрыв цепочки: '+e.code,true);}
-  else{validationOutput({status:'failed',code:e.code||'ERROR',message:e.message});err(e);}
+  else{validationOutput({status:e.code==='RESOURCE_LIMIT'?'limited':'failed',code:e.code||'ERROR',message:e.message});err(e);}
  }
 }
 async function verifyStore(){
@@ -220,7 +220,7 @@ async function verifyStore(){
 async function verifyAnchor(){
  const c=context(),h=c.head||fieldHead(),anchor=$('anchor').value;if(!anchor)throw Error('Укажите доверенный исторический HEAD');
  try{const result=await db.verifyDatabase(c.store,h,{anchorHead:anchor});if(!current(c))return;validationOutput(result);notice('Доверенный HEAD найден в проверенной ancestry.');}
- catch(e){if(current(c)){validationOutput({status:'failed',code:e.code||'ANCHOR_FAILED',message:e.message});err(e);}}
+ catch(e){if(current(c)){validationOutput({status:e.code==='RESOURCE_LIMIT'?'limited':'failed',code:e.code||'ANCHOR_FAILED',message:e.message});err(e);}}
 }
 const MAX_CONTAINER_BYTES=256*1024*1024;
 function checkSize(bytes){if(bytes>MAX_CONTAINER_BYTES)throw Error('Превышен размер контейнера (256 МиБ)');}
@@ -261,7 +261,7 @@ async function verifyFile(){
  const file=$('external').files[0];if(!file)throw Error('Выберите HTML или XML для внешней проверки');
  const c=context(),h=c.head||fieldHead(),raw=await containerText(file);if(!current(c))return;const other=readStoreFromDocument(raw);
  let external;
- try{external=await db.verifyDatabase(other,h);}catch(e){external={status:'failed',code:e.code||'ERROR',message:e.message};}
+ try{external=await db.verifyDatabase(other,h);}catch(e){external={status:e.code==='RESOURCE_LIMIT'?'limited':'failed',code:e.code||'ERROR',message:e.message};}
  if(!current(c))return;
  const changedIds=[],missingIds=[],addedIds=[],a=db.snapshot(c.store).records,b=db.snapshot(other).records;let shared=0;
  for(const [id,ct]of Object.entries(a)){if(!OWN(b,id))missingIds.push(id);else{shared++;if(b[id]!==ct)changedIds.push(id);}}

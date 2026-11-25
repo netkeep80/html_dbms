@@ -229,18 +229,29 @@ async function inspectChain(s,head,limit=MAX_RECORDS,visit,b=budget()){const sta
 const events=rev.reverse();let state=clone(events[0].r[1].state,b);if(visit)visit(state,events[0].head,false);for(let i=1;i<events.length;i++){try{state=patch(state,events[i].r[2],b);}catch(e){const d=diagnose(e,head,events.slice(i));if(d.status==='limited')return d;d.invalid=events[i].head;return d;}if(visit)visit(state,events[i-1].head,true);}
 unchanged(s,revisionAtStart);return {status:'complete',chain:{head,genesis:clone(events[0].r[1],undefined,RECORD),state,events,stats:deltaStats(b,start),size:measureJson(state)}};
 }catch(e){return diagnose(e,head);}}
+function diagnosticCost(value,offset=0){
+ const m=measureJson(value,{bytes:LIMITS.debugBytes,nodes:LIMITS.debugNodes,depth:MAX_DEPTH+8});
+ // Conservative bound for two-space indentation, including closing lines.
+ const bytes=m.bytes+(4*(m.depth+offset)+8)*m.nodes;
+ resource(bytes<=LIMITS.debugBytes,'Diagnostic output budget exceeded');return {bytes,nodes:m.nodes};
+}
+function diagnosticText(value){diagnosticCost(value);return JSON.stringify(value,null,2);}
 async function debugDatabase(s,head){
  const b=budget(),root=await inspectChain(s,head,MAX_RECORDS,undefined,b),children=Object.create(null);
+ let bytes=128,nodes=4;
+ function account(name,value,offset){
+  const m=diagnosticCost(value,offset);bytes+=m.bytes+quotedBytes(name,LIMITS.debugBytes)+16;nodes+=m.nodes;
+  resource(bytes<=LIMITS.debugBytes&&nodes<=LIMITS.debugNodes,'Debug output budget exceeded');
+ }
+ account('root',root,1);
  if(root.status==='complete'){
   for(const [name,h] of Object.entries(getRootRefs(root.chain.state))){
    const child=await inspectChain(s,h,MAX_RECORDS,undefined,b);
-   if(child.status==='limited')return JSON.stringify({rootHead:head,status:'limited',diagnosis:child},null,2);
-   children[name]=child;
+   if(child.status==='limited')return diagnosticText({rootHead:head,status:'limited',diagnosis:child});
+   account(name,child,2);children[name]=child;
   }
  }
- const result={rootHead:head,root,children},m=measureJson(result,{bytes:LIMITS.debugBytes,nodes:LIMITS.debugNodes,depth:MAX_DEPTH+8});
- resource(m.bytes+(2*m.depth+6)*m.nodes<=LIMITS.debugBytes,'Debug output budget exceeded');
- return JSON.stringify(result,null,2);
+ return diagnosticText({rootHead:head,root,children});
 }
 async function load(s,head){return loadChain(s,head);}
 async function loadChain(s,head,visit,b){const x=await inspectChain(s,head,MAX_RECORDS,visit,b);if(x.status!=='complete')throw error(x.code,x.message,{diagnosis:x});return x.chain;}
@@ -433,4 +444,4 @@ function commit(s,tx){
 }
 // Physical destructive replacement requires explicit confirmation in the caller.
 async function overwrite(s,head,ops){return append(s,head,ops,{overwrite:true});}
-export {VERSION,LIMITS,measureJson,newStore,validateStore,parseStore,adoptStore,revision,storeInfo,snapshot,catalog,readCipher,writePhysical,removePhysical,unpublish,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,debugDatabase,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,verifyCatalog,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
+export {VERSION,LIMITS,measureJson,newStore,validateStore,parseStore,adoptStore,revision,storeInfo,snapshot,catalog,readCipher,writePhysical,removePhysical,unpublish,packHead,unpackHead,validHead,sameHead,assertJson,patch,pointer,resolve,readState,getRootRefs,genesis,append,inspect,debugDatabase,diagnosticText,load,successorId,rootId,readRecord,createDatabase,createDocument,patchDocument,patchRoot,verifyDatabase,verifyCatalog,openDatabase,truncateInvalidTail,staging,publish,commit,overwrite,escapePtr,encode64,decode64};
