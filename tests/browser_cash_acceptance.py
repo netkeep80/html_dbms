@@ -47,6 +47,10 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         page.on('dialog',handle_dialog)
         page.evaluate(SHIM)
         page.set_content(fake_html.read_text(encoding='utf8'),wait_until='domcontentloaded')
+        # The shim fixture is built from the universal shell, with no trusted demo-source tag.
+        # Require the explicit launch gate, never modify the production trust policy.
+        expect(page.locator('.entry-launch')).to_be_visible(timeout=30000)
+        page.locator('.entry-launch').click()
         app=frame(page)
         expect(app.locator('h1')).to_contain_text('Касса',timeout=30000)
         assert page.locator('#entry-area iframe').get_attribute('sandbox')=='allow-scripts', 'Sandbox must remain restrictive'
@@ -123,6 +127,8 @@ with TemporaryDirectory(prefix='cash_ui_acceptance_') as tmp:
         second.on('pageerror',lambda err:errors.append(str(err)))
         second.evaluate(SHIM)
         second.set_content(saved,wait_until='domcontentloaded')
+        expect(second.locator('.entry-launch')).to_be_visible(timeout=20000)
+        second.locator('.entry-launch').click()
         app2=frame(second)
         expect(app2.locator('h1')).to_contain_text('Касса',timeout=20000)
         expect(app2.locator('#cash-count')).to_contain_text('21',timeout=20000)
