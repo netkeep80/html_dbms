@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
 from playwright.sync_api import sync_playwright,expect
-from browser_dual import store_from_output
+from browser_dual import store_from_output,frame
 from browser_head_url import replace_store
 from browser_network import block_service_workers
 
@@ -44,7 +44,7 @@ def run(context,tmp,kind):
  good=tmp/f'good.{kind}';good.write_text(replace_store(base.read_text('utf8'),kind,fixture['data']),encoding='utf8')
  page.goto(good.as_uri(),wait_until='domcontentloaded')
  expect(page.locator('.entry-launch')).to_be_visible();page.locator('.entry-launch').click()
- app=page.frame_locator('#entry-area iframe');expect(app.get_by_role('button',name='Resource test')).to_be_visible()
+ app=frame(page);expect(app.get_by_role('button',name='Resource test')).to_be_visible()
  assert page.locator('#entry-area iframe').get_attribute('sandbox')=='allow-scripts'
  app.get_by_role('button',name='Resource test').click()
  expect(app.locator('pre')).to_contain_text('"saved",true',timeout=30000)

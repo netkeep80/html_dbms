@@ -20,18 +20,6 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      # Temporary draft-only transport of deterministic PUBLIC generic build bytes.
-      # Removed when exact generated dist artifacts are committed.
-      - name: Draft resource build transport
-        run: |
-          python3 build.py
-          node - <<'JS'
-          const fs=require('node:fs');
-          for(const ext of ['html','xml']){
-            const s=fs.readFileSync('dist/html_dbms.'+ext,'utf8');
-            for(let i=0;i<s.length;i+=1800) console.log('RESOURCE_BUILD_'+ext+' '+JSON.stringify(s.slice(i,i+1800)));
-          }
-          JS
       - run: node tests/core.test.cjs
       - run: node tests/stability.test.cjs
       - run: node tests/metrics.test.cjs
