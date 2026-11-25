@@ -1,0 +1,9 @@
+{
+  "project": "netkeep80/html_dbms",
+  "protocol": "https://github.com/netkeep80/anet-memory/blob/main/ARCHITECTURE.md",
+  "memory": {
+    "ref": "refs/heads/anet/memory",
+    "record": ".anet/generation.json"
+  },
+  "start": "Read live GitHub first. Resolve the current authority ref, fetch the generation record at that exact commit, materialize the selected Library file_id, verify size_bytes and sha256, then read summary.json; follow attachment descriptors only as needed. Never use an older generation as current if the selected object is unavailable. GitHub requirements and live PR/CI remain authoritative. Publish new snapshots by expected-head non-force CAS on anet/memory; reread ref. No private financial data or secrets in public GitHub."
+}
